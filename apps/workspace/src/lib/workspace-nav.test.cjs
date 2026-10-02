@@ -65,12 +65,10 @@ test('an older API that sends raw activation states still projects operational m
   assert.equal(hrefs(items({ 'offerings-catalog': 'enabled' }, OWNER)).includes('/offerings'), true)
 })
 
-test('the AI sandbox follows its permission and deployment switch, never the AI staff module', () => {
-  const sandbox = (perms, features) =>
-    visibleAreas({}, perms, false, {}, features).flatMap((a) => a.children).map((c) => c.href)
-  assert.equal(sandbox(['ai_employees.read'], { ai_sandbox: true }).includes('/ai-employees/sandbox'), true)
-  assert.equal(sandbox(['ai_employees.read'], { ai_sandbox: true }).includes('/ai-employees'), false)
-  assert.equal(sandbox(['ai_employees.read'], { ai_sandbox: false }).includes('/ai-employees/sandbox'), false)
-  assert.equal(sandbox(['ai_employees.read'], {}).includes('/ai-employees/sandbox'), false)
-  assert.equal(sandbox(MEMBER, { ai_sandbox: true }).includes('/ai-employees/sandbox'), false)
+test('the AI staff area appears only once AI staff is on (the sandbox is reached from Modules)', () => {
+  const ai = (states) => visibleAreas(states, ['ai_employees.read'], false, {}).some((a) => a.key === 'ai')
+  assert.equal(ai({}), false)
+  assert.equal(ai({ 'ai-employees': 'active' }), true)
+  const hrefs = visibleAreas({ 'ai-employees': 'active' }, ['ai_employees.read'], false, {}).flatMap((a) => a.children).map((c) => c.href)
+  assert.equal(hrefs.includes('/ai-employees/sandbox'), false)
 })

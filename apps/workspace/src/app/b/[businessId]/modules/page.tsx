@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiTry } from '@/lib/api'
+import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { setModuleState } from './actions'
 
@@ -50,9 +50,11 @@ const ALWAYS_LABEL: Record<string, string> = {
 export default async function ModulesPage({ params }: { params: { businessId: string } }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const [recRes, catRes] = await Promise.all([
+  const [recRes, catRes, ctxRes] = await Promise.all([
     apiTry<{ data: Recommendations }>(`/v1/platform/businesses/${params.businessId}/module-recommendations`, token),
     apiTry<{ data: { modules: CatalogueModule[] } }>(`/v1/public/taxonomy`, token),
+    apiTry<{ data: { features?: Record<string, boolean>; permissions: string[] } }>(
+      '/v1/me/context', token, businessHeaders(params.businessId)),
   ])
   if (!recRes.ok) {
     return (
@@ -63,6 +65,11 @@ export default async function ModulesPage({ params }: { params: { businessId: st
     )
   }
   const rec = recRes.data.data
+  // The AI Employee Sandbox is a demonstration, not a tool: it is offered here,
+  // where an owner looks at what LOCAH can do, and on the AI staff card — never
+  // as a navigation area of its own.
+  const sandbox = ctxRes.ok && ctxRes.data.data.features?.ai_sandbox === true
+    && ctxRes.data.data.permissions.includes('ai_employees.read')
   const built = rec.modules.filter((m) => m.built)
   // Only what is really there: a Storefront tool LOCAH has not built yet is not claimed.
   const always = rec.modules.filter((m) => m.tier === 'always' && m.built)
@@ -85,12 +92,19 @@ export default async function ModulesPage({ params }: { params: { businessId: st
         }
         actions={<Link className="btn-quiet" href={`${base}/settings/business`}>How your business works</Link>}
       />
+      {sandbox ? (
+        <p className="bos-hint" style={{ maxWidth: 'none' }}>
+          Curious how an AI employee would answer your customers?{' '}
+          <Link href={`${base}/ai-employees/sandbox`}>Try the AI sandbox</Link> — a simulation on your own menu,
+          prices and free times; nothing is sent and nothing is saved.
+        </p>
+      ) : null}
 
       {running.length > 0 ? (
         <section aria-labelledby="running-h" className="bos-section">
           <h2 id="running-h" className="bos-section__title">Running <span>{running.length}</span></h2>
           <div className="bos-grid">
-            {running.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} />)}
+            {running.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
           </div>
         </section>
       ) : null}
@@ -100,7 +114,7 @@ export default async function ModulesPage({ params }: { params: { businessId: st
           <h2 id="essential-h" className="bos-section__title">Essential for you <span>{essential.length}</span></h2>
           <p className="bos-hint">What businesses like yours run every day.</p>
           <div className="bos-grid">
-            {essential.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} />)}
+            {essential.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
           </div>
         </section>
       ) : null}
@@ -111,7 +125,7 @@ export default async function ModulesPage({ params }: { params: { businessId: st
         </h2>
         {suggested.length > 0 ? (
           <div className="bos-grid">
-            {suggested.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} />)}
+            {suggested.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
           </div>
         ) : (
           <p className="bos-empty">
@@ -127,7 +141,7 @@ export default async function ModulesPage({ params }: { params: { businessId: st
         <details className="bos-section bos-more">
           <summary className="bos-section__title">Optional <span>{useful.length}</span></summary>
           <div className="bos-grid">
-            {useful.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} />)}
+            {useful.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
           </div>
         </details>
       ) : null}
@@ -168,7 +182,7 @@ export default async function ModulesPage({ params }: { params: { businessId: st
   )
 }
 
-function ToolCard({ m, businessId }: { m: Pick; businessId: string }) {
+function ToolCard({ m, businessId, sandbox = false }: { m: Pick; businessId: string; sandbox?: boolean }) {
   const r = m.readiness
   const on = !!r?.enabled
   const todo = (r?.steps ?? []).filter((s) => !s.done)
@@ -204,6 +218,9 @@ function ToolCard({ m, businessId }: { m: Pick; businessId: string }) {
         <p className="bos-tool__next"><span>Next</span>{todo[0].label}</p>
       ) : null}
       <footer className="bos-tool__foot">
+        {sandbox && m.module === 'ai-employees' ? (
+          <Link className="btn-quiet" href={`/b/${businessId}/ai-employees/sandbox`}>See it work (sandbox)</Link>
+        ) : null}
         {on && !r?.ready ? (
           <Link className="btn-primary" href={`/b/${businessId}/modules/${m.module}`}>Continue setup</Link>
         ) : null}

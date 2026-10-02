@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
@@ -59,12 +60,14 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
   const b = params.businessId
   const [res, context] = await Promise.all([
     apiTry<{ data: Overview }>(`/v1/b/${b}/ai-employees`, token),
-    apiTry<{ data: { permissions: string[] } }>('/v1/me/context', token, businessHeaders(b)),
+    apiTry<{ data: { permissions: string[]; features?: Record<string, boolean> } }>('/v1/me/context', token, businessHeaders(b)),
   ])
+  const sandbox = context.ok && context.data.data.features?.ai_sandbox === true
   const header = (
     <PageHeader
       title="AI employees"
       subtitle="Staff that work inside the limits you set. They use the same tools your team does, answer only from your own records, and every action is written down below."
+      actions={sandbox ? <Link className="btn btn-ghost" href={`/b/${b}/ai-employees/sandbox`}>Try it in the sandbox</Link> : undefined}
     />
   )
   if (!res.ok) return <div className="bos-page">{header}<GateNotice error={res.error} businessId={b} moduleLabel="AI staff" /></div>

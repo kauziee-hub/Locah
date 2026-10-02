@@ -16,8 +16,6 @@ type Context = {
   navigation_modules?: Record<string, string>
   /** This business's own words for its destinations (Menu, Reservations, Guests). */
   terms?: Record<string, string>
-  /** Deployment switches (ai_sandbox). */
-  features?: Record<string, boolean>
   permissions: string[]
   solo?: boolean
   workspace_language?: string
@@ -75,7 +73,6 @@ export default async function WorkspaceBusinessLayout({
     ? contextRes.data.data.navigation_modules ?? contextRes.data.data.module_states ?? {}
     : {}
   const terms = contextRes.ok ? contextRes.data.data.terms ?? {} : {}
-  const features = contextRes.ok ? contextRes.data.data.features ?? {} : {}
   const permissions = contextRes.ok ? contextRes.data.data.permissions ?? [] : null
   const unreadCount = unreadRes.ok ? unreadRes.data.data.unread_count : 0
   const solo = contextRes.ok ? Boolean(contextRes.data.data.solo) : false
@@ -92,7 +89,6 @@ export default async function WorkspaceBusinessLayout({
         businesses={businesses}
         moduleStates={moduleStates}
         terms={terms}
-        features={features}
         permissions={permissions}
         unreadCount={unreadCount}
         solo={solo}

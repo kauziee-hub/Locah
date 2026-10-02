@@ -123,7 +123,6 @@ export function AppSidebar({
   businesses,
   moduleStates,
   terms = {},
-  features = {},
   permissions,
   unreadCount,
   solo = false,
@@ -134,8 +133,6 @@ export function AppSidebar({
   moduleStates: Record<string, string>
   /** The business's own words for its destinations (from /v1/me/context). */
   terms?: Record<string, string>
-  /** Deployment switches from /v1/me/context (ai_sandbox). */
-  features?: Record<string, boolean>
   permissions: string[] | null
   unreadCount: number
   /** One person runs this business: no team menus, one calendar (OM-21). */
@@ -188,10 +185,10 @@ export function AppSidebar({
 
   const base = `/b/${businessId}`
   const areas = useMemo(
-    () => visibleAreas(moduleStates, permissions, solo, terms, features).map((a) => ({
+    () => visibleAreas(moduleStates, permissions, solo, terms).map((a) => ({
       ...a, label: t(a.label), children: a.children.map((c) => ({ ...c, label: t(c.label) })),
     })),
-    [moduleStates, permissions, solo, terms, features, t],
+    [moduleStates, permissions, solo, terms, t],
   )
   // The most specific link that matches the page is the active one, so
   // Settings › Automations does not also light up Business settings.

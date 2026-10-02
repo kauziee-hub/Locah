@@ -26,8 +26,6 @@ export type NavChild = {
   shape?: 'solo' | 'team'
   /** Which of the business's own words names this destination (`terms` from the API). */
   term?: 'offerings' | 'bookings' | 'customers'
-  /** A deployment switch from the API's `features` that must be on (e.g. the AI sandbox). */
-  feature?: string
 }
 /** A destination as shown: `setup` marks a tool waiting for its setup. */
 export type NavItem = { href: string; label: string; setup?: boolean }
@@ -142,11 +140,9 @@ export const AREAS: NavArea[] = [
   {
     key: 'ai',
     label: 'AI employees',
-    children: [
-      { href: '/ai-employees', label: 'AI staff', perm: 'ai_employees.read', module: 'ai-employees' },
-      // A labelled demonstration on the business's real records; it needs no module (nothing runs).
-      { href: '/ai-employees/sandbox', label: 'AI sandbox', perm: 'ai_employees.read', feature: 'ai_sandbox' },
-    ],
+    // The AI sandbox (a demonstration) is reached from the AI staff card in
+    // Modules, so this area still appears only once AI staff is on.
+    children: [{ href: '/ai-employees', label: 'AI staff', perm: 'ai_employees.read', module: 'ai-employees' }],
   },
   {
     key: 'modules',
@@ -190,7 +186,6 @@ export function visibleAreas(
   permissions: string[] | null,
   solo = false,
   terms: Record<string, string> = {},
-  features: Record<string, boolean> = {},
 ): { key: string; label: string; children: NavItem[] }[] {
   const on = (m: string) => OPERATIONAL.has(moduleStates[m] ?? '')
   // Before the context loads (or if it fails) show only Home, never a guess.
@@ -199,7 +194,6 @@ export function visibleAreas(
   const settingUp = (c: NavChild) => Boolean(c.module) && moduleStates[c.module!] === SETUP && canSetUp
   const may = (c: NavChild) =>
     (!c.shape || (c.shape === 'solo') === solo) &&
-    (!c.feature || features[c.feature] === true) &&
     (!c.module || on(c.module) || settingUp(c)) &&
     (!c.perm || (perms !== null && perms.has(c.perm))) &&
     (!c.anyPerm || (perms !== null && c.anyPerm.some((p) => perms.has(p))))
