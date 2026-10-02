@@ -70,8 +70,10 @@ _WHATSAPP = re.compile(r"\b(whats\s?app\w*|wa\b|dm\b|message us|text us)|வா�
 _ONLINE = re.compile(r"\b(online|website|site|app|internet|on the web)\b", re.I)
 _TAMIL_SCRIPT = re.compile(r"[஀-௿]")
 _TANGLISH = re.compile(
-    r"\b(pannu\w*|panr\w*|pann\w*|illa|irukk\w*|venum|vendaam|venaam|sollunga|seri|romba|konjam|enna|"
-    r"eppadi|enga|naan|neenga|ellaam|kitta|munnaadi|dhaan|aamaa|vaangu\w*|varuvaanga|podhum|pathi)\b", re.I)
+    r"\b(pannu\w*|panr\w*|pann\w*|illa|irukk\w*|iruk\w*|venum|vendaam|venaam|sollunga|seri|romba|konjam|enna|"
+    r"eppadi|enga|naan|neenga|ellaam|ellam|kitta|munnaadi|dhaan|aamaa|vaangu\w*|varuvaanga|podhum|pathi|"
+    r"pes(?:a|u|al|un)\w*|vech\w*|vach\w*|naanga|unga|kudunga|vaanga|mudiyum\w*|theriyum\w*|saapadu|sappadu|"
+    r"kadai|nalla|ungaluku|enakku|neraya)\b", re.I)
 
 
 def language_of(text: str) -> str:
@@ -84,6 +86,100 @@ def language_of(text: str) -> str:
     if len(_TANGLISH.findall(text)) >= 2 or tamil:
         return "ta_en"
     return "en"
+
+
+# ------------------------------------------------------------------ "can we talk in Tamil?"
+# A request to change the conversation's language is about the conversation,
+# not the business: it must switch the reply language and keep the question
+# that was asked, never be read as an answer to it.
+_LANG_NAME = {
+    # "தமிழில்" drops the virama before the locative (தமிழ + ில்), so the
+    # script name is matched with or without it.
+    "ta": r"(?:tamil|tamizh|thamizh|thamil|தமிழ்?)",
+    "en": r"(?:english|inglish|ingleesh|ஆங்கில(?:த்தில்|ம்)?|இங்கிலீஷ்)",
+}
+# The Tamil postposition "in" (Tamil la / தமிழ்ல), English "in", and the verbs a
+# person uses to ask (talk, speak, reply, continue — pesalama, pesunga, பேசலாமா).
+_IN_AFTER = r"(?:\s*-?\s*(?:la|le|lae|lay|lah|laye|il|ile|ல|லே|லயே|லேயே|ில்|ிலே|ில)\b|ல|லே|லயே|ில்|ிலே)"
+# Tamil-script words are matched with the script's range, not \w: Python's \w
+# leaves out Tamil vowel signs, which would cut "பேசலாமா" in half.
+_VERB = re.compile(
+    r"(\b(?:pes\w*|pesu\w*|speak\w*|talk\w*|reply\w*|respond\w*|answer\w*|continu\w*|chat\w*|write\w*|"
+    # pann…/panal…/panun… ("continue pannunga", "panalam") — never "paneer" or "panel".
+    r"switch\w*|change\w*|use|mathi\w*|maathi\w*|maatru\w*|thodar\w*|sollu\w*|pan(?:n|al|un)\w*|kelu\w*|"
+    r"please|pls|plz)\b|(?:பேச|பேசு|தொடர|மாற்ற|மாத்த|சொல்லு|பண்ணு|பதில்)[஀-௿]*)",
+    re.I,
+)
+# Words that carry no business content in a language request.
+_FILLER = re.compile(
+    r"\b(?:can|could|shall|may|we|i|you|u|let|lets|let's|us|now|from|here|on|onwards|the|a|an|in|to|with|me|"
+    r"ok|okay|seri|sir|madam|mam|bro|anna|akka|ji|ah|aa|ma|da|dei|thank|thanks|nandri|yes|no|only|just|also|"
+    r"please|pls|plz|more|better|instead|language|mozhi|bhashai|neenga|naama|nambo|nama|ini|ippo|ippa|"
+    r"inime|irundhu|script|letters|formal|pure|properly)\b",
+    re.I,
+)
+_NOT_A_REQUEST = re.compile(r"\b(?:tamil|tamizh|thamizh)\s+(?:nadu|nad|food|meals?|movies?|songs?|cuisine|style|"
+                            r"brahmin|people|wedding|bride|books?|news|class(?:es)?|tuition)\b", re.I)
+
+
+def without_language_request(text: str) -> str:
+    """The message minus the sentence that asked to switch language, so that
+    "Tamil la pesalama? Naan salon vechirukken" is read as "Naan salon
+    vechirukken" — the request is about the conversation, not the business."""
+    parts = re.split(r"(?<=[.?!।])\s+", (text or "").strip())
+    kept = [p for p in parts if language_request(p) is None]
+    return " ".join(kept).strip() or (text or "").strip()
+
+
+def language_request(text: str) -> tuple[str, bool] | None:
+    """(target, only) when the owner asks to talk in another language.
+
+    `target` is how to reply: "ta" (Tamil script) when they write Tamil
+    script or ask for script / formal Tamil; "ta_en" (Tamil in English
+    letters, as they wrote) for a Tanglish request; "en" for English. `only`
+    says the message asked nothing else, so it answers no question. Reads the
+    shape of a request — a language named with "in" (Tamil la, தமிழ்ல, in
+    English) or with a verb (talk, pesalama, continue) — not one fixed phrase;
+    "we sell Tamil meals" or "Tamil Nadu" are not requests.
+    """
+    raw = " ".join((text or "").split())
+    if not raw or len(raw) > 240:
+        return None
+    lowered = raw.casefold()
+    found: list[tuple[str, re.Match[str]]] = []
+    for target, name in _LANG_NAME.items():
+        for m in re.finditer(rf"(?P<pre>\bin\s+)?(?P<name>{name})(?P<post>{_IN_AFTER})?", lowered, re.I):
+            found.append((target, m))
+    if not found:
+        return None
+    target, match = found[-1]  # "not English, Tamil la" — the last one named wins
+    if target == "ta" and _NOT_A_REQUEST.search(lowered) and not _VERB.search(lowered):
+        return None
+    # "in Tamil" / "Tamil la" / "தமிழில்" — never the "il" that ends "tamil" itself.
+    has_in = bool(match.group("pre") or match.group("post")) or match.group("name").endswith("த்தில்")
+    words = re.findall(r"[\w஀-௿]+", lowered)
+    if not (has_in or _VERB.search(lowered) or len(words) <= 3):
+        return None
+    # What is left once the language, the verbs and the politeness are gone.
+    rest = lowered
+    for _, m in found:
+        rest = rest.replace(m.group(0), " ")
+    rest = _VERB.sub(" ", rest)
+    rest = _FILLER.sub(" ", rest)
+    content = re.findall(r"[a-z஀-௿]{3,}", rest)
+    only = not content
+    # With anything else in the message, it is a request only when it is plainly
+    # one — the language with "in" AND a verb ("Tamil la pesalama? Naan salon
+    # vechirukken"). "Our customers are mostly Tamil speaking" and "classes in
+    # Tamil" are facts about the business, not a change of language.
+    if not only and not (has_in and _VERB.search(lowered)):
+        return None
+    if target == "ta":
+        script = sum(1 for c in raw if _TAMIL_SCRIPT.match(c))
+        letters = sum(1 for c in raw if c.isalpha())
+        wants_script = bool(re.search(r"\b(script|letters|formal|pure|ezhuthu|எழுத்து)\b", lowered))
+        target = "ta" if wants_script or (letters and script / letters > 0.4) else "ta_en"
+    return target, only
 _VISIT = re.compile(r"\b(visit\w*|walk[- ]?in\w*|walk into|come (?:to|over)|drop by|showroom|in person|at the (?:shop|store|counter))\b", re.I)
 _JOIN = re.compile(r"\b(join\w*|enrol\w*|enroll\w*|admission\w*|sign(?:ing)? up|register\w*|membership\w*)\b", re.I)
 _SUBSCRIBE = re.compile(r"\b(subscri\w*)\b", re.I)
@@ -277,6 +373,18 @@ def offer_statement(text: str) -> list[str]:
     return names[:12]
 
 
+# Tamil / Tanglish words that *say* "we have it / we do it / it's available"
+# around a list, never part of a name: "Haircut, facial and bridal makeup
+# iruku" lists three services, "enga kitta dosa, idli iruku" two dishes.
+_TA_HAVE_TAIL = re.compile(
+    r"(?:\s+(?:iruk+[iu]\w*|irukk?a\w*|irukk?om|pan+(?:u|r)?(?:om|vom)|panrom|pannuvom|kudu(?:k+)?(?:urom|rom|pom)|"
+    r"sei(?:y|v)\w*om|venum|vendum|dhaan|thaan|mattum|ellam|kidaik+u\w*|available)"
+    r"|\s*(?:இருக்கு\w*|இருக்கும்|உண்டு|செய்வோம்|செய்கிறோம்|பண்றோம்|கொடுக்கிறோம்|தான்|மட்டும்|கிடைக்கும்))+[\s.!]*$",
+    re.I)
+_TA_HAVE_HEAD = re.compile(r"^(?:enga\s*kitta|namma\s*kitta|engalukku|enga\s+(?:kadai|shop)\s*la|எங்க(?:ிட்ட|\s*கிட்ட))\s+",
+                           re.I)
+
+
 def offering_names(text: str) -> list[str]:
     """Noun phrases that name things sold, from a list answer.
 
@@ -297,6 +405,7 @@ def offering_names(text: str) -> list[str]:
             continue
         part = re.sub(r"^(?:we (?:sell|make|offer|do|have|provide)|mainly|mostly|also)\s+", "", part, flags=re.I)
         part = re.sub(r"^(?:available|our|the|all)\s+", "", part, flags=re.I).strip()
+        part = _TA_HAVE_HEAD.sub("", _TA_HAVE_TAIL.sub("", " " + part).strip()).strip(" .-")
         if part and part.casefold() not in {n.casefold() for n in names}:
             names.append(part[:1].upper() + part[1:])
     return names[:12]

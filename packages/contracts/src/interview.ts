@@ -189,6 +189,8 @@ export type BusinessBlueprint = {
   applied_requests: string[]
   /** How the owner talks: Locah answers in the same mix. */
   language_style: 'en' | 'ta' | 'ta_en' | 'hi' | 'hi_en' | 'other'
+  /** The language the owner asked Locah to reply in; 'auto' mirrors each message. */
+  language_preference?: 'auto' | 'en' | 'ta' | 'ta_en'
   operating_patterns: { pattern: string; quote: string }[]
   /** Numbers the owner said, verified against their own words. */
   highlights: { value: string; label: string; quote: string }[]
@@ -221,6 +223,8 @@ export type BusinessInterviewData = {
   understanding: InterviewUnderstanding
   /** Build is offered as soon as there is something honest to build, and never withdrawn. */
   build_available?: boolean
+  /** Items the owner named in the conversation that are not draft catalogue items yet. */
+  setup_pending?: string[]
   available_modules: InterviewModule[]
   templates: { id: string; name: string; description: string; primary_color: string; accent_color: string
     available: boolean; look: string[]; page_count: number }[]

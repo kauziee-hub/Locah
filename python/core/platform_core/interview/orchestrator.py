@@ -28,6 +28,7 @@ from platform_core.interview.conversation import (
     LOGO_QUEUED,
     LOGO_UNAVAILABLE,
     DOCUMENT_UPLOAD,
+    LANGUAGE_SWITCHED,
     LOGO_UPLOAD,
     REDIRECT,
     REDUNDANT,
@@ -44,6 +45,7 @@ from platform_core.interview.conversation import (
     govern_question,
     mark_redundant,
     merge_fact,
+    speaks,
 )
 from platform_core.interview.coverage import assess, floor_met, worth_knowing
 from platform_core.interview.discovery import (
@@ -323,6 +325,8 @@ class BusinessInterviewOrchestrator:
                 "offerings": [o.name for o in wd.offerings],
                 "owner_claims": [c.claim for c in wd.owner_claims],
             },
+            # The language the owner asked Locah to reply in ("" = mirror the message).
+            "reply_language": "" if bp.language_preference == "auto" else bp.language_preference,
             "catalogue": [
                 {"group": g.name, "items": [i.name for i in g.items][:12], "sold_by": g.sold_by,
                  "still_unknown": [n for n in g.needs if n in {"varieties", "cuts", "sizes"}]}
@@ -359,6 +363,19 @@ class BusinessInterviewOrchestrator:
             bp.asks = [AskRecord(ask=legacy.id, targets=[bp.last_asked_target or ""], turn=bp.turn_count)
                        if legacy and bp.last_asked_target
                        else AskRecord(ask="opening", targets=list(OPENING_TARGETS), turn=0)]
+        said = text  # what the owner typed, as the transcript keeps it
+        if not field:
+            # "Tamil la pesalama?" changes how Locah talks, not what it knows: it
+            # is held for the rest of the conversation, and a message that asked
+            # nothing else answers no question (the one asked is asked again).
+            request = rd.language_request(text)
+            if request is not None:
+                bp.language_preference = request[0]
+                if request[1]:
+                    return BusinessInterviewOrchestrator._language_turn(
+                        bp, text, business_type=business_type, via=via, started=started)
+                # The rest of the message is read without the request in it.
+                text = rd.without_language_request(text)
         answering_targets = tuple(bp.asks[-1].targets) if bp.asks else ()
         reading = rd.read(text)
         # Explicit edits are user data, not a model task — and they are checked
@@ -398,6 +415,9 @@ class BusinessInterviewOrchestrator:
         elif not field:
             # No model to tell the language: the owner's own script and words do.
             bp.language_style = rd.language_of(text)
+        if bp.language_preference != "auto":
+            # What the owner asked for wins over how this one message was written.
+            bp.language_style = bp.language_preference
         _validate_extraction(ti)
         _contextual_signals(bp, ti, text)
         if not field:
@@ -568,7 +588,7 @@ class BusinessInterviewOrchestrator:
             bp.asks = (bp.asks + [AskRecord(ask="free", targets=[], turn=bp.turn_count + 1)])[-60:]
         _remaining(bp)
         spoken: Literal["text", "voice"] = "voice" if via == "voice" else "text"
-        bp.messages.extend([Message(role="user", text=text, via=spoken),
+        bp.messages.extend([Message(role="user", text=said, via=spoken),
                             Message(role="assistant", text=reply, via=spoken)])
         bp.messages = bp.messages[-60:]
         bp.turn_count += 1
@@ -586,6 +606,51 @@ class BusinessInterviewOrchestrator:
             next_ask=next_item.ask.id if next_item else None,
             ready=bp.readiness.ready, **bp.last_turn.model_dump(),
         )
+        return bp
+
+    @staticmethod
+    def _language_turn(
+        bp: BusinessBlueprint, text: str, *, business_type: str | None, via: str, started: float,
+    ) -> BusinessBlueprint:
+        """The owner asked to talk in another language and said nothing else.
+
+        Say yes in that language and ask the question that is still open, in
+        it. Nothing is extracted, nothing is answered, no question is skipped:
+        the next message answers the same question it would have. Deterministic
+        — no model call, so it works when the model does not.
+        """
+        from platform_core.interview.understanding import place_noun
+
+        bp.language_style = bp.language_preference if bp.language_preference != "auto" else bp.language_style
+        lang = _lang(bp.language_style)
+        last = bp.asks[-1] if bp.asks else None
+        if bp.completion_state.status == "built":
+            question = planner.HELP_EDIT[lang]
+        elif last is None or last.ask == "opening":
+            question = BusinessInterviewOrchestrator.opening_question(bp)
+        elif last.ask == "name":
+            question = planner.NAME_QUESTION[lang].format(noun=place_noun(bp))
+        elif last.ask in planner.ASKS_BY_ID:
+            question = planner.phrase(planner.ASKS_BY_ID[last.ask], bp, lang)
+        elif bp.readiness.ready:
+            question = planner.AFTER_READY[lang]
+        else:
+            # Nothing was pending: what Locah would ask next, now asked in it.
+            item = planner.choose(bp, "", business_type)
+            question = planner.phrase(item.ask, bp, lang) if item else planner.NOTHING_LEFT[lang]
+            if item:
+                planner.record(bp, item.ask)
+        reply = f"{LANGUAGE_SWITCHED[lang]} {question}".strip()
+        spoken: Literal["text", "voice"] = "voice" if via == "voice" else "text"
+        bp.messages.extend([Message(role="user", text=text, via=spoken),
+                            Message(role="assistant", text=reply, via=spoken)])
+        bp.messages = bp.messages[-60:]
+        bp.turn_count += 1
+        bp.last_turn = TurnTelemetry(provider="none", model="deterministic",
+                                     latency_ms=int((time.monotonic() - started) * 1000))
+        get_logger("business.interview").info(
+            "interview.language_switched", business_id=str(bp.business_id), session_id=str(bp.session_id),
+            turn_count=bp.turn_count, language=bp.language_style)
         return bp
 
     @staticmethod
@@ -755,7 +820,7 @@ def _question(
     proposed = planner.ASKS_BY_ID.get(ti.next_target) or planner.ask_for_target(ti.next_target)
     if proposed and proposed.id == item.ask.id:
         governed = govern_question(ti.next_question, heard, bp)
-        if governed:
+        if governed and speaks(governed, bp.language_preference):
             return str(governed)
     return str(planner.phrase(item.ask, bp, lang))
 

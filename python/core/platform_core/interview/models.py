@@ -487,6 +487,11 @@ class BusinessBlueprint(StrictModel):
     # Bounded idempotency window. Revision checking also rejects old replays.
     applied_requests: list[UUID] = Field(default_factory=list)
     language_style: LanguageStyle = "en"
+    # The language the owner explicitly asked Locah to talk in ("Tamil la
+    # pesalama?", "English la continue pannunga"). "auto" mirrors how each
+    # message is written; anything else holds for the rest of the conversation
+    # until they ask again. Replies only: facts are always their own words.
+    language_preference: Literal["auto", "en", "ta", "ta_en"] = "auto"
     operating_patterns: list[PatternEvidence] = Field(default_factory=list)
     highlights: list[Highlight] = Field(default_factory=list)
     # Optional asks already made once. Asking again is the questionnaire feel

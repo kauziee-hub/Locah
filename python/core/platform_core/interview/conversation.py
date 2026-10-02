@@ -384,10 +384,27 @@ def drafted_parts(bp: BusinessBlueprint) -> str:
     return f" I've drafted your {joined}."
 
 
+# The owner asked to talk in another language (reader.language_request): say
+# yes in that language, then carry on with the same question in it.
+LANGUAGE_SWITCHED = {
+    "en": "Sure — let's continue in English.",
+    "ta_en": "Kandippa, Tamil la continue pannalaam.",
+    "ta": "கண்டிப்பா, தமிழ்லயே பேசலாம்.",
+}
+
+
+def speaks(text: str, preference: str) -> bool:
+    """Is model-written wording in the language the owner asked for? With no
+    explicit preference any register will do (the model mirrors the owner)."""
+    from platform_core.interview import reader as rd
+
+    return preference == "auto" or rd.language_of(text) == preference
+
+
 def acknowledgement(bp: BusinessBlueprint, proposed: str, heard: str, style: str) -> str:
     previous = previous_ack(bp)
     governed = govern_acknowledgement(proposed, heard, previous)
-    if governed:
+    if governed and speaks(governed, bp.language_preference):
         return governed
     options = ACKS.get(_lang(style), ACKS["en"])
     for option in options[(bp.turn_count % len(options)):] + options:
@@ -409,7 +426,12 @@ SYSTEM_PROMPT = (
     "LANGUAGE. The owner may use English, Indian English, Tamil, or Tamil mixed with English "
     "(e.g. 'WhatsApp pannitu showroom-ku varuvanga'). Understand it natively. Reply fields "
     "(acknowledgement, next_question) mirror the owner's register: if they mix, you may mix; if "
-    "they write English, write English. Set language to en, ta, ta_en, hi, hi_en or other.\n\n"
+    "they write English, write English. Set language to en, ta, ta_en, hi, hi_en or other.\n"
+    "REPLY LANGUAGE. If reply_language is set (en = English; ta = Tamil in Tamil script; ta_en = Tamil "
+    "in English letters, the way people chat), write acknowledgement and next_question in it whatever "
+    "language the message is in — the owner asked for it. Facts are still exact quotes in the owner's "
+    "own words and script; never translate a quote, a name or a price. A message that only asks to "
+    "change the conversation's language answers nothing: no facts, no answers.\n\n"
     "UNDERSTAND DEEPLY. One message can answer several things. 'We sell all types of meat' means a "
     "product-led meat retailer — you know what people come for, but not yet which meats. "
     "'Select meat, then select kg, then order' means customers order online, products are sold "
