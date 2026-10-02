@@ -31,7 +31,7 @@ const CALL_STATE: Record<string, string> = {
 function ago(iso: string | null): string {
   if (!iso) return 'never'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 }
 
 export function ConnectionPanel({ businessId, connection, calls, canConfigure }: {
