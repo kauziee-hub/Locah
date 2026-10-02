@@ -25,12 +25,15 @@ function NavLink({
   active,
   collapsed,
   badge,
+  note,
 }: {
   href: string
   label: string
   active: boolean
   collapsed: boolean
   badge?: number
+  /** A short marker beside the label, e.g. a tool still waiting for setup. */
+  note?: string
 }) {
   return (
     <Link
@@ -61,6 +64,21 @@ function NavLink({
       >
         {collapsed ? label.slice(0, 1) : label}
       </span>
+      {!collapsed && note ? (
+        <span
+          style={{
+            fontSize: '0.68rem',
+            fontWeight: 600,
+            color: 'var(--color-muted-foreground)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '999px',
+            padding: '0 0.4rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {note}
+        </span>
+      ) : null}
       {!collapsed && badge && badge > 0 ? (
         <span
           style={{
@@ -104,6 +122,8 @@ export function AppSidebar({
   businessId,
   businesses,
   moduleStates,
+  terms = {},
+  features = {},
   permissions,
   unreadCount,
   solo = false,
@@ -112,6 +132,10 @@ export function AppSidebar({
   businessId: string
   businesses: NavBusiness[]
   moduleStates: Record<string, string>
+  /** The business's own words for its destinations (from /v1/me/context). */
+  terms?: Record<string, string>
+  /** Deployment switches from /v1/me/context (ai_sandbox). */
+  features?: Record<string, boolean>
   permissions: string[] | null
   unreadCount: number
   /** One person runs this business: no team menus, one calendar (OM-21). */
@@ -164,10 +188,10 @@ export function AppSidebar({
 
   const base = `/b/${businessId}`
   const areas = useMemo(
-    () => visibleAreas(moduleStates, permissions, solo).map((a) => ({
+    () => visibleAreas(moduleStates, permissions, solo, terms, features).map((a) => ({
       ...a, label: t(a.label), children: a.children.map((c) => ({ ...c, label: t(c.label) })),
     })),
-    [moduleStates, permissions, solo, t],
+    [moduleStates, permissions, solo, terms, features, t],
   )
   // The most specific link that matches the page is the active one, so
   // Settings › Automations does not also light up Business settings.
@@ -285,6 +309,7 @@ export function AppSidebar({
                   label={item.label}
                   active={isActive(item.href)}
                   collapsed={railed}
+                  note={item.setup ? t('Set up') : undefined}
                 />
               ))}
             </div>

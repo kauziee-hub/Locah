@@ -1,10 +1,17 @@
 /**
  * Workspace navigation (Business OS Guide §3 "Recommended Workspace navigation
- * model"). Twelve areas in a fixed order; what sits inside each depends on the
- * tools this business runs and what this person may do. An area with nothing
- * inside for this person is not shown — "the Workspace expands only as
- * relevant capabilities become active". This only decides what is shown; the
- * API decides what anyone may actually do.
+ * model"; Doc 05 §9.1 NAV-007–NAV-011). Twelve areas in a fixed order; what
+ * sits inside each is a projection of the tools this business runs and what
+ * this person may do. An area with nothing inside for this person is not shown
+ * — "the Workspace expands only as relevant capabilities become active".
+ *
+ * Module state comes from the API's `navigation_modules` (module readiness:
+ * entitled, switched on, set up). `active` is an operational destination;
+ * `setup_required` is shown only to people who can complete setup
+ * (`modules.configure`), marked as such, never as operational (NAV-008).
+ * Labels follow the business's own words (`terms`: Menu, Reservations, Guests)
+ * while routes stay the same (Doc 07 §3.3). This only decides what is shown;
+ * the API decides what anyone may actually do.
  */
 
 /** `href` is relative to the business (`/orders` → /b/{id}/orders); a leading `~`
@@ -17,7 +24,13 @@ export type NavChild = {
   module?: string
   /** 'solo': only when one person runs the business; 'team': never then (OM-21). */
   shape?: 'solo' | 'team'
+  /** Which of the business's own words names this destination (`terms` from the API). */
+  term?: 'offerings' | 'bookings' | 'customers'
+  /** A deployment switch from the API's `features` that must be on (e.g. the AI sandbox). */
+  feature?: string
 }
+/** A destination as shown: `setup` marks a tool waiting for its setup. */
+export type NavItem = { href: string; label: string; setup?: boolean }
 export type NavArea = { key: string; label: string; children: NavChild[] }
 
 export const AREAS: NavArea[] = [
@@ -49,7 +62,7 @@ export const AREAS: NavArea[] = [
       { href: '/orders', label: 'Orders', perm: 'orders.read', module: 'orders' },
       { href: '~/kds', label: 'Kitchen display', perm: 'kitchen.read', module: 'kitchen' },
       { href: '/kitchen', label: 'Kitchen stations', perm: 'kitchen.configure', module: 'kitchen' },
-      { href: '/bookings', label: 'Bookings', perm: 'bookings.read', module: 'bookings' },
+      { href: '/bookings', label: 'Bookings', perm: 'bookings.read', module: 'bookings', term: 'bookings' },
       { href: '/queue', label: 'Queue', perm: 'queue.read', module: 'queue-operations' },
       { href: '/tasks', label: 'Tasks', perm: 'tasks.read', module: 'tasks' },
       { href: '/attendance', label: 'Check-ins', perm: 'attendance.read', module: 'attendance' },
@@ -67,7 +80,7 @@ export const AREAS: NavArea[] = [
     key: 'offerings',
     label: 'Offerings',
     children: [
-      { href: '/offerings', label: 'Products & services', perm: 'offerings.read', module: 'offerings-catalog' },
+      { href: '/offerings', label: 'Products & services', perm: 'offerings.read', module: 'offerings-catalog', term: 'offerings' },
       { href: '/inventory', label: 'Stock', perm: 'inventory.read', module: 'inventory' },
       { href: '/buying', label: 'Buying', perm: 'procurement.read', module: 'procurement' },
       { href: '/recipes', label: 'Recipes', perm: 'procurement.read', module: 'recipes' },
@@ -79,7 +92,7 @@ export const AREAS: NavArea[] = [
     key: 'customers',
     label: 'Customers',
     children: [
-      { href: '/customers', label: 'Customers', perm: 'customers.read', module: 'customer-relationships' },
+      { href: '/customers', label: 'Customers', perm: 'customers.read', module: 'customer-relationships', term: 'customers' },
       { href: '/leads', label: 'Enquiries', perm: 'leads.read', module: 'leads' },
       { href: '/reviews', label: 'Reviews', perm: 'reviews.read', module: 'reviews' },
       { href: '/loyalty', label: 'Loyalty', perm: 'loyalty.read', module: 'loyalty' },
@@ -129,7 +142,11 @@ export const AREAS: NavArea[] = [
   {
     key: 'ai',
     label: 'AI employees',
-    children: [{ href: '/ai-employees', label: 'AI staff', perm: 'ai_employees.read', module: 'ai-employees' }],
+    children: [
+      { href: '/ai-employees', label: 'AI staff', perm: 'ai_employees.read', module: 'ai-employees' },
+      // A labelled demonstration on the business's real records; it needs no module (nothing runs).
+      { href: '/ai-employees/sandbox', label: 'AI sandbox', perm: 'ai_employees.read', feature: 'ai_sandbox' },
+    ],
   },
   {
     key: 'modules',
@@ -153,7 +170,10 @@ export const AREAS: NavArea[] = [
   },
 ]
 
+// `active` from navigation_modules; `ready`/`enabled` only from an older API
+// that sent raw activation states.
 const OPERATIONAL = new Set(['active', 'ready', 'enabled'])
+const SETUP = 'setup_required'
 
 /** "Sell & serve" reads as what this business actually does. */
 function operateLabel(on: (m: string) => boolean): string {
@@ -169,18 +189,27 @@ export function visibleAreas(
   moduleStates: Record<string, string>,
   permissions: string[] | null,
   solo = false,
-): { key: string; label: string; children: { href: string; label: string }[] }[] {
+  terms: Record<string, string> = {},
+  features: Record<string, boolean> = {},
+): { key: string; label: string; children: NavItem[] }[] {
   const on = (m: string) => OPERATIONAL.has(moduleStates[m] ?? '')
   // Before the context loads (or if it fails) show only Home, never a guess.
   const perms = permissions ? new Set(permissions) : null
+  const canSetUp = perms !== null && perms.has('modules.configure')
+  const settingUp = (c: NavChild) => Boolean(c.module) && moduleStates[c.module!] === SETUP && canSetUp
   const may = (c: NavChild) =>
     (!c.shape || (c.shape === 'solo') === solo) &&
-    (!c.module || on(c.module)) &&
+    (!c.feature || features[c.feature] === true) &&
+    (!c.module || on(c.module) || settingUp(c)) &&
     (!c.perm || (perms !== null && perms.has(c.perm))) &&
     (!c.anyPerm || (perms !== null && c.anyPerm.some((p) => perms.has(p))))
   return AREAS.map((a) => ({
     key: a.key,
     label: a.key === 'operate' ? operateLabel(on) : a.label,
-    children: a.children.filter(may).map(({ href, label }) => ({ href, label })),
+    children: a.children.filter(may).map((c) => ({
+      href: c.href,
+      label: (c.term && terms[c.term]) || c.label,
+      ...(c.module && !on(c.module) ? { setup: true } : {}),
+    })),
   })).filter((a) => a.children.length > 0)
 }

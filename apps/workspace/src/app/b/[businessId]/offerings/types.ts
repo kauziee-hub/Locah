@@ -89,7 +89,12 @@ export type Offering = {
   variant_options: Axis[]
   missing_fields: string[]
   version: number
+  image_asset_ids?: string[]
+  /** This offering's ready pictures, in order (`draft`: drawn by LOCAH, not yet kept). */
+  images?: OfferingPicture[]
 }
+
+export type OfferingPicture = { id: string; url: string | null; alt_text: string | null; draft: boolean }
 
 export type Variant = { id: string; name: string; price_amount: number | null; attributes: Record<string, string> }
 

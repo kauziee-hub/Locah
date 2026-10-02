@@ -275,6 +275,10 @@ type Section = {
   assets?: Record<string, Asset>
   /** Added by a module (website/capabilities.auto_sections): LOCAH's words, so translated. */
   is_auto?: boolean
+  /** Preview only: the module this section is bound to is not ready, so the
+   *  live site leaves it out (Doc 12 §11.9). The owner sees why. */
+  module_unavailable?: boolean
+  unavailable_reason?: string | null
 }
 
 /** A section a module added carries LOCAH's words, not the owner's: those follow the visitor's language. */
@@ -346,6 +350,28 @@ export function SectionRenderer({
   const image = assets.image_asset_id
   // Alternate grounds so a long page has rhythm instead of one flat field.
   const alt = index > 0 && index % 2 === 1
+
+  if (section.module_unavailable) {
+    // Only the owner's preview ever receives these; the live site omits them.
+    if (!previewToken) return null
+    const why =
+      section.unavailable_reason === 'module_not_entitled'
+        ? t('Its tool is not included in your plan right now.')
+        : section.unavailable_reason === 'module_not_active'
+          ? t('Switch on its tool in your Workspace to show this.')
+          : section.unavailable_reason === 'module_dependency_not_ready'
+            ? t('It is waiting for another tool to be set up first.')
+            : t('This shows once its tool is set up. Finish setting it up in your Workspace.')
+    return (
+      <section className={`ls-section ls-section--pending ${alt ? 'ls-section--alt' : ''}`} aria-label={t('Not on your live site yet')}>
+        <div className="ls-inner">
+          <p className="ls-meta">{t('Not on your live site yet')}</p>
+          {c.title ? <h2 className="ls-title">{str(c.title)}</h2> : null}
+          <p>{why}</p>
+        </div>
+      </section>
+    )
+  }
 
   switch (section.section_type_id) {
     /* ------------------------------------------------------------ hero */
@@ -917,6 +943,7 @@ export function SectionRenderer({
           showPrices={c.show_prices === undefined ? true : bool(c.show_prices)}
           offeringTypes={c.category_filter ? [str(c.category_filter)] : undefined}
           altGround={alt}
+          anchor={str(c.anchor) || undefined}
         />
       )
 

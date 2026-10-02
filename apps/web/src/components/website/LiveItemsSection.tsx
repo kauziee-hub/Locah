@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { addToBasket, fetchPublicOfferings, fetchPublicPlans } from '@/lib/checkout-api'
 import { OfferingCard } from './OfferingCard'
-import type { PublicOffering } from './offering-view'
+import { StockNote, soldOut, type PublicOffering } from './offering-view'
 import { useWords } from './SiteWords'
 import type { Words } from '@/lib/site-words'
 
@@ -233,6 +233,7 @@ function ItemAction({
   onAdd: (o: Offering) => void
 }) {
   const t = useWords()
+  if (action === 'cart' && soldOut(item)) return <span className="ls-stock ls-stock--out">{t('Out of stock')}</span>
   if (action === 'cart')
     return (
       <button type="button" className="ls-btn ls-btn--outline" onClick={() => onAdd(item)}>
@@ -271,6 +272,7 @@ function ItemGrid({
   slug: string
   capabilities?: Record<string, boolean | string | null>
 }) {
+  const t = useWords()
   const v = variant === 'list' || variant === 'grid' ? variant : 'cards'
   const card = (o: Offering) => (
     <OfferingCard
@@ -298,6 +300,7 @@ function ItemGrid({
               <div className="ls-item__text">
                 <h3 className="ls-item__title">{o.title}</h3>
                 {o.description ? <p className="ls-item__desc">{o.description}</p> : null}
+                {o.availability === 'low_stock' ? <StockNote o={o} t={t} /> : null}
               </div>
               <span className="ls-item__leader" aria-hidden="true" />
               <div className="ls-item__foot">

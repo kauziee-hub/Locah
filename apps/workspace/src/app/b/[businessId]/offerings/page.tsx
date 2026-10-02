@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiTry } from '@/lib/api'
+import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { ArchiveButton } from './ArchiveButton'
+import { FromConversation } from './FromConversation'
 import { inr, type Offering } from './types'
 
 export const dynamic = 'force-dynamic'
@@ -30,14 +31,20 @@ function priceText(o: Offering): string {
 export default async function OfferingsPage({ params }: { params: { businessId: string } }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const [res, rates] = await Promise.all([
+  const [res, rates, context, talk] = await Promise.all([
     apiTry<{ data: Offering[] }>(`/v1/platform/businesses/${params.businessId}/products`, token),
     apiTry<{ data: unknown[] }>(`/v1/platform/businesses/${params.businessId}/pricing/rates`, token),
+    apiTry<{ data: { terms?: Record<string, string> } }>('/v1/me/context', token, businessHeaders(params.businessId)),
+    apiTry<{ data: { setup_pending?: string[]; blueprint: { revision: number } } }>(
+      `/v1/b/${params.businessId}/interview`, token),
   ])
   const base = `/b/${params.businessId}/offerings`
+  // The business's own word for this page (Menu, Services, Products) — the route stays the same.
+  const title = (context.ok ? context.data.data.terms?.offerings : undefined) ?? 'Products & services'
+  const fromTalk = talk.ok ? talk.data.data.setup_pending ?? [] : []
   const header = (
     <PageHeader
-      title="Products & services"
+      title={title}
       subtitle="Everything people can buy, book, join, give to or ask about — kept in one place."
       actions={
         <>
@@ -62,6 +69,9 @@ export default async function OfferingsPage({ params }: { params: { businessId: 
   return (
     <div className="bos-page">
       {header}
+      {fromTalk.length && talk.ok ? (
+        <FromConversation businessId={params.businessId} names={fromTalk} revision={talk.data.data.blueprint.revision} />
+      ) : null}
       {offerings.length === 0 ? (
         <div className="bos-empty">
           Nothing here yet. Add what you sell, the services people book, or what they can enquire about — each

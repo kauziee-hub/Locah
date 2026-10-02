@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { refreshBusinessShell } from '@/lib/refresh'
 import { sendJson, type ActionResult } from '@/lib/server-send'
 import type { Setup, Thread } from './types'
 
@@ -9,6 +10,8 @@ const api = (b: string) => `/v1/platform/businesses/${b}`
 function refresh(b: string) {
   revalidatePath(`/b/${b}/whatsapp`)
   revalidatePath(`/b/${b}/inbox`)
+  // A connected number is what makes WhatsApp ready (and its "Set up" mark go).
+  refreshBusinessShell(b)
 }
 
 export async function connectSandbox(b: string, body: Record<string, unknown>): Promise<ActionResult> {

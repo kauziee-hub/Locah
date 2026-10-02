@@ -296,8 +296,14 @@ async def public_plans(session: AsyncSession, *, slug: str) -> list[dict[str, An
     """The plans a visitor can see on the business's website: active and
     public only, cheapest first — what "Plans" on the site is filled from."""
     from platform_core.services.checkout import CheckoutService
+    from platform_core.services.module_readiness import module_ready
 
     business = await CheckoutService._resolve_business(session, slug)
+    # Memberships' public read contract: no plans to join while the module is
+    # not ready (switched off, not entitled, or nothing published). The plans
+    # and every member's record are kept.
+    if not await module_ready(session, business.id, "memberships"):
+        return []
     plans = await MembershipPlanService.list_plans(session, business_id=business.id, status="active",
                                                    visibility="public")
     plans.sort(key=lambda p: (float(p.price_amount or 0), p.name))

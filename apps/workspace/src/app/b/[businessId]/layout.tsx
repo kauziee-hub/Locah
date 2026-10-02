@@ -12,6 +12,12 @@ export const dynamic = 'force-dynamic'
 
 type Context = {
   module_states: Record<string, string>
+  /** Module readiness for navigation: active | setup_required | … (Doc 05 NAV-007/008). */
+  navigation_modules?: Record<string, string>
+  /** This business's own words for its destinations (Menu, Reservations, Guests). */
+  terms?: Record<string, string>
+  /** Deployment switches (ai_sandbox). */
+  features?: Record<string, boolean>
   permissions: string[]
   solo?: boolean
   workspace_language?: string
@@ -63,7 +69,13 @@ export default async function WorkspaceBusinessLayout({
   if (businessesRes.ok && !businesses.some((b) => b.id === params.businessId)) {
     notFound()
   }
-  const moduleStates = contextRes.ok ? contextRes.data.data.module_states ?? {} : {}
+  // Readiness-based states when the API sends them; raw activation states only
+  // from an older API, so navigation never silently empties during a deploy.
+  const moduleStates = contextRes.ok
+    ? contextRes.data.data.navigation_modules ?? contextRes.data.data.module_states ?? {}
+    : {}
+  const terms = contextRes.ok ? contextRes.data.data.terms ?? {} : {}
+  const features = contextRes.ok ? contextRes.data.data.features ?? {} : {}
   const permissions = contextRes.ok ? contextRes.data.data.permissions ?? [] : null
   const unreadCount = unreadRes.ok ? unreadRes.data.data.unread_count : 0
   const solo = contextRes.ok ? Boolean(contextRes.data.data.solo) : false
@@ -79,6 +91,8 @@ export default async function WorkspaceBusinessLayout({
         businessId={params.businessId}
         businesses={businesses}
         moduleStates={moduleStates}
+        terms={terms}
+        features={features}
         permissions={permissions}
         unreadCount={unreadCount}
         solo={solo}

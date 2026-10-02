@@ -17,7 +17,6 @@ from platform_core.context_resolver import bind_public_context
 from platform_core.exceptions import ResourceNotFound, ValidationError
 from platform_core.models import (
     Business,
-    BusinessModuleState,
     MediaAsset,
     MerchantConnection,
     Offering,
@@ -25,7 +24,7 @@ from platform_core.models import (
 )
 from platform_core.services.business import BusinessService
 from platform_core.services.customer import CustomerService
-from platform_core.services.fulfilment import ACTIVE_MODULE_STATES, FulfilmentService
+from platform_core.services.fulfilment import FulfilmentService
 from platform_core.services.location import LocationService
 from platform_core.services.order import OrderService
 from platform_core.services.payment_attempt import PaymentAttemptService
@@ -44,15 +43,11 @@ class CheckoutService:
 
     @staticmethod
     async def _orders_active(session: AsyncSession, business_id: uuid.UUID) -> bool:
-        state = (
-            await session.execute(
-                select(BusinessModuleState).where(
-                    BusinessModuleState.business_id == business_id,
-                    BusinessModuleState.module_id == "orders",
-                )
-            )
-        ).scalars().first()
-        return state is not None and state.activation_state in ACTIVE_MODULE_STATES
+        """Orders switched on and entitled: every order path (website, WhatsApp,
+        a phone order staff take) needs at least this."""
+        from platform_core.services.module_readiness import module_operational
+
+        return bool(await module_operational(session, business_id, "orders"))
 
     @staticmethod
     async def cod_rules(session: AsyncSession, business_id: uuid.UUID) -> dict[str, Any]:
@@ -82,9 +77,17 @@ class CheckoutService:
 
     @staticmethod
     async def list_public_offerings(
-        session: AsyncSession, *, slug: str, limit: int = 100
+        session: AsyncSession, *, slug: str, limit: int = 100, location_id: uuid.UUID | None = None
     ) -> dict[str, Any]:
         business = await CheckoutService._resolve_business(session, slug)
+        from platform_core.services.module_readiness import module_ready
+
+        # The catalogue's public read contract: nothing is listed while the
+        # catalogue module is not ready (switched off, not entitled, or empty).
+        # Its records are kept, and return when it is switched on again.
+        if not await module_ready(session, business.id, "offerings-catalog"):
+            return {"business": {"id": str(business.id), "slug": business.slug,
+                                 "display_name": business.display_name}, "offerings": []}
         rows = (
             await session.execute(
                 select(Offering).where(
@@ -120,6 +123,14 @@ class CheckoutService:
         from platform_core.services.offering_public import public_details
 
         details = await public_details(session, business.id, list(rows))
+        # Inventory contributes availability, not a page (Doc 09 §10.7): one
+        # word per tracked offering, through its own public read contract, and
+        # only while Inventory is ready. Never a quantity.
+        availability: dict[str, str] = {}
+        if await module_ready(session, business.id, "inventory"):
+            from platform_core.stock.public import public_availability
+
+            availability = await public_availability(session, business.id, list(rows), location_id=location_id)
         return {
             "business": {
                 "id": str(business.id),
@@ -136,6 +147,7 @@ class CheckoutService:
                     "price_amount": float(o.price_amount) if o.price_amount is not None else None,
                     "currency": o.currency,
                     "image_url": _image_for(o),
+                    "availability": availability.get(str(o.id)),
                     **details[str(o.id)],
                 }
                 for o in rows
@@ -149,14 +161,11 @@ class CheckoutService:
             session, business.id, status="active"
         )
         modes = await FulfilmentService.active_modes(session, business.id)
-        payments_active = (
-            await session.execute(
-                select(BusinessModuleState).where(
-                    BusinessModuleState.business_id == business.id,
-                    BusinessModuleState.module_id == "payments",
-                )
-            )
-        ).scalars().first()
+        from platform_core.services.module_readiness import module_operational
+
+        # Payments adds online collection to checkout; it is not a page (Doc 09
+        # §10.8). Switched on is not enough without an Entitlement (§20.2).
+        payments_active = await module_operational(session, business.id, "payments")
         merchant = (
             await session.execute(
                 select(MerchantConnection).where(
@@ -166,11 +175,7 @@ class CheckoutService:
             )
         ).scalars().first()
         payment_methods = ["cod"]
-        if (
-            payments_active
-            and payments_active.activation_state in ACTIVE_MODULE_STATES
-            and merchant is not None
-        ):
+        if payments_active and merchant is not None:
             payment_methods.append("online")
         return {
             "business": {
@@ -320,6 +325,16 @@ class CheckoutService:
         """The website's checkout: a guest with a name and email, or a signed-in
         LOCAH customer whose order joins their own record (Founder §12)."""
         business = await CheckoutService._resolve_business(session, slug)
+        from platform_core.services.module_readiness import module_operational, module_ready
+
+        # A website checkout is a customer action on catalogue items: Orders
+        # switched on and entitled, and the catalogue's public read contract
+        # ready. Switching either off stops new checkouts at once (Doc 08 §7.4);
+        # the orders already placed are untouched.
+        if not (await module_operational(session, business.id, "orders")
+                and await module_ready(session, business.id, "offerings-catalog")):
+            raise ValidationError("Orders are not available on this website right now",
+                                  details={"code": "orders_unavailable"})
         guest = payload.get("guest") or {}
         display_name = str(guest.get("name") or "").strip()
         email = str(guest.get("email") or "").strip().lower()
@@ -451,14 +466,11 @@ class CheckoutService:
             location_id = uuid.UUID(str(location_id))
 
         modes = await FulfilmentService.active_modes(session, business.id)
-        payments_active = (
-            await session.execute(
-                select(BusinessModuleState).where(
-                    BusinessModuleState.business_id == business.id,
-                    BusinessModuleState.module_id == "payments",
-                )
-            )
-        ).scalars().first()
+        from platform_core.services.module_readiness import module_operational
+
+        # Payments adds online collection to checkout; it is not a page (Doc 09
+        # §10.8). Switched on is not enough without an Entitlement (§20.2).
+        payments_active = await module_operational(session, business.id, "payments")
         merchant = (
             await session.execute(
                 select(MerchantConnection).where(
@@ -468,11 +480,7 @@ class CheckoutService:
             )
         ).scalars().first()
         payment_methods = ["cod"]
-        if (
-            payments_active
-            and payments_active.activation_state in ACTIVE_MODULE_STATES
-            and merchant is not None
-        ):
+        if payments_active and merchant is not None:
             payment_methods.append("online")
         if mode not in modes:
             raise ValidationError(

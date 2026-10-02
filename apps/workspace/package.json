@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test src/lib/workspace-nav.test.cjs"
   },
   "dependencies": {
     "@platform/api-client": "workspace:*",

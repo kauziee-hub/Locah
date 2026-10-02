@@ -31,6 +31,7 @@ from platform_core.events.subscribers import (  # noqa: F401  (registration side
     recipe_consumption,
     reviews_invite,
     task_events,
+    website_revalidation,
 )
 
 __all__ = [
@@ -54,4 +55,5 @@ __all__ = [
     "recipe_consumption",
     "reviews_invite",
     "task_events",
+    "website_revalidation",
 ]

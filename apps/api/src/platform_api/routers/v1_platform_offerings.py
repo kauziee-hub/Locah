@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
+from platform_core.exceptions import ResourceNotFound
 from platform_core.permissions import (
     OFFERINGS_ARCHIVE,
     OFFERINGS_CREATE,
@@ -19,6 +20,7 @@ from platform_core.permissions import (
 )
 from platform_core.resolvers.offering_resolver import OfferingResolver
 from platform_core.services.category import CategoryService
+from platform_core.services.media import MediaService
 from platform_core.services.offering import OfferingService
 
 router = APIRouter(prefix="/v1/platform/businesses", tags=["offerings"])
@@ -279,10 +281,33 @@ async def get_product(
     offering = await OfferingResolver.resolve(
         session, business_id=business_id, offering_id=product_id
     )
+    images = await MediaService.resolve_many(
+        session, business_id=business_id, asset_ids=list(offering.image_asset_ids or [])
+    )
     return {
-        "data": OfferingService.serialize(offering),
+        "data": {**OfferingService.serialize(offering), "images": images},
         "meta": {"correlation_id": actor.request.correlation_id},
     }
+
+
+@router.post("/{business_id}/products/{product_id}/generate-image")
+async def generate_product_image(
+    business_id: UUID,
+    product_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE, "offerings-catalog")),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Draw an illustrative picture of this offering (a draft the owner can keep
+    or replace). Where only a real photo is honest, says so instead."""
+    from platform_core.services.website_images import WebsiteImageService
+
+    result = await WebsiteImageService.generate_offering_image(
+        session, business_id=business_id, actor_id=actor.request.identity_id, offering_id=product_id,
+        correlation_id=actor.request.correlation_id)
+    if result.get("reason") == "offering_missing":
+        raise ResourceNotFound("Offering")
+    await session.commit()
+    return {"data": result, "meta": {"correlation_id": actor.request.correlation_id}}
 
 
 @router.patch("/{business_id}/products/{product_id}")

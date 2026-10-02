@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { refreshBusinessShell } from '@/lib/refresh'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { platformUrl } from '@platform/config'
 
@@ -25,4 +26,5 @@ export async function setModuleState(formData: FormData) {
   await send(`/v1/b/${businessId}/modules/${moduleId}/${action}`, 'POST')
   revalidatePath(`/b/${businessId}/modules`)
   revalidatePath(`/b/${businessId}/modules/${moduleId}`)
+  refreshBusinessShell(businessId)
 }

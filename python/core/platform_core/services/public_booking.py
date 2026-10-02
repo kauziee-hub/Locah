@@ -18,7 +18,6 @@ from platform_core.exceptions import ResourceNotFound, ValidationError
 from platform_core.models import (
     Booking,
     Business,
-    BusinessModuleState,
     Offering,
     WorkforceLocationAssignment,
     WorkforceMember,
@@ -34,9 +33,6 @@ from platform_core.services.location import LocationService
 from platform_core.services.booking_allocation import BookingAllocationService
 from platform_core.validation.booking import validate_availability_query
 
-ACTIVE_MODULE_STATES = frozenset({"enabled", "ready", "active"})
-
-
 class PublicBookingService:
     @staticmethod
     async def _resolve_business(session: AsyncSession, slug: str) -> Business:
@@ -48,19 +44,27 @@ class PublicBookingService:
 
     @staticmethod
     async def _bookings_active(session: AsyncSession, business_id: uuid.UUID) -> bool:
-        state = (
-            (
-                await session.execute(
-                    select(BusinessModuleState).where(
-                        BusinessModuleState.business_id == business_id,
-                        BusinessModuleState.module_id == "bookings",
-                    )
-                )
-            )
-            .scalars()
-            .first()
-        )
-        return state is not None and state.activation_state in ACTIVE_MODULE_STATES
+        """Public booking is a customer action: Bookings must be *ready* — switched
+        on, entitled and with something real to book — the same answer that
+        decides whether the website offers "Book" at all (module_readiness)."""
+        from platform_core.services.module_readiness import module_ready
+
+        return bool(await module_ready(session, business_id, "bookings"))
+
+    @staticmethod
+    async def _require_bookings(session: AsyncSession, business_id: uuid.UUID) -> None:
+        if not await PublicBookingService._bookings_active(session, business_id):
+            raise ValidationError("Bookings are not enabled for this Business", details={"code": "bookings_disabled"})
+
+    @staticmethod
+    async def _public_offering(session: AsyncSession, business: Business, offering_id: Any) -> Offering:
+        """An offering a visitor may book: this business's, live and public. An
+        archived, draft or private one is not found — never bookable by its id."""
+        offering = await session.get(Offering, uuid.UUID(str(offering_id)))
+        if (offering is None or offering.business_id != business.id or offering.deleted_at is not None
+                or offering.status != "active" or offering.visibility != "public"):
+            raise ResourceNotFound("Offering")
+        return offering
 
     @staticmethod
     async def booking_options(session: AsyncSession, *, slug: str) -> dict[str, Any]:
@@ -204,6 +208,7 @@ class PublicBookingService:
         session: AsyncSession, *, slug: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         business = await PublicBookingService._resolve_business(session, slug)
+        await PublicBookingService._require_bookings(session, business.id)
         params = validate_availability_query(payload)
         location = await LocationService.get_by_id(session, business.id, params["location_id"])
         if location is None or location.status != "active":
@@ -363,9 +368,7 @@ class PublicBookingService:
 
         mode = str(payload.get("reservation_mode") or "appointment")
         if payload.get("offering_id"):
-            offering = await session.get(Offering, uuid.UUID(str(payload["offering_id"])))
-            if offering is None or offering.business_id != business.id:
-                raise ResourceNotFound("Offering")
+            offering = await PublicBookingService._public_offering(session, business, payload["offering_id"])
             mode = mode_for(offering)
         elif mode not in ("table", "appointment", "accommodation", "rental", "event_date"):
             mode = "appointment"  # a class or site visit is always booked against its offering
@@ -382,15 +385,14 @@ class PublicBookingService:
         from platform_core.services.booking_slots import BookingSlotService, mode_for, parse_day
 
         business = await PublicBookingService._resolve_business(session, slug)
+        await PublicBookingService._require_bookings(session, business.id)
         location = await LocationService.get_by_id(session, business.id, uuid.UUID(str(payload["location_id"])))
         if location is None or location.status != "active":
             raise ValidationError("Location is closed or inactive", details={"code": "location_closed"})
         offering = None
         mode = str(payload.get("mode") or "appointment")
         if payload.get("offering_id"):
-            offering = await session.get(Offering, uuid.UUID(str(payload["offering_id"])))
-            if offering is None or offering.business_id != business.id:
-                raise ResourceNotFound("Offering")
+            offering = await PublicBookingService._public_offering(session, business, payload["offering_id"])
             mode = mode_for(offering)
         provider = uuid.UUID(str(payload["provider_id"])) if payload.get("provider_id") else None
         return dict(await BookingSlotService.day_slots(
@@ -407,15 +409,14 @@ class PublicBookingService:
         from platform_core.validation.booking import parse_datetime
 
         business = await PublicBookingService._resolve_business(session, slug)
+        await PublicBookingService._require_bookings(session, business.id)
         location = await LocationService.get_by_id(session, business.id, uuid.UUID(str(payload["location_id"])))
         if location is None or location.status != "active":
             raise ValidationError("Location is closed or inactive", details={"code": "location_closed"})
         offering = None
         mode = str(payload.get("mode") or "rental")
         if payload.get("offering_id"):
-            offering = await session.get(Offering, uuid.UUID(str(payload["offering_id"])))
-            if offering is None or offering.business_id != business.id:
-                raise ResourceNotFound("Offering")
+            offering = await PublicBookingService._public_offering(session, business, payload["offering_id"])
             mode = mode_for(offering)
         if mode == "accommodation":
             starts, ends = stay_window(location, offering, parse_day(payload.get("check_in")),

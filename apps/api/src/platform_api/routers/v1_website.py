@@ -423,20 +423,23 @@ async def apply_template(
 
 # ---------------------------------------------------------------- what the business's tools add (P1-10C)
 _ACTION_WORDS = {
+    "catalogue": "Customers can see what you offer, with prices",
     "order": "Customers can order online", "book": "Customers can book", "join": "Customers can see and join plans",
     "request_quote": "Customers can ask for a quote", "enquire": "Customers can send an enquiry",
     "site_visit": "Customers can ask for a site visit", "test_drive": "Customers can ask for a test drive",
     "donate": "Supporters can donate", "track": "Customers can track their order",
 }
 _ACTION_MODULE = {
+    "catalogue": "offerings-catalog",
     "order": "orders", "book": "bookings", "join": "memberships", "request_quote": "quotes", "enquire": "leads",
     "site_visit": "leads", "test_drive": "leads", "donate": "orders", "track": "fulfilment",
 }
 # Actions worth a "not yet" line when their tool is on but unfinished; the
 # others only exist for businesses that list the right things (a project, a car).
-_ALWAYS_OFFERED = {"order", "book", "join", "request_quote", "enquire", "track"}
+_ALWAYS_OFFERED = {"catalogue", "order", "book", "join", "request_quote", "enquire", "track"}
 _SECTION_WORDS = {
-    "orders": "Your shop, so people can order", "memberships": "Your plans, so people can join",
+    "offerings-catalog": "Your {catalogue}, from your real items and prices",
+    "memberships": "Your plans, so people can join",
     "bookings": "A way to book", "reviews": "Your verified reviews", "leads": "An enquiry form",
 }
 
@@ -479,7 +482,12 @@ async def website_capabilities(
     types = await caps.section_types(session, version_id)
     reviews = await caps.published_review_count(session, business_id)
     would = caps.auto_sections({**flags, "_kinds": kinds}, types, hidden=[], published_reviews=reviews, traits=traits)
-    hidden = set(website.auto_sections_hidden or [])
+    hidden = {caps.LEGACY_HIDDEN.get(m, m) for m in website.auto_sections_hidden or []}
+    catalogue = str(flags.get("catalogue_label") or "What we offer").lower()
+
+    def section_words(module: str) -> str:
+        return _SECTION_WORDS.get(module, module).format(catalogue=catalogue)
+
     from platform_core.services.module_readiness import readiness
 
     states = await readiness(session, business_id)
@@ -492,6 +500,15 @@ async def website_capabilities(
         elif key in _ALWAYS_OFFERED and state.get("enabled"):
             # Switched on but not set up yet: say the one thing still missing.
             todo = next((st["label"] for st in state.get("steps") or [] if not st["done"]), None)
+            if not todo and state.get("blocked_by"):
+                from platform_core.catalog.modules import MODULES
+
+                needs = [MODULES[m].label if m in MODULES else m for m in state["blocked_by"]]
+                todo = f"Finish setting up {' and '.join(needs)} first"
+            if not todo and not state.get("entitled", True):
+                todo = "Not included in your plan right now"
+            if key == "order" and state.get("ready") and not (states.get("fulfilment") or {}).get("ready"):
+                todo = "Turn on pickup or delivery (Pickup & delivery) so orders can be handed over"
             if key == "request_quote" and not (states.get("leads") or {}).get("ready"):
                 todo = todo or "Switch on Enquiries so quote requests have somewhere to land"
             actions.append({"key": key, "label": label, "live": False, "module": module,
@@ -500,9 +517,9 @@ async def website_capabilities(
         "primary": flags.get("primary"), "primary_label": flags.get("primary_label"),
         "actions": actions,
         "auto_sections": [{"module": s["module"], "section_type": s["section_type_id"],
-                           "label": _SECTION_WORDS.get(s["module"], s["module"]),
+                           "label": section_words(s["module"]),
                            "state": "hidden" if s["module"] in hidden else "showing"} for s in would]
-        + [{"module": m, "section_type": None, "label": _SECTION_WORDS.get(m, m), "state": "hidden"}
+        + [{"module": m, "section_type": None, "label": section_words(m), "state": "hidden"}
            for m in sorted(hidden) if m not in {s["module"] for s in would}],
     }, "meta": {"correlation_id": actor.request.correlation_id}}
 
@@ -522,7 +539,10 @@ async def set_auto_section(
     if body.module not in AUTO_SECTION_MODULES:
         raise ValidationError("That tool does not add a section")
     website = await WebsiteResolver.resolve_website(session, business_id=business_id)
-    hidden = set(website.auto_sections_hidden or [])
+    from platform_core.website.capabilities import LEGACY_HIDDEN
+
+    # A pre-catalogue "orders" entry hid the shop; it now means the catalogue.
+    hidden = {LEGACY_HIDDEN.get(m, m) for m in website.auto_sections_hidden or []}
     hidden = hidden | {body.module} if body.hidden else hidden - {body.module}
     website.auto_sections_hidden = sorted(hidden)
     await AuditService.record(session, event_type="website.auto_section.changed",

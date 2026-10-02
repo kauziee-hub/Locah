@@ -146,9 +146,15 @@ async def assert_tenant_isolated(
         await engine.dispose()
 
 
-def drain_events(business_id: str | uuid.UUID, *, rounds: int = 3) -> int:
+def drain_events(business_id: str | uuid.UUID, *, rounds: int = 30) -> int:
     """Run this business's pending outbox events through fan-out and every
-    subscriber, like the worker would — isolated to this business's events."""
+    subscriber, like the worker would — isolated to this business's events.
+
+    The worker claims ten events and ten deliveries at a time and keeps
+    polling, so this keeps going until a round finds nothing left to fan out
+    or deliver (`rounds` is only a runaway guard). A fixed small number of
+    rounds would leave late deliveries behind whenever a business's earlier
+    events — module switches, catalogue edits — fan out to many subscribers."""
     from platform_worker.outbox_consumer import poll_and_dispatch_outbox, poll_and_run_deliveries
 
     async def _run() -> int:
@@ -163,9 +169,12 @@ def drain_events(business_id: str | uuid.UUID, *, rounds: int = 3) -> int:
                 if not ids:
                     break
                 async with factory() as session:
-                    await poll_and_dispatch_outbox(session, "phase-b-test", event_ids=ids)
+                    fanned = await poll_and_dispatch_outbox(session, "phase-b-test", event_ids=ids)
                 async with factory() as session:
-                    total += await poll_and_run_deliveries(session, "phase-b-test", event_ids=ids)
+                    settled = await poll_and_run_deliveries(session, "phase-b-test", event_ids=ids)
+                total += settled
+                if not fanned and not settled:
+                    break
         finally:
             await engine.dispose()
         return total

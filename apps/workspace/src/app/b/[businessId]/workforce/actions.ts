@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { refreshBusinessShell } from '@/lib/refresh'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiPost } from '@/lib/api'
 
@@ -16,6 +17,7 @@ export async function createWorkforceMember(
     token
   )
   revalidatePath(`/b/${businessId}/workforce`)
+  refreshBusinessShell(businessId)
 }
 
 export async function deactivateWorkforceMember(businessId: string, memberId: string) {
@@ -28,4 +30,5 @@ export async function deactivateWorkforceMember(businessId: string, memberId: st
   )
   revalidatePath(`/b/${businessId}/workforce`)
   revalidatePath(`/b/${businessId}/workforce/${memberId}`)
+  refreshBusinessShell(businessId)
 }

@@ -212,6 +212,27 @@ class MediaService:
         )
 
     @staticmethod
+    async def resolve_many(
+        session: AsyncSession, *, business_id: uuid.UUID, asset_ids: list[uuid.UUID]
+    ) -> list[dict[str, Any]]:
+        """This business's own ready pictures among `asset_ids`, in that order
+        (each with its url and whether it is an unapproved draft LOCAH drew)."""
+        if not asset_ids:
+            return []
+        rows = (
+            await session.execute(
+                select(MediaAsset).where(
+                    MediaAsset.id.in_(asset_ids),
+                    MediaAsset.business_id == business_id,
+                    MediaAsset.status == "ready",
+                    MediaAsset.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        by_id = {a.id: a for a in rows}
+        return [{"id": str(i), **MediaService._resolved(by_id[i])} for i in asset_ids if i in by_id]
+
+    @staticmethod
     async def list_for_business(
         session: AsyncSession,
         *,

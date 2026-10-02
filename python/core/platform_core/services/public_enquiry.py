@@ -41,11 +41,12 @@ def _bad(field: str, message: str) -> ValidationError:
 class PublicEnquiryService:
     @staticmethod
     async def accepting(session: AsyncSession, business_id: uuid.UUID) -> bool:
-        state = (await session.execute(
-            select(BusinessModuleState.activation_state).where(
-                BusinessModuleState.business_id == business_id, BusinessModuleState.module_id == "leads")
-        )).scalar()
-        return state in ("enabled", "ready", "active")
+        """Leads' public intake: open while Leads is ready — switched on and
+        entitled (a stale activation without an Entitlement takes nothing,
+        Doc 08 §20.2) — the same answer that puts the enquiry form on the site."""
+        from platform_core.services.module_readiness import module_ready
+
+        return bool(await module_ready(session, business_id, "leads"))
 
     @staticmethod
     async def submit(session: AsyncSession, *, slug: str, payload: dict[str, Any], correlation_id: str) -> dict[str, Any]:

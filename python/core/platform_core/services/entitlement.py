@@ -8,6 +8,7 @@ from platform_core.context import EntitlementSet
 from platform_core.entitlements.resolver import BusinessEntitlementResolver
 from platform_core.models import Business, BusinessModuleState
 from platform_core.services.audit import AuditService
+from platform_core.services.outbox import OutboxService
 
 
 class EntitlementService:
@@ -43,6 +44,7 @@ class ModuleService:
         module_id: str,
         actor_id: uuid.UUID,
         entitlements: EntitlementSet,
+        correlation_id: str | None = None,
     ) -> BusinessModuleState:
         if not entitlements.is_entitled(module_id):
             from platform_core.exceptions import EntitlementRequired
@@ -101,6 +103,17 @@ class ModuleService:
             action="enable",
             after_state={"module_id": module_id},
         )
+        # The domain fact, in the same transaction: what the module contributes
+        # to the Marketplace listing and the public website follows from it
+        # (marketplace.index, website.revalidate subscribers). An audit row is
+        # history; it reaches no subscriber.
+        await OutboxService.publish(
+            session,
+            event_type="module.enabled",
+            payload={"business_id": str(business_id), "module_id": module_id, "source": "business"},
+            business_id=business_id,
+            correlation_id=correlation_id,
+        )
         return state
 
     @staticmethod
@@ -111,6 +124,7 @@ class ModuleService:
         module_id: str,
         actor_id: uuid.UUID,
         reason: str | None = None,
+        correlation_id: str | None = None,
     ) -> BusinessModuleState:
         from platform_core.catalog.modules import MODULES, storefront_modules
 
@@ -147,5 +161,14 @@ class ModuleService:
             resource_id=state.id,
             action="deactivate",
             after_state={"module_id": module_id, "reason": reason},
+        )
+        # Deactivation stops new operations and keeps every record (Doc 08
+        # §7.4 rule 6); the event takes its public actions away everywhere.
+        await OutboxService.publish(
+            session,
+            event_type="module.deactivated",
+            payload={"business_id": str(business_id), "module_id": module_id, "source": "business"},
+            business_id=business_id,
+            correlation_id=correlation_id,
         )
         return state

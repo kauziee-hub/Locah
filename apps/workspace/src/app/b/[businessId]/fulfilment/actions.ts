@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { refreshBusinessShell } from '@/lib/refresh'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { platformUrl } from '@platform/config'
 
@@ -62,6 +63,7 @@ export async function updateFulfilmentSettings(formData: FormData) {
   })
   revalidatePath(`/b/${businessId}/fulfilment`)
   revalidatePath(`/b/${businessId}/fulfilment/zones`)
+  refreshBusinessShell(businessId)
 }
 
 /** Paying on delivery / at pickup — one rule for the website and WhatsApp (Founder: Orders; Payments §5). */

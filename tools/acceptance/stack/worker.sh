@@ -13,6 +13,9 @@ export VOICE_PROVIDER=replay
 export IMAGE_PROVIDER=none
 export MESSAGING_SANDBOX=1
 export WORKER_POLL_INTERVAL_SECONDS=1
+# Drop the local web app's cached site when something it renders changes.
+export WEB_REVALIDATE_URL=${WEB_REVALIDATE_URL:-http://localhost:${WEB_PORT:-3100}/api/revalidate}
+export WEB_REVALIDATE_SECRET=${REVALIDATE_SECRET:-local-revalidate-secret-for-acceptance}
 unset GEMINI_API_KEY XAI_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY || true
 # platform_worker lives in apps/worker/src; run from there so it imports.
 cd "$ROOT/apps/worker/src"

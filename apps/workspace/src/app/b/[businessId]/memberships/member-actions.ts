@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { refreshBusinessShell } from '@/lib/refresh'
 import { sendJson, type ActionResult } from '@/lib/server-send'
 
 const api = (b: string) => `/v1/platform/businesses/${b}`
@@ -8,6 +9,8 @@ const api = (b: string) => `/v1/platform/businesses/${b}`
 function refresh(businessId: string, enrolmentId?: string) {
   revalidatePath(`/b/${businessId}/memberships`)
   if (enrolmentId) revalidatePath(`/b/${businessId}/memberships/${enrolmentId}`)
+  // A published or archived plan is what makes Memberships ready or not.
+  if (!enrolmentId) refreshBusinessShell(businessId)
 }
 
 async function send<T = unknown>(

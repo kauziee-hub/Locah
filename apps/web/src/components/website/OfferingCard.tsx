@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { addToBasket } from '@/lib/checkout-api'
-import { Specs, money, priceLabel, type OptionGroup, type PublicOffering } from './offering-view'
+import { Specs, StockNote, money, priceLabel, soldOut, type OptionGroup, type PublicOffering } from './offering-view'
 import { useWords } from './SiteWords'
 
 export type { PublicOffering } from './offering-view'
@@ -33,6 +33,8 @@ export function OfferingCard({
 }) {
   const t = useWords()
   const flow = o.kind?.flow ?? 'cart'
+  // Ordering is live AND Inventory has not said this one is sold out.
+  const orderable = canOrder && !soldOut(o)
   const groups = useMemo(() => o.option_groups ?? [], [o.option_groups])
   const [pack, setPack] = useState(o.packs?.[0]?.label ?? '')
   const [variant, setVariant] = useState(o.variants?.[0]?.id ?? '')
@@ -121,6 +123,7 @@ export function OfferingCard({
         {o.kind && flow !== 'cart' ? <p className="ls-offer__kind">{t(o.kind.label)}</p> : null}
         <h3 className="ls-item__title">{o.title}</h3>
         {o.description ? <p className="ls-item__desc">{o.description}</p> : null}
+        <StockNote o={o} t={t} />
         <Specs o={o} t={t} />
         {o.price_basis?.words ? <p className="ls-offer__basis">{t('Today’s price: {basis}', { basis: o.price_basis.words })}</p> : null}
         {o.preorder && canOrder ? (
@@ -156,7 +159,7 @@ export function OfferingCard({
               </>
             ) : null}
           </div>
-        ) : chooses && canOrder ? (
+        ) : chooses && orderable ? (
           <div className="ls-chooser">
             {o.packs?.length ? (
               <div className="ls-choice" role="radiogroup" aria-label={t('Pack size')}>
@@ -204,7 +207,7 @@ export function OfferingCard({
           <div className="ls-item__foot">
             {priceLabel(o, t) ? <span className="ls-price">{priceLabel(o, t)}</span> : <span />}
             <span className="ls-offer__actions">
-              {flow === 'cart' && canOrder ? <button type="button" className="ls-btn" onClick={add}>{t(o.kind?.cta ?? 'Add')}</button> : null}
+              {flow === 'cart' && orderable ? <button type="button" className="ls-btn" onClick={add}>{t(o.kind?.cta ?? 'Add')}</button> : null}
               {flow === 'booking' && canBook ? <Link className="ls-btn" href={`/${slug}/book?offering_id=${o.id}`}>{t(o.kind?.cta ?? 'Book')}</Link> : null}
               {(flow === 'enquiry' || flow === 'membership') && canEnquire ? (
                 <>

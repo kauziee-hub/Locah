@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.exceptions import ValidationError
 from platform_core.gates import assert_business_mutable
-from platform_core.models import BusinessProfile, WebsitePage, WebsiteSection, WebsiteVersion
+from platform_core.models import BusinessProfile, WebsitePage, WebsiteSection, WebsiteSectionType, WebsiteVersion
 from platform_core.secrets import resolve_signing_secret
 from platform_core.context_resolver import bind_public_context
 from platform_core.resolvers.website_resolver import WebsiteResolver
@@ -313,19 +313,49 @@ class WebsitePublishService:
         # behind it is actually *ready* — built, switched on and set up — the
         # same answer the Marketplace listing uses (Guide §4; Founder §16).
         contact = await _public_contact(session, business.id)
-        capabilities = await caps.site_capabilities(
-            session, business.id, has_whatsapp=bool(contact.get("whatsapp")), has_phone=bool(contact.get("phone")))
-        kinds = capabilities.pop("_kinds", {})
-        traits = capabilities.pop("_traits", [])
-        # Every visible section of this version, with the page it is on: the
-        # tools' sections and the header's main button both depend on it.
+        states, kinds, traits = await caps.gather_states(session, business.id)
+        ready = {k: bool(v["ready"]) for k, v in states.items()}
+        capabilities = caps.flags_for(
+            ready, kinds, traits, has_whatsapp=bool(contact.get("whatsapp")), has_phone=bool(contact.get("phone")))
+        capabilities.pop("_kinds", None)
+        capabilities.pop("_traits", None)
+        # Doc 12 §11.9: a section bound to a module is filled through that
+        # module's public read contract, so it shows only while the module is
+        # ready. The owner's preview keeps it as a placeholder saying why; the
+        # live site leaves it out. The stored design is never changed.
+        type_modules = {
+            row.id: row.contributing_module or row.requires_module
+            for row in (await session.execute(select(WebsiteSectionType))).scalars().all()
+        }
+        showable: list[dict[str, Any]] = []
+        for row in serialized_page.get("sections") or []:
+            module = caps.section_module(row.get("section_type_id", ""), row.get("module_binding"), type_modules)
+            if caps.section_available(row.get("section_type_id", ""), module, ready):
+                showable.append(row)
+            elif is_preview:
+                showable.append({**row, "module_unavailable": True, "unavailable_module": module,
+                                 "unavailable_reason": caps.unavailable_reason(states.get(module or ""))})
+        serialized_page["sections"] = showable
+        # Every visible section of this version that can show right now, with
+        # the page it is on: the tools' sections and the header's main button
+        # both depend on it. Anchors and pages that only a not-ready section
+        # filled are remembered so the navigation stops pointing at them.
         placed: list[tuple[Any, Any]] = []
+        lost_anchors: set[str] = set()
+        page_shows: dict[str, bool] = {}
         for p in pages:
             if not (p.is_published or is_preview):
                 continue
+            page_shows.setdefault(p.slug, False)
             for s in await WebsiteResolver.list_sections(session, page_id=p.id):
-                if s.is_visible:
+                if not s.is_visible:
+                    continue
+                module = caps.section_module(s.section_type_id, s.module_binding, type_modules)
+                if caps.section_available(s.section_type_id, module, ready):
                     placed.append((p, s))
+                    page_shows[p.slug] = True
+                elif isinstance((s.content or {}).get("anchor"), str):
+                    lost_anchors.add(str((s.content or {})["anchor"]))
         # A module that became ready shows up on the home page without a
         # rebuild when the owner's design has nothing for it (Founder §15).
         extra = caps.auto_sections(
@@ -368,6 +398,13 @@ class WebsitePublishService:
         capabilities.update(caps.pick_primary(
             capabilities, traits, landings={a: landing(a) for a in caps.LANDING_SECTIONS},
             has_whatsapp=bool(contact.get("whatsapp")), has_phone=bool(contact.get("phone"))))
+        navigation = _navigation(
+            version.navigation, page_shows=page_shows, lost_anchors=lost_anchors,
+            kept_anchors={str((s.content or {}).get("anchor")) for _, s in placed if (s.content or {}).get("anchor")}
+            | {str(r["content"].get("anchor")) for r in extra if r["content"].get("anchor")},
+            catalogue=(landing("order"), str(capabilities.get("catalogue_label") or ""))
+            if capabilities.get("catalogue") else None,
+        )
 
         return {
             "business": {
@@ -386,11 +423,54 @@ class WebsitePublishService:
             "website": WebsiteResolver.serialize_website(website),
             "version": WebsiteResolver.serialize_version(version),
             "page": serialized_page,
-            "navigation": version.navigation,
+            "navigation": navigation,
             "theme": await _theme_with_logo(session, business.id, version.theme),
             "is_preview": is_preview,
             "cache_control": "no-store" if is_preview else "public",
         }
+
+
+def _navigation(
+    stored: Any,
+    *,
+    page_shows: dict[str, bool],
+    lost_anchors: set[str],
+    kept_anchors: set[str],
+    catalogue: tuple[str | None, str] | None,
+) -> list[Any]:
+    """The site's navigation as it can be used right now.
+
+    Pure. The stored navigation is the owner's (or the generator's) and is never
+    rewritten; this only (a) drops a link whose target was filled solely by a
+    section whose module is not ready — a "Menu" link after the catalogue is
+    switched off — and (b) adds one link to the catalogue when it is ready and
+    nothing in the navigation already leads there. Both are keyed by path, so
+    rendering twice, or a module switched on twice, never adds a second link.
+    """
+    import re
+
+    items = [i for i in (stored if isinstance(stored, list) else [])]
+    out: list[Any] = []
+    for item in items:
+        path = item.get("path") if isinstance(item, dict) else None
+        if isinstance(path, str):
+            match = re.match(r"^/([^#?]*)(?:#([^?]+))?", path)
+            slug, anchor = (match.group(1), match.group(2)) if match else ("", None)
+            if slug and page_shows.get(slug) is False:
+                continue
+            if anchor and anchor in lost_anchors and anchor not in kept_anchors:
+                continue
+        out.append(item)
+    if catalogue is not None:
+        path, label = catalogue
+        if path and label and not any(
+            isinstance(i, dict) and (i.get("path") == path or str(i.get("label", "")).casefold() == label.casefold())
+            for i in out
+        ):
+            at = next((n for n, i in enumerate(out) if isinstance(i, dict) and "contact" in str(i.get("path", ""))),
+                      len(out))
+            out.insert(at, {"label": label, "path": path})
+    return out
 
 
 async def _theme_with_logo(session: Any, business_id: Any, theme: Any) -> dict[str, Any]:

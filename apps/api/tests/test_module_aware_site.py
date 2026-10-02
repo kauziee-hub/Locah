@@ -67,17 +67,21 @@ def test_digital_only_publishes_no_address() -> None:
 
 
 def test_a_ready_tool_adds_its_section_only_where_the_design_has_none() -> None:
-    flags = decide({"memberships": True, "orders": True, "reviews": True}, {"product": 2}, [])
+    # The catalogue section is the catalogue's (a menu can be browsed without
+    # online ordering); Orders only decides whether it carries an Add button.
+    flags = {**decide({"memberships": True, "offerings-catalog": True, "orders": True, "reviews": True},
+                      {"product": 2}, []), "catalogue_label": "Products"}
     types = {s["section_type_id"]: s for s in auto_sections(flags, {"hero", "contact"}, hidden=[],
                                                             published_reviews=0, traits=[])}
     assert set(types) == {"plans_section", "offerings_list"}
     assert types["plans_section"]["content"]["anchor"] == "plans"
+    assert types["offerings_list"]["module_binding"] == {"module": "offerings-catalog"}
     assert all(s["is_auto"] for s in types.values())
     # The owner's own menu already shows the shop; their own plans already show plans.
     assert auto_sections(flags, {"menu_section", "plans_section"}, hidden=[], published_reviews=0, traits=[]) == []
     # Hidden by the owner stays hidden.
     assert [s["module"] for s in auto_sections(flags, set(), hidden=["memberships"], published_reviews=0,
-                                               traits=[])] == ["orders"]
+                                               traits=[])] == ["offerings-catalog"]
     # Reviews appear once there is a review to show.
     with_reviews = auto_sections(flags, {"menu_section", "plans_section"}, hidden=[], published_reviews=2, traits=[])
     assert [s["section_type_id"] for s in with_reviews] == ["reviews_section"]

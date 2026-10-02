@@ -62,9 +62,12 @@ class QuoteRequest(BaseModel):
 @router.get("/websites/{slug}/offerings")
 async def public_offerings(
     slug: str,
+    location_id: UUID | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    data = await CheckoutService.list_public_offerings(session, slug=slug)
+    """The catalogue's public read contract. `location_id` narrows stock
+    availability to one Location (Doc 09 §5.5)."""
+    data = await CheckoutService.list_public_offerings(session, slug=slug, location_id=location_id)
     return {"data": data, "meta": {"count": len(data["offerings"])}}
 
 

@@ -114,7 +114,7 @@ MODULES: dict[str, ModuleInfo] = {m.key: m for m in (
         "Appointments, tables, rooms, classes, rentals, site visits and event dates — each with its own rules.",
         customer_can=("Pick a date and time and book", "Manage or cancel their booking"),
         staff_can=("See the calendar", "Confirm, check in, complete, cancel"),
-        setup=(_s("bookable_offering", "Add a service, room, table or class people can book"),),
+        setup=(_s("bookable_offering", "Add a service, room, table, class or staff member people can book"),),
         packs=("appointments", "stays"), depends_on=("offerings-catalog",),
         site=("book", "my_bookings"), marketplace_actions=("book",), built=True,
     ),

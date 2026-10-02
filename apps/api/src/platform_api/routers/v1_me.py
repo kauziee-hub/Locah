@@ -35,6 +35,13 @@ class ContextResponse(BaseModel):
     permissions: list[str]
     entitled_modules: list[str]
     module_states: dict[str, str]
+    # Per catalogue module: active | setup_required | not_entitled | deactivated
+    # | not_enabled | unavailable — the Workspace navigation's projection input
+    # (Doc 05 NAV-007/NAV-008), from the same readiness customer surfaces use.
+    navigation_modules: dict[str, str] = Field(default_factory=dict)
+    # This Business's own words for its destinations (Doc 07 §3.3): offerings,
+    # bookings, customers. Labels only; routes and permissions never change.
+    terms: dict[str, str] = Field(default_factory=dict)
     default_business_id: str | None = None
     last_business_id: str | None = None
     primary_business_id: str | None = None
@@ -70,10 +77,18 @@ async def get_context(
 ) -> dict[str, Any]:
     prefs = await IdentityService.get_consumer_preferences(session, ctx.identity_id)
     solo = False
+    navigation_modules: dict[str, str] = {}
+    terms: dict[str, str] = {}
     if ctx.business_id is not None:
+        from platform_core.services.business import BusinessService
         from platform_core.services.business_classification import run_solo
+        from platform_core.services.workspace_projection import navigation_modules as project, terms_for
 
         solo = await run_solo(session, ctx.business_id)
+        navigation_modules = await project(session, ctx.business_id)
+        business = await BusinessService.get_by_id(session, ctx.business_id)
+        if business is not None:
+            terms = await terms_for(session, business)
     return {
         "data": ContextResponse(
             identity_id=str(ctx.identity_id),
@@ -84,6 +99,8 @@ async def get_context(
             permissions=sorted(ctx.effective_permissions),
             entitled_modules=sorted(ctx.effective_entitlements.modules),
             module_states={k: v.activation_state for k, v in ctx.module_states.items()},
+            navigation_modules=navigation_modules,
+            terms=terms,
             default_business_id=prefs.get("default_business_id"),
             last_business_id=prefs.get("last_business_id"),
             primary_business_id=prefs.get("primary_business_id"),

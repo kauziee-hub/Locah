@@ -184,12 +184,59 @@ async def test_setup_offerings_needs_explicit_module_choice(monkeypatch):
     bp.website_draft.offerings = [OfferingDraft(name="Chicken")]
     create = AsyncMock()
     monkeypatch.setattr(OfferingService, "create_offering", create)
+    import platform_core.services.module_readiness as readiness
+
+    monkeypatch.setattr(readiness, "module_operational", AsyncMock(return_value=False))
     with pytest.raises(ValidationError, match="Choose the online catalogue"):
         await Service.setup_offerings(
             AsyncMock(), Business(id=bp.business_id), bp,
             actor_id=uuid4(), correlation_id=str(uuid4()),
         )
     create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_switching_the_catalogue_on_later_is_also_the_owners_choice(monkeypatch):
+    """Not picked during onboarding, switched on in the Workspace afterwards:
+    the owner may still bring in what they named, as private drafts."""
+    bp = blueprint()
+    bp.completion_state.status = "built"
+    bp.completion_state.confirmed = True
+    bp.website_draft.offerings = [OfferingDraft(name="Haircut"), OfferingDraft(name="Facial")]
+    create = AsyncMock()
+    monkeypatch.setattr(OfferingService, "list_for_business", AsyncMock(return_value=[]))
+    monkeypatch.setattr(OfferingService, "create_offering", create)
+    import platform_core.services.module_readiness as readiness
+
+    monkeypatch.setattr(readiness, "module_operational", AsyncMock(return_value=True))
+    await Service.setup_offerings(
+        AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(), correlation_id=str(uuid4()),
+    )
+    assert [c.kwargs["payload"]["title"] for c in create.await_args_list] == ["Haircut", "Facial"]
+    assert all(c.kwargs["payload"]["visibility"] == "private" for c in create.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("category", "subcategory", "expected"), [
+    ("beauty", "salon", "service"),
+    ("food_service", "restaurant", "menu_item"),
+])
+async def test_drafts_take_the_kind_the_trade_sells(monkeypatch, category, subcategory, expected):
+    from platform_core.interview.models import CategorySeed
+
+    bp = blueprint()
+    bp.category = CategorySeed(category_key=category, subcategory_key=subcategory)
+    bp.completion_state.status = "built"
+    bp.completion_state.confirmed = True
+    bp.approved_modules = ["offerings-catalog"]
+    bp.website_draft.offerings = [OfferingDraft(name="First item")]
+    create = AsyncMock()
+    monkeypatch.setattr(OfferingService, "list_for_business", AsyncMock(return_value=[]))
+    monkeypatch.setattr(OfferingService, "create_offering", create)
+    await Service.setup_offerings(
+        AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(), correlation_id=str(uuid4()),
+    )
+    assert create.await_args is not None and create.await_args.kwargs["payload"]["offering_type"] == expected
 
 
 def entitlements():

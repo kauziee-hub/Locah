@@ -263,35 +263,100 @@ class WebsiteImageService:
             if existing:
                 skipped += 1
                 continue
-            planned = section_image_prompt(theme, "product_showcase", business_type or "",
-                                           subject=offering.title)
-            if planned is None:
-                skipped += 1  # a project or a piece of work: only a real photo will do
+            drawn = await WebsiteImageService._draw_offering(
+                session, business_id=business_id, actor_id=actor_id, theme=theme,
+                business_type=business_type, offering=offering)
+            if not drawn["ok"]:
+                # a project or a piece of work needs a real photo; anything else failed
+                if drawn["reason"] == "needs_real_photo":
+                    skipped += 1
+                else:
+                    failed += 1
                 continue
-            generated = await generate_image_bytes(planned[0], aspect_ratio=planned[1])
-            if generated is None:
-                failed += 1
-                continue
-            try:
-                asset = await MediaService.persist_generated(
-                    session,
-                    business_id=business_id,
-                    actor_id=actor_id,
-                    purpose="offering",
-                    mime_type=generated.mime_type,
-                    body=generated.bytes,
-                    alt_text=f"Illustrative picture: {offering.title}"[:200],
-                    original_filename=f"generated-{offering.id}.jpg",
-                )
-            except Exception as exc:  # noqa: BLE001
-                _log.warning("website.images.offering_persist_failed", error=str(exc)[:300])
-                failed += 1
-                continue
-            offering.image_asset_ids = [uuid.UUID(asset["id"])]
+            offering.image_asset_ids = [uuid.UUID(drawn["asset"]["id"])]
             flag_modified(offering, "image_asset_ids")
             generated_count += 1
         await session.flush()
         return {"generated": generated_count, "skipped": skipped, "failed": failed}
+
+    @staticmethod
+    async def _draw_offering(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        theme: dict[str, Any],
+        business_type: str | None,
+        offering: Offering,
+    ) -> dict[str, Any]:
+        """One illustrative picture of one real offering, stored as a draft media
+        asset the owner can keep, replace or remove. The subject is the
+        offering's own title — never an invented detail."""
+        planned = section_image_prompt(theme, "product_showcase", business_type or "", subject=offering.title)
+        if planned is None:
+            return {"ok": False, "reason": "needs_real_photo", "detail": REAL_PHOTO_MESSAGE}
+        generated = await generate_image_bytes(planned[0], aspect_ratio=planned[1])
+        if generated is None:
+            return {"ok": False, "reason": "generation_unavailable",
+                    "detail": "Image generation did not return a picture. You can upload one instead."}
+        try:
+            asset = await MediaService.persist_generated(
+                session,
+                business_id=business_id,
+                actor_id=actor_id,
+                purpose="offering",
+                mime_type=generated.mime_type,
+                body=generated.bytes,
+                alt_text=f"Illustrative picture: {offering.title}"[:200],
+                original_filename=f"generated-{offering.id}.jpg",
+                generated_for=f"offering:{offering.id}",
+                prompt_version=PROMPT_VERSION,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("website.images.offering_persist_failed", error=str(exc)[:300])
+            return {"ok": False, "reason": "persist_failed",
+                    "detail": "The picture could not be saved. You can upload one instead."}
+        return {"ok": True, "asset": asset}
+
+    @staticmethod
+    async def generate_offering_image(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        offering_id: uuid.UUID,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        """The owner's "Draw a picture" for one offering. The new picture goes
+        first; earlier pictures are kept. Saved through the catalogue's own
+        update (version, audit, `offering.updated`), so the website and
+        Marketplace refresh like after any other edit."""
+        from platform_core.services.offering import OfferingService
+
+        business = await session.get(Business, business_id)
+        offering = await session.get(Offering, offering_id)
+        if business is None or offering is None or offering.business_id != business_id                 or offering.deleted_at is not None:
+            return {"ok": False, "reason": "offering_missing"}
+        draft = (
+            await session.execute(
+                select(WebsiteVersion).where(
+                    WebsiteVersion.business_id == business_id,
+                    WebsiteVersion.version_type == "draft",
+                    WebsiteVersion.superseded_at.is_(None),
+                )
+            )
+        ).scalars().first()
+        drawn = await WebsiteImageService._draw_offering(
+            session, business_id=business_id, actor_id=actor_id, theme=dict(draft.theme or {}) if draft else {},
+            business_type=business.business_type, offering=offering)
+        if not drawn["ok"]:
+            return drawn
+        new_id = uuid.UUID(drawn["asset"]["id"])
+        await OfferingService.patch_offering(
+            session, business_id=business_id, offering_id=offering_id, actor_id=actor_id,
+            correlation_id=correlation_id,
+            payload={"image_asset_ids": [new_id, *[a for a in (offering.image_asset_ids or []) if a != new_id]]})
+        return drawn
 
 
 def _trade(business: Business) -> str:

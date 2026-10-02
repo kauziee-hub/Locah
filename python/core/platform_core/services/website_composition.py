@@ -66,12 +66,23 @@ class WebsiteCompositionService:
 
     @staticmethod
     async def _active_modules(session: AsyncSession, business_id: uuid.UUID) -> set[str]:
+        """Switched on AND entitled. A stale activation row without an
+        Entitlement contributes nothing to the website (Doc 08 §20.2).
+
+        Setup completeness is deliberately not required: an owner may place a
+        Menu before the first item exists. Until the module is ready the
+        section is a placeholder in the preview and absent from the live site
+        (WebsitePublishService.load_public_page, Doc 12 §11.9)."""
+        from platform_core.services.entitlement import EntitlementService
+
         rows = await session.execute(
             select(BusinessModuleState.module_id, BusinessModuleState.activation_state).where(
                 BusinessModuleState.business_id == business_id
             )
         )
-        return {row[0] for row in rows.all() if row[1] in ACTIVE_MODULE_STATES}
+        switched_on = {row[0] for row in rows.all() if row[1] in ACTIVE_MODULE_STATES}
+        entitlements = await EntitlementService.get_effective(session, business_id)
+        return {m for m in switched_on if entitlements.is_entitled(m)}
 
     @staticmethod
     async def active_modules(session: AsyncSession, *, business_id: uuid.UUID) -> set[str]:
@@ -227,6 +238,8 @@ class WebsiteCompositionService:
             section_type_id=section_type_id,
             layout_variant=variant,
             content=validated,
+            # Doc 12 §11.1/§11.9: which module's public read contract fills it.
+            module_binding={"module": needed} if needed else None,
             is_visible=True,
             sort_order=index,
         )

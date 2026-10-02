@@ -194,6 +194,7 @@ async def enable_module(
         module_id=module_id,
         actor_id=ctx.identity_id,
         entitlements=ctx.effective_entitlements,
+        correlation_id=ctx.correlation_id,
     )
     await session.commit()
     return {
@@ -216,6 +217,7 @@ async def deactivate_module(
         business_id=business_id,
         module_id=module_id,
         actor_id=ctx.identity_id,
+        correlation_id=ctx.correlation_id,
     )
     await session.commit()
     return {

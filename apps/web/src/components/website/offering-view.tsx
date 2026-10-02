@@ -35,6 +35,21 @@ export type PublicOffering = {
   preorder?: PreorderInfo
   /** Priced from today's rate (OK-15): how the price is made up. */
   price_basis?: { words: string | null; rate_at: string | null }
+  /** Inventory's public word for this item (never a quantity); absent when
+   *  the business does not track its stock or Inventory is not on. */
+  availability?: 'available' | 'low_stock' | 'out_of_stock' | null
+}
+
+/** Sold out can be shown but never added to a basket. */
+export function soldOut(o: PublicOffering): boolean {
+  return o.availability === 'out_of_stock'
+}
+
+/** One honest line about stock, from Inventory's public answer — or nothing. */
+export function StockNote({ o, t = english }: { o: PublicOffering; t?: Words }) {
+  if (o.availability === 'out_of_stock') return <p className="ls-stock ls-stock--out">{t('Out of stock')}</p>
+  if (o.availability === 'low_stock') return <p className="ls-stock ls-stock--low">{t('Only a few left')}</p>
+  return null
 }
 
 export function money(amount?: number | null, currency?: string) {

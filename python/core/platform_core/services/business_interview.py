@@ -426,9 +426,15 @@ class BusinessInterviewService:
                 logo_url = None
         from platform_core.interview.coverage import floor_met
 
+        applied = {name.casefold() for name in bp.applied_setup_offerings}
         return {
             "blueprint": bp.model_dump(mode="json"),
             "understanding": understanding(bp, business.business_type, logo_url),
+            # What the owner named in the conversation that has not become a
+            # draft catalogue item yet — offered, never created without asking.
+            "setup_pending": [
+                name for name, _, _ in _setup_rows(bp) if name and name.casefold() not in applied
+            ] if bp.completion_state.status == "built" and bp.completion_state.confirmed else [],
             # Build is offered as soon as there is something honest to build —
             # and never taken away once offered.
             "build_available": bp.completion_state.ready_at is not None
@@ -856,18 +862,31 @@ class BusinessInterviewService:
         if bp.completion_state.status != "built" or not bp.completion_state.confirmed:
             raise ValidationError("Build and confirm your business before setting up items")
         if "offerings-catalog" not in bp.approved_modules:
-            raise ValidationError("Choose the online catalogue before setting up items")
+            # Chosen during onboarding, or switched on later in the Workspace —
+            # either way it is the owner's own choice of the catalogue.
+            from platform_core.services.module_readiness import module_operational
+
+            if not await module_operational(session, business.id, "offerings-catalog"):
+                raise ValidationError("Choose the online catalogue before setting up items")
         from platform_core.services.offering import OfferingService
+
+        from platform_core.catalog.offering_kinds import FIRST_LAUNCH_KINDS
+        from platform_core.interview.playbooks import playbook_for
 
         existing = await OfferingService.list_for_business(session, business.id)
         known = {item.title.strip().casefold() for item in existing}
         applied = {name.casefold() for name in bp.applied_setup_offerings}
+        # What this trade sells (a salon's services, a restaurant's menu items),
+        # so a draft can be booked or ordered as it should. The owner can change
+        # the kind; a trade whose kind is not a catalogue kind keeps the default.
+        offer_kind = playbook_for(bp).offer_kind
+        typed = {"offering_type": offer_kind} if offer_kind in FIRST_LAUNCH_KINDS else {}
         for name, price, unit in _setup_rows(bp):
             if not name or name.casefold() in applied:
                 continue
             if name.casefold() not in known:
                 payload: dict[str, Any] = {
-                    "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry",
+                    "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry", **typed,
                 }
                 amount = re.sub(r"[^\d.]", "", price)
                 if amount:
@@ -958,6 +977,7 @@ class BusinessInterviewService:
                         module_id=mid,
                         actor_id=actor_id,
                         entitlements=BusinessEntitlementResolver.to_entitlement_set(entitlement),
+                        correlation_id=correlation_id,
                     )
                 active.add(mid)
             pending -= ready

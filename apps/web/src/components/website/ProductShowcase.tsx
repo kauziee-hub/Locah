@@ -40,6 +40,8 @@ type Live = {
   description?: string | null
   price_amount?: number | null
   currency?: string
+  image_url?: string | null
+  availability?: string | null
 }
 
 function money(amount?: number | null, currency?: string) {
@@ -125,9 +127,14 @@ export function ProductShowcase({
   const [live, setLive] = useState<Live[]>([])
   const [added, setAdded] = useState('')
   const canOrder = Boolean(capabilities?.order)
+  // The catalogue is ready: show the business's real items and prices (the
+  // Offerings module's public read contract), whether or not ordering is on.
+  // The words written into this section at build time are only the fallback
+  // for a business with no live catalogue.
+  const canBrowse = canOrder || Boolean(capabilities?.catalogue)
 
   useEffect(() => {
-    if (!canOrder) return
+    if (!canBrowse) return
     let gone = false
     fetchPublicOfferings(businessSlug)
       .then((data: { offerings?: Array<Record<string, unknown>> }) => {
@@ -139,15 +146,17 @@ export function ProductShowcase({
             description: (row.description as string) || null,
             price_amount: typeof row.price_amount === 'number' ? row.price_amount : null,
             currency: String(row.currency || 'INR'),
+            image_url: typeof row.image_url === 'string' ? row.image_url : null,
+            availability: typeof row.availability === 'string' ? row.availability : null,
           }))
-          .filter((row) => row.id && row.title && row.price_amount !== null)
+          .filter((row) => row.id && row.title && (row.price_amount !== null || !canOrder))
         setLive(rows)
       })
       .catch(() => undefined)
     return () => {
       gone = true
     }
-  }, [businessSlug, canOrder])
+  }, [businessSlug, canOrder, canBrowse])
 
   const shown = useMemo(
     () => (active === 'All' ? items : items.filter((item) => item.category === active)),
@@ -188,8 +197,23 @@ export function ProductShowcase({
     </div>
   )
 
-  // Ordering is on and real items exist: this is a shop now.
-  if (canOrder && live.length > 0) {
+  const order = (name: string) => {
+    const href = orderHref(contact, businessName, name, t)
+    if (!href || !orderLabel) return null
+    return (
+      <a
+        className="ls-btn ls-btn--sm ls-order"
+        href={href}
+        target={href.startsWith('https') ? '_blank' : undefined}
+        rel={href.startsWith('https') ? 'noopener noreferrer' : undefined}
+      >
+        {t(orderLabel)}
+      </a>
+    )
+  }
+
+  // Real items exist: show them. With ordering on this is a shop.
+  if (canBrowse && live.length > 0) {
     return (
       <section id={anchor} className={`ls-section ls-showcase ${alt ? 'ls-section--alt' : ''}`}>
         <div className="ls-inner">
@@ -197,16 +221,29 @@ export function ProductShowcase({
           <ul className="ls-shop-grid">
             {live.map((row) => (
               <li key={row.id} className="ls-card ls-card--product">
+                {row.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="ls-card__img" src={row.image_url} alt="" loading="lazy" />
+                ) : null}
                 <div className="ls-card__body">
                   <h3 className="ls-card__title">{row.title}</h3>
                   {row.description ? <p className="ls-card__text">{row.description}</p> : null}
+                  {row.availability === 'out_of_stock' ? (
+                    <p className="ls-stock ls-stock--out">{t('Out of stock')}</p>
+                  ) : row.availability === 'low_stock' ? (
+                    <p className="ls-stock ls-stock--low">{t('Only a few left')}</p>
+                  ) : null}
                   <div className="ls-card__foot">
                     <span className="ls-price">
                       <strong>{money(row.price_amount, row.currency)}</strong>
                     </span>
-                    <button type="button" className="ls-btn ls-btn--sm" onClick={() => add(row)}>
-                      + {t('Add')}
-                    </button>
+                    {canOrder && row.availability !== 'out_of_stock' ? (
+                      <button type="button" className="ls-btn ls-btn--sm" onClick={() => add(row)}>
+                        + {t('Add')}
+                      </button>
+                    ) : (
+                      order(row.title)
+                    )}
                   </div>
                 </div>
               </li>
@@ -225,20 +262,6 @@ export function ProductShowcase({
     )
   }
 
-  const order = (name: string) => {
-    const href = orderHref(contact, businessName, name, t)
-    if (!href || !orderLabel) return null
-    return (
-      <a
-        className="ls-btn ls-btn--sm ls-order"
-        href={href}
-        target={href.startsWith('https') ? '_blank' : undefined}
-        rel={href.startsWith('https') ? 'noopener noreferrer' : undefined}
-      >
-        {t(orderLabel)}
-      </a>
-    )
-  }
 
   const chips =
     filters.length > 1 && variant !== 'category_boards' ? (

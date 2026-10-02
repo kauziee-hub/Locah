@@ -136,6 +136,10 @@ def test_a_schedule_entry_is_a_weekday_or_a_date_and_starts_before_it_ends(owner
 
 def test_guests_book_inside_opening_hours_and_the_desk_may_book_outside(owner: dict[str, str]) -> None:
     bid, slug, loc = _business(owner)
+    # Public booking needs something real to book (module readiness): here, a
+    # person on the rota. With nothing bookable the website offers no "Book"
+    # and the public endpoint refuses (test_module_projection).
+    _provider(owner, bid, loc)
     r = client.patch(f"/v1/platform/businesses/{bid}/locations/{loc}", json={"hours": {"mon": [["09:00", "18:00"]]}},
                      headers=owner)
     assert r.status_code == 200, r.text

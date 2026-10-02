@@ -19,7 +19,7 @@ from platform_core.events.registry import EventContext, subscribe
 # straight off the projection rather than re-deriving them per result, so
 # without these a business that switched Bookings off keeps showing a "Book"
 # button that leads nowhere until something unrelated happens to reindex it.
-_TRIGGERS = (
+TRIGGERS = (
     "website.published",
     "business.profile.updated",
     "business.visibility.changed",
@@ -60,7 +60,7 @@ _TRIGGERS = (
     # return type of this decorator factory once it wraps an `async def`; every
     # other @subscribe(...) site in the codebase hits the same false positive.
     "marketplace.index",
-    *_TRIGGERS,
+    *TRIGGERS,
     description="Re-index the Marketplace projection for the affected business",
 )
 async def reindex(session: AsyncSession, event: EventContext) -> None:

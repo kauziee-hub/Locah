@@ -150,6 +150,27 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* Inventory's public word for an item (never a quantity). Theme colours only. */
+.ls-stock {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--site-muted);
+}
+.ls-stock--out {
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+/* A section whose tool is not set up yet, shown only in the owner's preview. */
+.ls-section--pending {
+  border: 1px dashed currentColor;
+  border-radius: 12px;
+  margin: 1rem auto;
+  max-width: 72rem;
+  opacity: 0.8;
+}
+
 .ls-meta {
   font-size: 0.85rem;
   color: var(--site-muted);
