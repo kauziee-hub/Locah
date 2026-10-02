@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { createSupabaseBrowserClientInstance } from '@platform/auth'
+import { EmailCodeSignIn } from '@/components/EmailCodeSignIn'
 import { acceptInvitation } from './actions'
 
 export type JoinView = {
@@ -28,9 +29,9 @@ export function JoinPanel({ view, signedInAs }: { view: JoinView; signedInAs: st
   const [mode, setMode] = useState<'create' | 'signin'>('create')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [usePassword, setUsePassword] = useState(false)
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
 
   const join = async () => {
     const r = await acceptInvitation(view.business.id, view.invitation_id)
@@ -121,64 +122,62 @@ export function JoinPanel({ view, signedInAs }: { view: JoinView; signedInAs: st
   return (
     <>
       {intro}
-      <form
-        className="bos-card bos-join__form"
-        onSubmit={(e) => {
-          e.preventDefault()
-          setError(null)
-          setNotice(null)
-          start(async () => {
-            if (mode === 'create') {
-              const { data, error: err } = await supabase.auth.signUp({
-                email: email.trim(),
-                password,
-                options: { data: { display_name: view.name ?? undefined } },
-              })
-              if (err) return setError(err.message)
-              if (!data.session) {
-                setNotice(`We sent a confirmation to ${email.trim()}. Open it, then come back to this link to join.`)
-                return
-              }
-            } else {
-              const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-              if (err) return setError('That email and password did not match. Try again.')
-            }
-            await join()
-          })
-        }}
-      >
+      <section className="bos-card bos-join__form" style={{ display: 'grid', gap: '0.75rem' }}>
         <h2>{mode === 'create' ? 'Create your login' : 'Sign in to join'}</h2>
-        <p className="bos-hint">
-          Use the email {view.business.name} added you with ({view.email_hint}).
-          {mode === 'create' ? ' Choose a password only you know.' : ''}
-        </p>
-        <label>
-          <span className="bos-label">Email</span>
-          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          <span className="bos-label">{mode === 'create' ? 'Choose a password' : 'Password'}</span>
-          <input
-            type="password"
-            autoComplete={mode === 'create' ? 'new-password' : 'current-password'}
-            minLength={mode === 'create' ? 8 : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={pending}>
-          {pending ? 'One moment…' : mode === 'create' ? 'Create login and join' : 'Sign in and join'}
-        </button>
-        {error ? <p className="bos-status bos-error" role="alert">{error}</p> : null}
-        {notice ? <p className="bos-status" role="status">{notice}</p> : null}
         <p className="bos-hint" style={{ margin: 0 }}>
-          {mode === 'create' ? 'Already have a LOCAH login? ' : 'New to LOCAH? '}
-          <button type="button" className="btn-quiet" onClick={() => setMode(mode === 'create' ? 'signin' : 'create')}>
-            {mode === 'create' ? 'Sign in instead' : 'Create a login'}
-          </button>
+          Use the email {view.business.name} added you with ({view.email_hint}). We will email you a code —
+          {mode === 'create' ? ' no password to choose.' : ' or use your password.'}
         </p>
-      </form>
+        {mode === 'signin' && usePassword ? (
+          <form
+            style={{ display: 'grid', gap: '0.75rem' }}
+            onSubmit={(e) => {
+              e.preventDefault()
+              setError(null)
+              start(async () => {
+                const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+                if (err) return setError('That email and password did not match. Try again, or use an email code.')
+                await join()
+              })
+            }}
+          >
+            <label>
+              <span className="bos-label">Email</span>
+              <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <label>
+              <span className="bos-label">Password</span>
+              <input type="password" autoComplete="current-password" value={password}
+                onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+            <button type="submit" disabled={pending}>{pending ? 'One moment…' : 'Sign in and join'}</button>
+          </form>
+        ) : (
+          // The code is checked on this page, so the invitation is still here
+          // when it is accepted: create or sign in, then join, in one go.
+          <EmailCodeSignIn
+            key={mode}
+            supabase={supabase}
+            createAccount={mode === 'create'}
+            onSignedIn={join}
+            sendLabel="Email me a code"
+            verifyLabel={mode === 'create' ? 'Create login and join' : 'Sign in and join'}
+          />
+        )}
+        {error ? <p className="bos-status bos-error" role="alert">{error}</p> : null}
+        <p className="bos-hint" style={{ margin: 0, display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <span>{mode === 'create' ? 'Already have a LOCAH login? ' : 'New to LOCAH? '}
+            <button type="button" className="btn-quiet" onClick={() => { setMode(mode === 'create' ? 'signin' : 'create'); setUsePassword(false); setError(null) }}>
+              {mode === 'create' ? 'Sign in instead' : 'Create a login'}
+            </button>
+          </span>
+          {mode === 'signin' ? (
+            <button type="button" className="btn-quiet" onClick={() => { setUsePassword(!usePassword); setError(null) }}>
+              {usePassword ? 'Email me a code instead' : 'Use my password instead'}
+            </button>
+          ) : null}
+        </p>
+      </section>
     </>
   )
 }

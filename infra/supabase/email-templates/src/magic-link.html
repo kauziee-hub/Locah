@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Sign in to LOCAH</title>
+<title>Your LOCAH sign-in code</title>
 </head>
 <body style="margin:0;padding:0;background:#f7f4ef;">
-<div style="display:none;font-size:1px;color:#f7f4ef;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Your LOCAH sign-in link.</div>
+<div style="display:none;font-size:1px;color:#f7f4ef;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Your code to sign in to LOCAH.</div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f4ef;">
 <tr><td align="center" style="padding:32px 16px;">
@@ -22,33 +22,21 @@
 </td></tr>
 
 <tr><td style="background:#ffffff;border:1px solid #d8d4cc;border-radius:14px;padding:38px 34px 34px;">
-  <h1 style="margin:0 0 12px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.3;font-weight:650;color:#1b1f3b;">Sign in to LOCAH</h1>
-  <p style="margin:0 0 26px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#6b6862;">Use the link below to sign in. No password needed.</p>
+  <h1 style="margin:0 0 12px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.3;font-weight:650;color:#1b1f3b;">Your sign-in code</h1>
+  <p style="margin:0 0 22px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#6b6862;">Type this code on the LOCAH page you have open to sign in.</p>
 
-  <!-- Bulletproof button: Outlook ignores padded anchors, so it gets VML. -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>
-    <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="__LOCAH_WEB_ORIGIN__/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/" style="height:46px;v-text-anchor:middle;width:230px;" arcsize="18%" stroke="f" fillcolor="#e8622c">
-      <w:anchorlock/><center style="color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;">Sign in</center>
-    </v:roundrect>
-    <![endif]-->
-    <!--[if !mso]><!-- -->
-    <a href="__LOCAH_WEB_ORIGIN__/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/" style="display:inline-block;background:#e8622c;color:#ffffff;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;line-height:46px;text-align:center;text-decoration:none;border-radius:8px;padding:0 30px;">Sign in</a>
-    <!--<![endif]-->
-  </td></tr></table>
+  <!-- The code, not a link: it is typed into the LOCAH page the person already
+       has open, so nothing here depends on a web address (Doc 09 AUTH-003). -->
+  <p style="margin:0;font-family:'SFMono-Regular',Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:1.2;font-weight:700;letter-spacing:0.32em;color:#1b1f3b;background:#f7f4ef;border-radius:10px;padding:16px 0 16px 0.32em;text-align:center;">{{ .Token }}</p>
 
   <p style="margin:22px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b6862;">
-    This link expires shortly and can only be used once.
-  </p>
-  <p style="margin:26px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b6862;">
-    If the button does not work, copy this link into your browser:<br>
-    <a href="__LOCAH_WEB_ORIGIN__/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/" style="color:#1b1f3b;word-break:break-all;">__LOCAH_WEB_ORIGIN__/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/</a>
+    The code expires shortly and works once. If you asked for more than one, use the newest.
   </p>
 </td></tr>
 
 <tr><td style="padding:22px 6px 0;">
   <p style="margin:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#6b6862;">
-    If you did not request this, you can safely ignore this email.
+    You received this because someone asked to sign in to LOCAH with this address. If that was not you, ignore this email. Never share this code: LOCAH will never ask you for it.
   </p>
 </td></tr>
 

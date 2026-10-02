@@ -6,6 +6,32 @@ templates and URL settings in project configuration, not in the repository — t
 is no migration that can apply them, and no service-role API that can set them.
 They have to be pasted into the dashboard once per project.
 
+## 0. Sign-up and sign-in are by emailed code (October 2026)
+
+Creating an account and signing in no longer depend on clicking a link. The
+person enters their email, LOCAH emails a **6-digit code**, and they type it on
+the page they already have open (`apps/web/src/app/login/LoginForm.tsx`, the
+Workspace's `EmailCodeSignIn`, the invitation join page; shared logic in
+`packages/auth/src/email-otp.ts`). Supabase sends the code with
+`signInWithOtp` and checks it with `verifyOtp({ type: 'email' })`; the session
+cookie is set by `@supabase/ssr` exactly as before.
+
+Supabase uses **two** templates for this, so both must show `{{ .Token }}`:
+
+| Template (dashboard) | When Supabase sends it | File | Subject |
+| --- | --- | --- | --- |
+| Confirm signup | the address has no account yet | `confirm-signup.html` | Your LOCAH code |
+| Magic Link | the address already has an account | `magic-link.html` | Your LOCAH sign-in code |
+
+Both are code-only — no link, no origin to render — so they can be pasted from
+`src/` directly. Also set, under Authentication → Providers → Email:
+**Email OTP Length = 6** and **Email OTP Expiration = 600** seconds (matching
+`infra/supabase/config.toml`).
+
+Password sign-in still works for accounts that have a password, and password
+**reset** is still a link (`reset-password.html`), so §1 below still matters for
+that one email.
+
 ## The bug this fixes
 
 A confirmation email pointed at `http://localhost:3000`, so clicking it produced
@@ -48,9 +74,9 @@ set the subject:
 
 | Template | File | Subject |
 | --- | --- | --- |
-| Confirm signup | `confirm-signup.html` | Confirm your email |
+| Confirm signup | `confirm-signup.html` | Your LOCAH code |
 | Invite user | `invite.html` | You have been invited to LOCAH |
-| Magic Link | `magic-link.html` | Your LOCAH sign-in link |
+| Magic Link | `magic-link.html` | Your LOCAH sign-in code |
 | Change Email Address | `change-email.html` | Confirm your new email |
 | Reset Password | `reset-password.html` | Reset your LOCAH password |
 

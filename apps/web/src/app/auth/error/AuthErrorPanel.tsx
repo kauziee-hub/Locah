@@ -26,19 +26,12 @@ export function AuthErrorPanel({
     e.preventDefault()
     setBusy(true)
     setError(null)
-    // Send back the kind of link that died. A signup confirmation is not a
-    // substitute for a password reset: the account is already confirmed, so
-    // Supabase refuses it and the person is stuck on the same page.
-    const { error } =
-      flow === 'recovery'
-        ? await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: siteUrl('/auth/confirm?type=recovery'),
-          })
-        : await supabase.auth.resend({
-            type: 'signup',
-            email,
-            options: { emailRedirectTo: siteUrl('/auth/callback') },
-          })
+    // Only a password reset is re-sent as a link. A dead signup or sign-in
+    // link is never replaced by another link: the email-code sign-in below
+    // confirms the address too, and depends on no URL setting.
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: siteUrl('/auth/confirm?type=recovery'),
+    })
     setBusy(false)
     if (error) {
       setError(error.message)
@@ -69,12 +62,10 @@ export function AuthErrorPanel({
           {sent ? (
             <div role="status" className="ob-notice">
               <p>
-                {flow === 'recovery'
-                  ? 'If that address has a LOCAH account, a password reset link is on its way. It expires shortly, so open it soon.'
-                  : 'If that address has an account awaiting confirmation, a new link is on its way. It expires shortly, so open it soon.'}
+                If that address has a LOCAH account, a password reset link is on its way. It expires shortly, so open it soon.
               </p>
             </div>
-          ) : canResend ? (
+          ) : canResend && flow === 'recovery' ? (
             <form onSubmit={handleResend}>
               {error ? (
                 <div role="alert" className="ob-error" style={{ marginBottom: 'var(--sp-4)' }}>
@@ -99,18 +90,19 @@ export function AuthErrorPanel({
               </div>
 
               <button className="lc-btn lc-btn--primary" type="submit" disabled={busy}>
-                {busy
-                  ? 'Sending…'
-                  : flow === 'recovery'
-                    ? 'Send a new reset link'
-                    : 'Send a new link'}
+                {busy ? 'Sending…' : 'Send a new reset link'}
               </button>
             </form>
           ) : null}
 
-          <p className="lc-muted lc-small" style={{ marginTop: 'var(--sp-6)' }}>
-            Already confirmed? <Link href="/login">Sign in</Link>
-          </p>
+          <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: '0.5rem' }}>
+            <Link className={flow === 'recovery' ? 'lc-btn lc-btn--ghost' : 'lc-btn lc-btn--primary'} href="/login">
+              Sign in with an email code
+            </Link>
+            <p className="lc-muted lc-small" style={{ margin: 0 }}>
+              We email you a 6-digit code to type in — it also confirms your email, and no link is needed.
+            </p>
+          </div>
         </div>
       </main>
     </div>

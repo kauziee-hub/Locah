@@ -15,6 +15,20 @@ const SECRET = process.env.MOCK_AUTH_JWT_SECRET || 'local-acceptance-secret-with
 const DB = process.env.MOCK_AUTH_DB || 'locah_accept'
 const PG = ['-h', 'localhost', '-p', process.env.PGPORT || '54329', '-U', 'postgres', '-d', DB, '-v', 'ON_ERROR_STOP=1', '-At']
 const users = new Map() // email -> { id, password }
+const codes = new Map() // email -> { code, id, sentAt, expires } — the latest one-time code
+const mail = [] // the local "inbox": { to, code, kind, at }
+
+/** The local auth.users id for an email, from this mock or the database. */
+function idFor(email) {
+  if (users.has(email)) return users.get(email).id
+  try {
+    const out = execFileSync('psql', [...PG, '-c', `select id from auth.users where lower(email) = '${email.replace(/'/g, "''")}' limit 1`])
+    const id = String(out).trim()
+    return id || null
+  } catch {
+    return null
+  }
+}
 const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 
 function claims(auth) {
@@ -91,6 +105,50 @@ http
       const u = users.get(String(email || '').trim().toLowerCase())
       if (!u || u.password !== String(password)) return json(res, 400, { error: 'invalid_grant', error_description: 'Invalid login credentials' })
       return json(res, 200, session(u.id, String(email).trim().toLowerCase()))
+    }
+    // Email one-time codes (signInWithOtp / verifyOtp). The code is "emailed"
+    // to an in-memory local mailbox, readable at GET /__mock/mail?email= — the
+    // stand-in for an inbox, for browser tests on localhost only.
+    if (url.pathname === '/auth/v1/otp' && req.method === 'POST') {
+      const body = await readBody(req)
+      const e = String(body.email || '').trim().toLowerCase()
+      if (!EMAIL.test(e)) return json(res, 400, { code: 400, error_code: 'validation_failed', msg: 'Unable to validate email address: invalid format' })
+      const last = codes.get(e)
+      if (last && Date.now() - last.sentAt < 1000 * Number(process.env.MOCK_AUTH_RESEND_SECONDS || 0)) {
+        return json(res, 429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'For security purposes, you can only request this after a few seconds.' })
+      }
+      let id = idFor(e)
+      if (!id) {
+        if (body.create_user === false) return json(res, 422, { code: 422, error_code: 'otp_disabled', msg: 'Signups not allowed for otp' })
+        id = crypto.randomUUID()
+        try {
+          execFileSync('psql', [...PG, '-c',
+            `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+             values ('${id}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '${e}', '', now(), now(), now())`])
+        } catch {
+          return json(res, 500, { msg: 'could not create the local user' })
+        }
+      }
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0')
+      codes.set(e, { code, id, sentAt: Date.now(), expires: Date.now() + 1000 * Number(process.env.MOCK_AUTH_OTP_SECONDS || 600) })
+      mail.push({ to: e, code, kind: body.create_user === false ? 'magic_link' : 'confirmation', at: new Date().toISOString() })
+      console.log(`[mock mail] code for ${e}: ${code}`)
+      return json(res, 200, {})
+    }
+    if (url.pathname === '/auth/v1/verify' && req.method === 'POST') {
+      const { email, token, type } = await readBody(req)
+      const e = String(email || '').trim().toLowerCase()
+      const entry = codes.get(e)
+      // Real Supabase answers a wrong code and an expired one identically.
+      const refused = () => json(res, 403, { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' })
+      if (!['email', 'signup', 'magiclink'].includes(String(type))) return refused()
+      if (!entry || entry.code !== String(token || '') || Date.now() > entry.expires) return refused()
+      codes.delete(e)
+      return json(res, 200, session(entry.id, e))
+    }
+    if (url.pathname === '/__mock/mail' && req.method === 'GET') {
+      const e = String(url.searchParams.get('email') || '').trim().toLowerCase()
+      return json(res, 200, { messages: mail.filter((m) => !e || m.to === e) })
     }
     if (url.pathname === '/auth/v1/logout') return res.writeHead(204).end()
     if (url.pathname.endsWith('/jwks.json')) return json(res, 200, { keys: [] })

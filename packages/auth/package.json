@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "test": "pnpm build && node --test test/email-otp.test.mjs"
   },
   "dependencies": {
     "@platform/config": "workspace:*",
