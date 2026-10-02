@@ -5,6 +5,11 @@ tier, limits or kill switch, pausing all of them and deciding approvals need
 ``ai_employees.manage`` — a person's permission; no AI employee holds it.
 Approving a request that acts in another module also needs that module's own
 permission (sending a purchase order needs ``procurement.approve``).
+
+The AI Employee Sandbox (``/ai-employees/sandbox``) is a demonstration: it reads
+the business's real records through public reads and asks the same runtime
+decision a live employee would, but writes nothing and sends nothing. It needs
+only ``ai_employees.read`` and works whether or not the AI staff module is on.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
-from platform_core.ai_employees import collections, procurement
+from platform_core.ai_employees import collections, procurement, sandbox
 from platform_core.ai_employees.runtime import AIRuntime
 from platform_core.exceptions import PermissionDenied, ResourceNotFound
 from platform_core.models import AIAction
@@ -55,6 +60,32 @@ class DecisionBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     approve: bool
+
+
+class SandboxMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario: str = Field(pattern="^(whatsapp_manager|receptionist)$")
+    message: str = Field(min_length=1, max_length=500)
+
+
+class SandboxProposal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(pattern="^(order|booking|lead)$")
+    summary: str = Field(default="", max_length=300)
+    offering_id: UUID | None = None
+    location_id: UUID | None = None
+    quantity: int | None = Field(default=None, ge=1, le=50)
+    starts_at: str | None = Field(default=None, max_length=40)
+    ends_at: str | None = Field(default=None, max_length=40)
+    mode: str | None = Field(default=None, max_length=40)
+    message: str | None = Field(default=None, max_length=500)
+
+
+def _sandbox_on() -> None:
+    if not sandbox.enabled():
+        raise ResourceNotFound("AI Employee Sandbox")
 
 
 @router.get("/{business_id}/ai-employees")
@@ -143,3 +174,37 @@ async def decide(
     data = await AIRuntime.overview(session, business_id)
     await session.commit()
     return {"data": data, "meta": _meta(actor)}
+
+
+@router.get("/{business_id}/ai-employees/sandbox")
+async def sandbox_overview(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    return {"data": await sandbox.overview(session, business_id), "meta": _meta(actor)}
+
+
+@router.post("/{business_id}/ai-employees/sandbox/simulate")
+async def sandbox_simulate(
+    business_id: UUID,
+    body: SandboxMessage,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    data = await sandbox.simulate(session, business_id, scenario=body.scenario, message=body.message)
+    return {"data": data, "meta": _meta(actor)}
+
+
+@router.post("/{business_id}/ai-employees/sandbox/approve")
+async def sandbox_approve(
+    business_id: UUID,
+    body: SandboxProposal,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    proposal = body.model_dump(mode="json", exclude_none=True)
+    return {"data": await sandbox.approve(session, business_id, proposal), "meta": _meta(actor)}

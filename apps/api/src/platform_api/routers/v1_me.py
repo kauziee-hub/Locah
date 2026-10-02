@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
 from platform_api.dependencies import get_request_context
+from platform_core.ai_employees.sandbox import enabled as sandbox_enabled
 from platform_core.context import RequestContext
 from platform_core.services.consumer_activity import ConsumerActivityService
 from platform_core.services.identity import IdentityService
@@ -42,6 +43,9 @@ class ContextResponse(BaseModel):
     # This Business's own words for its destinations (Doc 07 §3.3): offerings,
     # bookings, customers. Labels only; routes and permissions never change.
     terms: dict[str, str] = Field(default_factory=dict)
+    # Deployment switches the Workspace needs to decide what to show
+    # (ai_sandbox: the AI Employee Sandbox demonstration, AI_SANDBOX_ENABLED).
+    features: dict[str, bool] = Field(default_factory=dict)
     default_business_id: str | None = None
     last_business_id: str | None = None
     primary_business_id: str | None = None
@@ -101,6 +105,7 @@ async def get_context(
             module_states={k: v.activation_state for k, v in ctx.module_states.items()},
             navigation_modules=navigation_modules,
             terms=terms,
+            features={"ai_sandbox": sandbox_enabled()},
             default_business_id=prefs.get("default_business_id"),
             last_business_id=prefs.get("last_business_id"),
             primary_business_id=prefs.get("primary_business_id"),
