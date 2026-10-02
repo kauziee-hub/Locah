@@ -11,7 +11,7 @@
 //   CHROME_PATH=/opt/pw-browsers/chromium CHROME_NO_SANDBOX=1 node tools/acceptance/phase_b/p1_team.mjs
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { launch } from '../cdp.mjs'
-import { OUT, WS, api, browser, check, clickUntil, newBusiness, realErrors } from './common.mjs'
+import { OUT, WS, api, browser, check, clickUntil, newBusiness, realErrors, joinWithCode } from './common.mjs'
 
 const results = []
 const shots = `${OUT}/phase_b/p1_team`
@@ -89,9 +89,7 @@ try {
   check(intro.includes('Murugan, join Selvi Provisions') && intro.includes('Store keeper') && intro.includes('What is low, what arrived')
     && intro.includes('Selvi Provisions') && !intro.includes('T Nagar'), 'join page says who, what role, where and the home screen', results)
   await staff.shot(`${shots}/05-join-page.png`, { full: true })
-  await staff.type('.bos-join__form input[type=email]', email)
-  await staff.type('.bos-join__form input[type=password]', 'stock-2026-secure')
-  await staff.click('Create login and join', { byText: true })
+  await joinWithCode(staff, email)
   let landed = ''
   for (let i = 0; i < 60 && !landed.startsWith('/b/'); i++) {
     await new Promise((r) => setTimeout(r, 500))

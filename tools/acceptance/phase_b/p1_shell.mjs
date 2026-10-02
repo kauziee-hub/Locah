@@ -11,7 +11,7 @@
 //   CHROME_PATH=/opt/pw-browsers/chromium CHROME_NO_SANDBOX=1 node tools/acceptance/phase_b/p1_shell.mjs
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { launch } from '../cdp.mjs'
-import { OUT, WS, api, browser, check, newBusiness, realErrors } from './common.mjs'
+import { OUT, WS, api, browser, check, newBusiness, realErrors, joinWithCode } from './common.mjs'
 
 const results = []
 const shots = `${OUT}/phase_b/p1_shell`
@@ -40,9 +40,12 @@ try {
   await owner.goto(`${WS}/b/${biz.id}`)
   await owner.waitFor('Needs you now', { text: true })
   const areas = await areasOf(owner)
-  check(JSON.stringify(areas) === JSON.stringify(['Business presence', 'Sell', 'Offerings', 'Customers', 'Money', 'Team', 'Modules & integrations', 'Settings']),
+  // Messaging is switched on for every new business, so Reach shows (its tools
+  // marked "Set up" until a number is connected, NAV-008); basic Insights is
+  // part of the Workspace for anyone who can read orders. AI staff is off.
+  check(JSON.stringify(areas) === JSON.stringify(['Business presence', 'Sell', 'Offerings', 'Customers', 'Money', 'Team', 'Reach', 'Insights', 'Modules & integrations', 'Settings']),
     `owner areas in the Guide's order (${areas.join(', ')})`, results)
-  check(!areas.includes('Reach') && !areas.includes('Insights') && !areas.includes('AI employees'), 'areas with nothing built stay hidden', results)
+  check(!areas.includes('AI employees'), 'areas with nothing built stay hidden', results)
   const bands = await owner.eval(`[...document.querySelectorAll('.bos-band h2')].map(h => h.innerText)`)
   check(JSON.stringify(bands) === JSON.stringify(['Needs you now', 'Today', 'Your business']), `owner home has the three bands (${bands.join(' / ')})`, results)
   const rows = await owner.eval(`[...document.querySelectorAll('.bos-band--now .bos-attention__row')].map(a => a.innerText.replace(/\\s+/g, ' '))`)
@@ -80,10 +83,7 @@ async function joinAs(name, role, locations) {
   const added = await api(`${base}/team/people`, { method: 'POST', body: { name, email, role, location_ids: locations } })
   const page = await launch({ width: 1440, height: 900 })
   await page.goto(`${WS}${added.data.join_path}`)
-  await page.waitFor('Create your login', { text: true })
-  await page.type('.bos-join__form input[type=email]', email)
-  await page.type('.bos-join__form input[type=password]', 'a-good-password-26')
-  await page.click('Create login and join', { byText: true })
+  await joinWithCode(page, email)
   for (let i = 0; i < 60; i++) {
     if ((await page.eval('location.pathname')).startsWith('/b/')) break
     await new Promise((r) => setTimeout(r, 500))
@@ -104,7 +104,8 @@ try {
   const arrived = await keeper.eval(`document.querySelector('.bos-band--arrived').innerText.replace(/\\s+/g, ' ')`)
   check(arrived.includes('+4') && !arrived.includes('+25'), 'what arrived is only their location', results)
   const links = await linksOf(keeper)
-  check(JSON.stringify(links) === JSON.stringify(['Home', 'Notifications', 'Products & services', 'Stock']), `store keeper sidebar holds only their work (${links.join(', ')})`, results)
+  // A grocery that lists only products calls the catalogue "Products" (Doc 07 §3.3).
+  check(JSON.stringify(links) === JSON.stringify(['Home', 'Notifications', 'Products', 'Stock', 'Transfers', 'Van stock']), `store keeper sidebar holds only their work (${links.join(', ')})`, results)
   await keeper.shot(`${shots}/04-store-keeper-home.png`, { full: true })
   await keeper.goto(`${WS}/b/${biz.id}/payments`)
   await keeper.waitFor('main')

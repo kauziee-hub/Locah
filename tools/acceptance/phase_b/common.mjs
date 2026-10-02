@@ -63,3 +63,26 @@ export async function clickUntil(page, text, selector, tries = 8) {
 export function realErrors(page) {
   return page.consoleErrors.filter((e) => !/Failed to fetch RSC payload .* TypeError: Failed to fetch(\n\s+at [^\n]+)*$/s.test(e))
 }
+
+/** The local auth stand-in's latest one-time code for an email (its mailbox). */
+export async function mailCode(email, { tries = 20 } = {}) {
+  const auth = process.env.LOCAH_AUTH || 'http://127.0.0.1:54321'
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(`${auth}/__mock/mail?email=${encodeURIComponent(email)}`)
+    const last = (await r.json()).messages?.at(-1)
+    if (last?.code) return last.code
+    await new Promise((res) => setTimeout(res, 250))
+  }
+  throw new Error(`no code was emailed to ${email}`)
+}
+
+/** An invited person creates their login on the join page the way they really
+ *  would: email, then the 6-digit code emailed to them (no password). */
+export async function joinWithCode(page, email) {
+  await page.waitFor('Create your login', { text: true })
+  await page.type('.bos-join__form input[type=email]', email)
+  await page.eval(`document.querySelector('.bos-join__form button[type=submit]').click()`)
+  await page.waitFor('.bos-join__form input[autocomplete=one-time-code]')
+  // A complete code checks itself — the same as typing or pasting it.
+  await page.type('.bos-join__form input[autocomplete=one-time-code]', await mailCode(email))
+}
