@@ -53,6 +53,9 @@ class Bucket:
 BUCKETS: tuple[Bucket, ...] = (
     Bucket(name="business_interview", methods=frozenset({"POST"}), prefixes=(),
            contains=("/interview",), limit=20, window_seconds=60),
+    # Catalogue import reading — a PDF or photo is one AI call per upload.
+    Bucket(name="catalogue_import_read", methods=frozenset({"POST"}), prefixes=(),
+           contains=("/catalogue-import/read",), limit=10, window_seconds=60),
     # Website AI generation — expensive, provider-backed, low legitimate rate.
     Bucket(
         name="website_generate",

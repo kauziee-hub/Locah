@@ -79,6 +79,7 @@ from platform_api.routers import (
     v1_platform_loyalty,
     v1_platform_marketing,
     v1_ai_employees,
+    v1_catalogue_import,
     v1_attendance,
     v1_documents,
 )
@@ -288,6 +289,7 @@ app.include_router(v1_platform_loyalty.router)
 app.include_router(v1_platform_marketing.router)
 app.include_router(v1_attendance.router)
 app.include_router(v1_ai_employees.router)
+app.include_router(v1_catalogue_import.router)
 app.include_router(v1_documents.router)
 app.include_router(v1_documents.public_router)
 app.include_router(v1_documents.download_router)

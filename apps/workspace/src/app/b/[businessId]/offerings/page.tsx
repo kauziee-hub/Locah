@@ -49,6 +49,7 @@ export default async function OfferingsPage({ params }: { params: { businessId: 
       actions={
         <>
           {rates.ok && rates.data.data.length ? <Link className="btn-ghost" href={`${base}/rates`}>Today&apos;s rates</Link> : null}
+          <Link className="btn-ghost" href={`${base}/import`}>Import</Link>
           <Link className="btn" href={`${base}/new`}>Add</Link>
         </>
       }
@@ -76,7 +77,8 @@ export default async function OfferingsPage({ params }: { params: { businessId: 
         <div className="bos-empty">
           Nothing here yet. Add what you sell, the services people book, or what they can enquire about — each
           stays a draft until you make it live.{' '}
-          <Link href={`${base}/new`}>Add the first one</Link>
+          <Link href={`${base}/new`}>Add the first one</Link>, or{' '}
+          <Link href={`${base}/import`}>import your list</Link> from a sheet, a PDF or a photo of your menu.
         </div>
       ) : (
         [...groups.entries()].map(([label, items]) => (

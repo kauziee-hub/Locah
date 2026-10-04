@@ -670,6 +670,32 @@ class Offering(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
 
 
+class OfferingCatalogImport(Base):
+    """One committed catalogue import (CSV / XLSX / an AI-read document). Items
+    are created as drafts; the batch keeps which offerings it created or updated
+    so the owner can review them and make them live."""
+
+    __tablename__ = "offerings_catalog_imports"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    business_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("businesses.id"))
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    file_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    created_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    updated_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    error_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    offering_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PG_UUID(as_uuid=True)), nullable=False, server_default=text("'{}'")
+    )
+    created_by: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("platform_identities.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class OfferingVariant(Base):
     __tablename__ = "offerings_catalog_variants"
 
