@@ -33,6 +33,20 @@ class CustomerResolver:
         return contact
 
     @staticmethod
+    async def summaries(
+        session: AsyncSession, *, business_id: uuid.UUID, contact_ids: set[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """The customer module's public batch read for other modules' pages:
+        id -> {id, name, phone}. Erased or deleted contacts are left out."""
+        if not contact_ids:
+            return {}
+        rows = (await session.execute(select(CustomerContact).where(
+            CustomerContact.business_id == business_id, CustomerContact.id.in_(contact_ids),
+            CustomerContact.deleted_at.is_(None),
+        ))).scalars().all()
+        return {c.id: {"id": str(c.id), "name": c.display_name, "phone": c.phone} for c in rows}
+
+    @staticmethod
     def require_operable(contact: CustomerContact, *, action: str = "update") -> None:
         if contact.status == "archived":
             raise ResourceStateDenied(

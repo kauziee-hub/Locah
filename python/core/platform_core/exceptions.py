@@ -148,7 +148,9 @@ _STATE_WORDS = {
 def _state_sentence(resource: str, state: str, action: str | None) -> str:
     thing = str(resource).replace("_", " ")
     word = _STATE_WORDS.get(str(state), str(state).replace("_", " "))
-    if action:
+    # "transition" and "update" are the code's words for any change, not an
+    # owner's: those read as "already … refresh" like a change with no name.
+    if action and action not in ("transition", "update"):
         return f"Can't {action}: this {thing} is {word}."
     return f"This {thing} is already {word} — refresh to see where it stands."
 

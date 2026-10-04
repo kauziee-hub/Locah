@@ -545,3 +545,46 @@ def test_booking_audit_and_outbox(owner: tuple[dict[str, str], uuid.UUID]) -> No
         await engine.dispose()
 
     asyncio.run(_assert_events())
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_bookings_say_who_where_and_with_whom_and_a_refusal_reads_as_words(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """The Workspace shows who a booking is for (and a number to call), where,
+    and with whom — read through the customer and workforce modules — and a
+    step the booking's state no longer allows is refused in plain words."""
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
+    client.post(f"/v1/b/{business_id}/modules/customer-relationships/enable", headers=headers)
+    location_id = _primary_location_id(client, headers, business_id)
+    provider_id = _create_provider(client, headers, business_id, location_id)
+    contact = client.post(f"/v1/platform/businesses/{business_id}/customers",
+                          json={"display_name": "Meena", "phone": "+919840011223"}, headers=headers)
+    assert contact.status_code == 200, contact.text
+    starts_at, ends_at = _slot(hours_ahead=30)
+    made = client.post(f"/v1/platform/businesses/{business_id}/bookings", json={
+        "location_id": location_id, "provider_id": provider_id, "reservation_mode": "appointment",
+        "title": "Haircut", "starts_at": starts_at, "ends_at": ends_at,
+        "customer_contact_id": contact.json()["data"]["id"],
+    }, headers=headers)
+    assert made.status_code == 200, made.text
+    booking_id = made.json()["data"]["id"]
+
+    listed = client.get(f"/v1/platform/businesses/{business_id}/bookings", headers=headers).json()["data"]
+    row = next(b for b in listed if b["id"] == booking_id)
+    assert row["customer"]["name"] == "Meena" and row["customer"]["phone"] == "+919840011223"
+    assert row["provider_name"].startswith("Provider ") and row["location_name"]
+    one = client.get(f"/v1/platform/businesses/{business_id}/bookings/{booking_id}", headers=headers).json()["data"]
+    assert one["customer"] == row["customer"] and one["provider_name"] == row["provider_name"]
+
+    done = client.post(f"/v1/platform/businesses/{business_id}/bookings/{booking_id}/status",
+                       json={"status": "cancelled", "reason": "Cancelled by the business"}, headers=headers)
+    assert done.status_code == 200, done.text
+    again = client.post(f"/v1/platform/businesses/{business_id}/bookings/{booking_id}/status",
+                        json={"status": "confirmed"}, headers=headers)
+    assert again.status_code == 409
+    message = again.json()["error"]["message"]
+    assert message == "This booking is already cancelled — refresh to see where it stands.", message

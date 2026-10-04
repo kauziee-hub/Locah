@@ -80,6 +80,19 @@ class WorkforceService:
         return list((await session.execute(query)).scalars().all())
 
     @staticmethod
+    async def names(
+        session: AsyncSession, *, business_id: uuid.UUID, member_ids: set[uuid.UUID]
+    ) -> dict[uuid.UUID, str]:
+        """Workforce's public batch read for other modules' pages: id -> name.
+        Kept even for someone who has since left, so old bookings still say who."""
+        if not member_ids:
+            return {}
+        rows = (await session.execute(select(WorkforceMember.id, WorkforceMember.display_name).where(
+            WorkforceMember.business_id == business_id, WorkforceMember.id.in_(member_ids),
+        ))).all()
+        return {row[0]: str(row[1]) for row in rows}
+
+    @staticmethod
     async def get_member(
         session: AsyncSession, *, business_id: uuid.UUID, member_id: uuid.UUID
     ) -> WorkforceMember:

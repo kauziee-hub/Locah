@@ -499,15 +499,14 @@ class FulfilmentService:
                             jobs: list[FulfilmentJob]) -> list[dict[str, Any]]:
         """Jobs as the Workspace shows them: whose order, its number, and the
         delivery address in one line — never an id or a stored status."""
-        from platform_core.models import CustomerContact
+        from platform_core.resolvers.customer_resolver import CustomerResolver
 
         order_ids = [j.order_id for j in jobs]
         orders = {o.id: o for o in (await session.execute(select(SalesOrder).where(
             SalesOrder.business_id == business_id, SalesOrder.id.in_(order_ids)))).scalars().all()} if order_ids else {}
-        contact_ids = [o.customer_contact_id for o in orders.values() if o.customer_contact_id]
-        people = {c.id: c for c in (await session.execute(select(CustomerContact).where(
-            CustomerContact.business_id == business_id, CustomerContact.id.in_(contact_ids)))).scalars().all()
-        } if contact_ids else {}
+        people = await CustomerResolver.summaries(
+            session, business_id=business_id,
+            contact_ids={o.customer_contact_id for o in orders.values() if o.customer_contact_id})
         out = []
         for j in jobs:
             order = orders.get(j.order_id)
@@ -519,9 +518,9 @@ class FulfilmentService:
             out.append(FulfilmentService.serialize_job(j) | {
                 "order_number": order.order_number if order else None,
                 "order_total": float(order.total_amount) if order else None,
-                "customer_name": (person.display_name if person else None) or (
+                "customer_name": (person["name"] if person else None) or (
                     str(a.get("name")).strip() if isinstance(a.get("name"), str) else None),
-                "customer_phone": (person.phone if person else None) or (
+                "customer_phone": (person["phone"] if person else None) or (
                     str(a.get("phone")).strip() if isinstance(a.get("phone"), str) else None),
                 "address_line": ", ".join(dict.fromkeys(parts)) or None,
                 "note": str(a.get("note")).strip() if isinstance(a.get("note"), str) and a.get("note") else None,

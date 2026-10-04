@@ -39,6 +39,29 @@ class BookingService:
         return cast(dict[str, Any], BookingResolver.serialize_booking(booking))
 
     @staticmethod
+    async def describe(session: AsyncSession, business_id: uuid.UUID,
+                       bookings: list[Booking]) -> list[dict[str, Any]]:
+        """Bookings as the Workspace shows them: who it is for (with a number to
+        call), where, and with whom — through the customer and workforce
+        modules' public batch reads, never per row."""
+        from platform_core.models import BusinessLocation
+        from platform_core.services.workforce import WorkforceService
+
+        people = await CustomerResolver.summaries(
+            session, business_id=business_id,
+            contact_ids={b.customer_contact_id for b in bookings if b.customer_contact_id})
+        places = {loc.id: loc.name for loc in (await session.execute(select(BusinessLocation).where(
+            BusinessLocation.business_id == business_id,
+            BusinessLocation.id.in_({b.location_id for b in bookings})))).scalars().all()} if bookings else {}
+        staff = await WorkforceService.names(
+            session, business_id=business_id, member_ids={b.provider_id for b in bookings if b.provider_id})
+        return [BookingService.serialize(b) | {
+            "customer": people.get(b.customer_contact_id) if b.customer_contact_id else None,
+            "location_name": places.get(b.location_id),
+            "provider_name": staff.get(b.provider_id) if b.provider_id else None,
+        } for b in bookings]
+
+    @staticmethod
     def _generate_booking_number() -> str:
         return f"BKG-{uuid.uuid4().hex[:8].upper()}"
 

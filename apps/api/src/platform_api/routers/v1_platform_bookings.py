@@ -175,7 +175,7 @@ async def list_bookings(
         provider_id=provider_id,
     )
     return {
-        "data": [BookingService.serialize(b) for b in bookings],
+        "data": await BookingService.describe(session, business_id, list(bookings)),
         "meta": {"correlation_id": actor.request.correlation_id, "count": len(bookings)},
     }
 
@@ -210,7 +210,7 @@ async def get_booking(
 ) -> dict[str, Any]:
     booking = await BookingResolver.resolve(session, business_id=business_id, booking_id=booking_id)
     return {
-        "data": BookingService.serialize(booking),
+        "data": (await BookingService.describe(session, business_id, [booking]))[0],
         "meta": {"correlation_id": actor.request.correlation_id},
     }
 
