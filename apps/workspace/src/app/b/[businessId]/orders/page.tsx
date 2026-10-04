@@ -7,6 +7,7 @@ import { advanceOrderStatus } from './actions'
 import { CHANNEL, money, paymentLabel } from './labels'
 import { pageWords } from '@/lib/ws-lang'
 import type { Words } from '@/lib/ws-words'
+import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
 
@@ -251,11 +252,12 @@ export default async function OrdersPage({
           },
         ]}
         empty={
-          <EmptyState title={t('No orders here')}>
-            {searchParams?.status || searchParams?.channel
-              ? t('Nothing matches these filters right now.')
-              : t('Orders placed on your website, WhatsApp, the counter or by phone land here.')}
-          </EmptyState>
+          searchParams?.status || searchParams?.channel ? (
+            <EmptyState title={t('No orders here')}>{t('Nothing matches these filters right now.')}</EmptyState>
+          ) : (
+            <BusinessEmpty businessId={params.businessId} module="orders" fallbackTitle={t('No orders here')}
+                           fallback={t('Orders placed on your website, WhatsApp, the counter or by phone land here.')} />
+          )
         }
       />
     </div>

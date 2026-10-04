@@ -416,20 +416,22 @@ export function GateNotice({
       </Link>
     </Card>
   )
+  // Straight to that tool's setup page when the gate says which tool it is.
+  const setup = error.moduleId ? `${base}/modules/${error.moduleId}` : `${base}/modules`
   if (error.code === 'MODULE_NOT_ACTIVE') {
     return shell(
-      `${moduleLabel} is not active yet`,
-      `This business is entitled to ${moduleLabel}, but the module has not been enabled. Enabling it makes these pages operational — nothing is lost in the meantime.`,
-      `${base}/modules`,
-      'Open module catalog'
+      `${moduleLabel} is switched off`,
+      `Turn ${moduleLabel} on to use these pages. The setup page shows what it adds for your customers and the few steps before it's ready — nothing you've saved is lost while it's off.`,
+      setup,
+      `Set up ${moduleLabel}`
     )
   }
   if (error.code === 'ENTITLEMENT_REQUIRED') {
     return shell(
-      `${moduleLabel} is not included in this plan`,
-      `${moduleLabel} needs a commercial entitlement before it can be enabled.`,
-      `${base}/modules`,
-      'Review modules and plans'
+      `${moduleLabel} isn't in your plan`,
+      `Your current plan doesn't include ${moduleLabel}. See what it does and what it needs.`,
+      setup,
+      `About ${moduleLabel}`
     )
   }
   if (error.code === 'PERMISSION_DENIED') {

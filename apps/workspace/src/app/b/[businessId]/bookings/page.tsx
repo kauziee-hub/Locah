@@ -5,6 +5,7 @@ import { apiTry } from '@/lib/api'
 import { DataTable, EmptyState, FilterTabs, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { updateBookingsPolicy, withdrawWaitlist } from './actions'
 import { LocalTime } from '@/components/LocalTime'
+import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,11 +125,12 @@ export default async function BookingsPage({
           },
         ]}
         empty={
-          <EmptyState title="No bookings here">
-            {searchParams?.status
-              ? `Nothing with status "${searchParams.status}".`
-              : 'Reservations made on your website appear here for you to confirm.'}
-          </EmptyState>
+          searchParams?.status ? (
+            <EmptyState title="No bookings here">{`Nothing with status "${searchParams.status}".`}</EmptyState>
+          ) : (
+            <BusinessEmpty businessId={params.businessId} module="bookings" fallbackTitle="No bookings here"
+                           fallback="Reservations made on your website appear here for you to confirm." />
+          )
         }
       />
 

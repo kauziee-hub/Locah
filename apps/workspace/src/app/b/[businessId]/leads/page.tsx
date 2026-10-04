@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DataTable, EmptyState, FilterTabs, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { createLead } from './actions'
+import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,11 +81,12 @@ export default async function LeadsPage({
           },
         ]}
         empty={
-          <EmptyState title="No leads here">
-            {searchParams?.status
-              ? `Nothing at the "${searchParams.status}" stage.`
-              : 'Website enquiries arrive here automatically. You can also add one below.'}
-          </EmptyState>
+          searchParams?.status ? (
+            <EmptyState title="No leads here">{`Nothing at the "${searchParams.status}" stage.`}</EmptyState>
+          ) : (
+            <BusinessEmpty businessId={params.businessId} module="leads" fallbackTitle="No leads here"
+                           fallback="Website enquiries arrive here automatically. You can also add one below." />
+          )
         }
       />
 

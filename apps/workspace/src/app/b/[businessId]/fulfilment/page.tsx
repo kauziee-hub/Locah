@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { DataTable, EmptyState, GateNotice, PageHeader, StatusPill } from '@/components/ui'
+import { DataTable, GateNotice, PageHeader, StatusPill } from '@/components/ui'
+import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,9 +81,8 @@ export default async function FulfilmentBoardPage({
           },
         ]}
         empty={
-          <EmptyState title="No fulfilment jobs yet">
-            A job is created for each order that needs pickup, delivery, or shipping.
-          </EmptyState>
+          <BusinessEmpty businessId={params.businessId} module="fulfilment" fallbackTitle="No fulfilment jobs yet"
+                         fallback="A job is created for each order that needs pickup, delivery, or shipping." />
         }
       />
     </div>

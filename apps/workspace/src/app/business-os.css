@@ -1170,3 +1170,4 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
 .bos-tests__status.is-payment_failed { border-color: var(--status-bad-bd); background: var(--status-bad-bg); color: var(--status-bad-fg); }
 .bos-tests__pay { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; }
 @media (max-width: 640px) { .bos-tests__row { grid-template-columns: 1fr; } }
+.bos-empty__actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }

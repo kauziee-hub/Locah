@@ -77,3 +77,18 @@ async def one_calendar(
     data = await agenda(session, business_id, days=days,
                         can=lambda perm, module: perm in permissions and module in live)
     return {"data": data, "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+@router.get("/{business_id}/empty-states")
+async def empty_states(
+    business_id: UUID,
+    lang: str = Query(default="en", pattern="^(en|ta|hi)$"),
+    actor: BusinessActorContext = Depends(require_business_member()),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """What each empty list should say for THIS Business: its own items, whether
+    its website can bring the first one in yet, and what to do now."""
+    from platform_core.services.empty_states import empty_states as compose
+
+    data = await compose(session, actor.business, lang=lang)
+    return {"data": data, "meta": {"correlation_id": actor.request.correlation_id}}

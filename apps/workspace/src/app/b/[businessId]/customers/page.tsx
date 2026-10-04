@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { DataTable, EmptyState, FilterTabs, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
+import { DataTable, FilterTabs, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { createCustomer } from './actions'
+import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,9 +95,8 @@ export default async function CustomersPage({
           { key: 'status', header: 'Status', render: (c) => <StatusPill value={c.status} /> },
         ]}
         empty={
-          <EmptyState title="No customer records yet">
-            A record is created the first time someone orders or books. You can also add one below.
-          </EmptyState>
+          <BusinessEmpty businessId={params.businessId} module="customers" fallbackTitle="No customer records yet"
+                         fallback="A record is created the first time someone orders or books. You can also add one below." />
         }
       />
 

@@ -60,6 +60,8 @@ export type ApiError = {
   status: number
   code: string
   message: string
+  /** The tool a gate refused for (MODULE_NOT_ACTIVE / ENTITLEMENT_REQUIRED). */
+  moduleId?: string
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError }
@@ -86,12 +88,14 @@ export async function apiTry<T>(
   }
   let code = 'UNKNOWN'
   let message = `Request failed with status ${res.status}`
+  let moduleId: string | undefined
   try {
     const body = await res.json()
     code = body?.error?.code ?? code
     message = body?.error?.message ?? message
+    moduleId = typeof body?.error?.details?.module_id === 'string' ? body.error.details.module_id : undefined
   } catch {
     // Non-JSON error body — keep the status-derived defaults.
   }
-  return { ok: false, error: { status: res.status, code, message } }
+  return { ok: false, error: { status: res.status, code, message, ...(moduleId ? { moduleId } : {}) } }
 }
