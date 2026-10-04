@@ -61,3 +61,4 @@ acceptance-out/
 # Chrome profiles from local acceptance runs (tools/acceptance/cdp.mjs)
 locah-accept-*/
 .next-verify/
+.next-otp-verify/

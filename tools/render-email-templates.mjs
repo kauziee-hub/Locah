@@ -24,6 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const SRC = join(here, '..', 'infra', 'supabase', 'email-templates', 'src')
 const OUT = join(here, '..', 'infra', 'supabase', 'email-templates', 'dist')
 const PLACEHOLDER = '__LOCAH_WEB_ORIGIN__'
+const CODE_ONLY = new Set(['confirm-signup.html', 'magic-link.html'])
 
 function resolveOrigin() {
   const flagIndex = process.argv.indexOf('--origin')
@@ -73,7 +74,11 @@ const files = (await readdir(SRC)).filter((f) => f.endsWith('.html'))
 
 for (const file of files) {
   const source = await readFile(join(SRC, file), 'utf8')
-  if (!source.includes(PLACEHOLDER)) {
+  // These two emails deliberately have no link: preserve the provider's code
+  // placeholder. All link-based emails still require a deployment origin.
+  const codeOnly = CODE_ONLY.has(file) && source.includes('{{ .Token }}') &&
+    !/\bhref\s*=|\.ConfirmationURL\b|\.TokenHash\b/i.test(source)
+  if (!source.includes(PLACEHOLDER) && !codeOnly) {
     console.error(`${file} has no ${PLACEHOLDER} — it would ship with a stale origin.`)
     process.exit(1)
   }

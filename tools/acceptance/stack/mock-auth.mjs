@@ -129,10 +129,10 @@ http
           return json(res, 500, { msg: 'could not create the local user' })
         }
       }
-      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0')
+      const code = String(crypto.randomInt(0, 100000000)).padStart(8, '0')
       codes.set(e, { code, id, sentAt: Date.now(), expires: Date.now() + 1000 * Number(process.env.MOCK_AUTH_OTP_SECONDS || 600) })
       mail.push({ to: e, code, kind: body.create_user === false ? 'magic_link' : 'confirmation', at: new Date().toISOString() })
-      console.log(`[mock mail] code for ${e}: ${code}`)
+      console.log('[mock mail] local email queued')
       return json(res, 200, {})
     }
     if (url.pathname === '/auth/v1/verify' && req.method === 'POST') {

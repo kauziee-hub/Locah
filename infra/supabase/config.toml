@@ -229,7 +229,7 @@ secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 # Number of characters used in the email OTP.
-otp_length = 6
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour). Sign-in
 # is by emailed code, so keep it short: 10 minutes (the hosted project should match).
 otp_expiry = 600
@@ -249,7 +249,7 @@ otp_expiry = 600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
-# Sign-up and sign-in are by emailed 6-digit code (apps/web LoginForm,
+# Sign-up and sign-in are by emailed 8-digit code (apps/web LoginForm,
 # @platform/auth email-otp). A new address gets the "confirmation" template, a
 # known one the "magic_link" template; both carry {{ .Token }} and no link, so
 # no Site URL or redirect setting can send anyone to the wrong host. The hosted

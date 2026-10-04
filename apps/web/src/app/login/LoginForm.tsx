@@ -39,7 +39,7 @@ function humanPasswordError(message: string): string {
 }
 
 /**
- * Sign in or create an account with a six-digit code sent by email.
+ * Sign in or create an account with an eight-digit code sent by email.
  *
  * There is no confirmation link to click: a link carries a host, and when the
  * auth project's URL settings and the deployment disagree the link points

@@ -77,7 +77,7 @@ export async function mailCode(email, { tries = 20 } = {}) {
 }
 
 /** An invited person creates their login on the join page the way they really
- *  would: email, then the 6-digit code emailed to them (no password). */
+ *  would: email, then the 8-digit code emailed to them (no password). */
 export async function joinWithCode(page, email) {
   await page.waitFor('Create your login', { text: true })
   await page.type('.bos-join__form input[type=email]', email)

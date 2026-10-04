@@ -6,7 +6,7 @@
  * Supabase project's Site URL or Redirect URLs allowlist does not match the
  * deployment, Supabase silently substitutes Site URL — which is how a real
  * inbox received `http://localhost:3000/...` (infra/supabase/email-templates
- * README). A six-digit code is typed back into the page the person is already
+ * README). An eight-digit code is typed back into the page the person is already
  * on, so nothing in the email depends on any URL configuration, and the
  * Destination Intent never leaves this browser tab.
  *
@@ -24,8 +24,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 /** The part of a Supabase client the code ceremony uses (any browser client). */
 export type OtpAuthClient = { auth: Pick<SupabaseClient['auth'], 'signInWithOtp' | 'verifyOtp'> }
 
-/** Supabase's default (and this project's configured) code length. */
-export const OTP_LENGTH = 6
+/** Matches the hosted project's Email OTP length and local Supabase config. */
+export const OTP_LENGTH = 8
 
 /** Seconds before a new code may be requested from the same page. */
 export const RESEND_COOLDOWN_SECONDS = 60
@@ -40,7 +40,7 @@ export function isEmail(raw: string): boolean {
   return EMAIL.test(normalizeEmail(raw))
 }
 
-/** Keep the digits a person typed or pasted ("123 456", "123-456"), at most six. */
+/** Keep pasted/spaced digits, up to the configured email code length. */
 export function normalizeOtp(raw: string): string {
   return raw.replace(/\D/g, '').slice(0, OTP_LENGTH)
 }
@@ -78,7 +78,7 @@ export function classifyOtpError(error: { message?: string; code?: string; statu
 }
 
 export const OTP_PROBLEM_WORDS: Record<OtpProblem, string> = {
-  incomplete_code: 'Enter all 6 digits from the email.',
+  incomplete_code: `Enter all ${OTP_LENGTH} digits from the email.`,
   wrong_or_expired_code: 'That code is not right or has expired. Check the latest email, or send a new code.',
   rate_limited: 'Too many attempts. Wait a minute, then try again.',
   no_account: 'There is no account with this email yet. Create one instead.',

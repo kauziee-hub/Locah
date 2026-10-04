@@ -13,7 +13,7 @@ import {
 } from '@platform/auth'
 
 /**
- * Sign in — or create a login — with a six-digit code emailed to the person.
+ * Sign in — or create a login — with an eight-digit code emailed to the person.
  *
  * No link is sent, so nothing depends on the auth project's URL settings, and
  * the person never leaves this page: an invitation, a destination or a half-

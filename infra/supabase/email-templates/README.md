@@ -9,7 +9,7 @@ They have to be pasted into the dashboard once per project.
 ## 0. Sign-up and sign-in are by emailed code (October 2026)
 
 Creating an account and signing in no longer depend on clicking a link. The
-person enters their email, LOCAH emails a **6-digit code**, and they type it on
+person enters their email, LOCAH emails an **8-digit code**, and they type it on
 the page they already have open (`apps/web/src/app/login/LoginForm.tsx`, the
 Workspace's `EmailCodeSignIn`, the invitation join page; shared logic in
 `packages/auth/src/email-otp.ts`). Supabase sends the code with
@@ -25,7 +25,7 @@ Supabase uses **two** templates for this, so both must show `{{ .Token }}`:
 
 Both are code-only — no link, no origin to render — so they can be pasted from
 `src/` directly. Also set, under Authentication → Providers → Email:
-**Email OTP Length = 6** and **Email OTP Expiration = 600** seconds (matching
+**Email OTP Length = 8** and **Email OTP Expiration = 600** seconds (matching
 `infra/supabase/config.toml`).
 
 Password sign-in still works for accounts that have a password, and password
@@ -58,11 +58,11 @@ Authentication → URL Configuration:
 | Setting | Value |
 | --- | --- |
 | Site URL | `https://locah-web-production.up.railway.app` |
-| Redirect URLs | `https://locah-web-production.up.railway.app/**`<br>`https://locah-workspace-production.up.railway.app/**`<br>`http://localhost:3000/**` |
+| Redirect URLs | `https://locah-web-production.up.railway.app/**`<br>`https://locah-workspace-production.up.railway.app/**` |
 
 Site URL is what a link falls back to, so it must be the production web app.
-Keep the `localhost` entry so local signup still works — it is in the allowlist,
-which is checked, not in Site URL, which is the fallback.
+Use local Supabase for local signup testing. Production does not need a localhost
+redirect entry, and localhost must never be the production Site URL.
 
 When a custom domain replaces Railway's generated domains, update Site URL and
 add the new web and Workspace origins here.
@@ -118,5 +118,30 @@ requested. If it comes back as something else, the allowlist still does not matc
 The default sender is `noreply@mail.app.supabase.io`, which does not say LOCAH and
 carries Supabase's sending reputation. Configuring SMTP under Authentication →
 Emails with a LOCAH sending domain (and its SPF/DKIM records) is what makes these
-emails actually come *from* LOCAH. Until then the templates are branded but the
-envelope sender is not.
+emails actually come *from* LOCAH. Until then the default sender is not LOCAH.
+On the hosted Free plan, the dashboard also requires custom SMTP before these
+custom templates can be edited; checking them into Git or deploying Railway does
+not publish them to Supabase.
+
+## 6. Connecting an email service
+
+Production setup requires a domain you own, access to its DNS, and an email
+provider account. Railway's generated domain cannot be verified as your email
+sending domain. For Resend:
+
+1. Verify your sending domain in Resend using the DNS records it provides.
+2. In Supabase Authentication → Emails → SMTP Settings, use host
+   `smtp.resend.com`, port `465`, username `resend`, sender name `LOCAH`, and a
+   sender email on that verified domain. Enter the Resend API key as the password
+   directly in the dashboard; never put it in Git, a public variable, or chat.
+3. Enable and save custom SMTP, then publish the five templates and subjects
+   above. Render the link-based copies with
+   `pnpm email:templates --origin https://locah-web-production.up.railway.app`.
+   The generated `dist/` also includes the two unchanged code-only templates.
+4. Recheck URL configuration and Email OTP length/expiry, then perform an inbox
+   delivery and sign-in check with a designated test account. An accepted OTP
+   request alone is not proof of delivery.
+
+Official setup: https://resend.com/docs/send-with-supabase-smtp and
+https://supabase.com/docs/guides/auth/auth-smtp. Do not enable an incomplete SMTP
+configuration: it will prevent auth emails from being sent.

@@ -68,11 +68,15 @@ write a new forward migration instead.
 ## Supabase Auth
 
 - URL configuration: Site URL = the production web origin; Redirect URLs = the web
-  and Workspace origins (`https://<host>/**`) plus `http://localhost:3000/**`.
-- Sign-up and sign-in use emailed **6-digit codes**. The *Confirm signup* and
+  and Workspace origins (`https://<host>/**`). Use local Supabase for local tests;
+  never set the production Site URL to localhost.
+- Sign-up and sign-in use emailed **8-digit codes**. The *Confirm signup* and
   *Magic Link* templates must contain `{{ .Token }}` — paste
   `infra/supabase/email-templates/src/confirm-signup.html` and `magic-link.html`
-  (details in that folder's README). Email OTP length 6, expiry 600 s.
+  (details in that folder's README). Email OTP length 8, expiry 600 s.
+- Configure a verified sending domain and custom SMTP for production delivery.
+  On the hosted Free plan, SMTP is also required to edit the email templates.
+  Repository templates and Railway deploys do not update hosted Auth settings.
 - Password reset is still a link and lands on `/auth/update-password`.
 
 ## External activations (not live yet)
