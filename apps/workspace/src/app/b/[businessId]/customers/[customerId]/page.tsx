@@ -79,7 +79,11 @@ export default async function CustomerDetailPage({
           { action: 'block', label: 'Block', confirm: `Block ${customer.display_name}? They can no longer order or book online.` },
           { action: 'archive', label: 'Archive', confirm: `Archive ${customer.display_name}? Their history is kept; they leave your list.` },
         ]
-      : [{ action: 'restore', label: 'Restore', confirm: undefined }]
+      : [{
+          action: 'restore',
+          label: customer.status === 'blocked' ? 'Unblock' : 'Bring back',
+          confirm: customer.status === 'blocked' ? `Unblock ${customer.display_name}? They can order and book online again.` : undefined,
+        }]
   const STATUS: Record<string, string> = { active: 'Active', blocked: 'Blocked', archived: 'Archived' }
 
   return (

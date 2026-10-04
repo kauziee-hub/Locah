@@ -13,10 +13,13 @@ export type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; me
 export async function sendJson<T = unknown>(path: string, method: string, body?: unknown): Promise<ActionResult<T>> {
   const token = await getAccessToken()
   if (!token) return { ok: false, message: 'Your session ended. Sign in again.' }
+  // A write always carries a JSON body: many routes take an optional one
+  // (e.g. a version) and refuse a request with none at all.
+  const writes = method !== 'GET' && method !== 'DELETE'
   const res = await fetch(`${apiUrl}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? (writes ? '{}' : undefined) : JSON.stringify(body),
     cache: 'no-store',
   })
   let payload: { data?: T; error?: { message?: string }; detail?: unknown } | null = null
@@ -39,7 +42,9 @@ export function fieldProblem(detail: unknown): string | null {
   if (!Array.isArray(detail) || !detail.length) return null
   const issue = detail[0] as FieldIssue
   const field = [...(issue.loc ?? [])].reverse().find((p) => typeof p === 'string' && p !== 'body')
-  const name = field ? String(field).replace(/_/g, ' ') : 'A value'
+  // Nothing about a field: the request itself was malformed — the page's fault, not the person's.
+  if (!field) return 'That could not be sent. Refresh the page and try again.'
+  const name = String(field).replace(/_/g, ' ')
   const label = name.charAt(0).toUpperCase() + name.slice(1)
   const ctx = issue.ctx ?? {}
   const says: Record<string, string> = {

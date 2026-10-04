@@ -245,3 +245,21 @@ def test_owner_has_customer_permissions(owner: tuple[dict[str, str], uuid.UUID])
         await engine.dispose()
 
     asyncio.run(_check())
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_a_blocked_customer_can_be_unblocked(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    base = f"/v1/platform/businesses/{business_id}/customers"
+    customer_id = client.post(base, json={"display_name": "Divya", "phone": "+919840022334"},
+                              headers=headers).json()["data"]["id"]
+    # The Workspace sends an empty body to these steps.
+    blocked = client.post(f"{base}/{customer_id}/block", json={}, headers=headers)
+    assert blocked.status_code == 200 and blocked.json()["data"]["status"] == "blocked", blocked.text
+    back = client.post(f"{base}/{customer_id}/restore", json={}, headers=headers)
+    assert back.status_code == 200 and back.json()["data"]["status"] == "active", back.text
+    again = client.post(f"{base}/{customer_id}/restore", json={}, headers=headers)
+    assert again.status_code == 409
+

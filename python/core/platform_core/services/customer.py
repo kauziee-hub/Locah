@@ -487,12 +487,14 @@ class CustomerService:
         )
         CustomerService._check_version(contact, expected_version)
 
-        if contact.status != "archived":
+        # Restore brings back an archived record and lifts a block: both make
+        # the customer active again (there is no separate "unblock").
+        if contact.status not in ("archived", "blocked"):
             raise ResourceStateDenied(
                 "customer",
                 contact.status,
                 action="restore",
-                allowed_states=["archived"],
+                allowed_states=["archived", "blocked"],
             )
 
         before = CustomerResolver.serialize_contact(contact)
