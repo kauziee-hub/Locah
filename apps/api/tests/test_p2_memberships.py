@@ -372,7 +372,10 @@ def test_milk_tomorrow_skip_one_day_change_and_pause_become_real_orders_once(mon
     e = _enrol(owner, base, plan["id"], contact,
                starts_at=datetime.combine(date.today(), time(0, 0), IST).isoformat())
     _pay(owner, base, e["id"], 900)
-    t1, t2, t3 = _tomorrow(), _tomorrow() + timedelta(days=1), _tomorrow() + timedelta(days=2)
+    # From the day after tomorrow: tomorrow is already decided after its 21:00
+    # cutoff, so a run in the evening would be refused for the wrong reason.
+    t1 = _tomorrow() + timedelta(days=1)
+    t2, t3 = t1 + timedelta(days=1), t1 + timedelta(days=2)
     day = client.get(f"{base}/subscriptions/day", params={"on_date": t1.isoformat()}, headers=owner).json()["data"]
     assert day["slots"]["Morning"]["deliver"] == 1 and day["slots"]["Morning"]["quantity"] == 1
 
