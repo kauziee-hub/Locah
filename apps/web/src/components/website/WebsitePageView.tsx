@@ -230,6 +230,7 @@ export function WebsitePageView({
   // The tab title is set by each route's generateMetadata, not here — a <title>
   // rendered in the tree lands in <body> on React 18 and duplicates the tag.
   const contact: SiteContact = data.business.contact || {}
+  const place = data.business.place || {}
   // §12.2: the business's connected number opens its WhatsApp menu; the
   // number the owner published is the fallback.
   const journey = data.whatsapp || null
@@ -493,6 +494,17 @@ export function WebsitePageView({
                   {t(item.label)}
                 </Link>
               ))}
+            </div>
+          ) : null}
+          {place.address || place.hours_summary || place.phone ? (
+            <div className="ls-foot__col ls-foot__place">
+              <p className="ls-foot__heading">{t('Find us')}</p>
+              {place.address ? (
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address)}`}
+                   target="_blank" rel="noopener noreferrer">{place.address}</a>
+              ) : null}
+              {place.hours_summary ? <span>{place.hours_summary}</span> : null}
+              {place.phone ? <a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{place.phone}</a> : null}
             </div>
           ) : null}
           {canOrder && !canBook && !(visitLinks.length > 0 || journey) ? <CommerceCart slug={slug} variant="footer" /> : null}

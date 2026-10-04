@@ -370,6 +370,17 @@ class WebsitePublishService:
                 section["sort_order"] = (rows[at - 1]["sort_order"] + 1 + n) if at > 0 else n
             rows[at:at] = extra
             serialized_page["sections"] = rows
+        # The contact section states today's address, hours and phone from the
+        # business's main location — what the owner keeps in Locations — not
+        # the words written when the site was generated.
+        place = await _live_place(session, business.id)
+        if place:
+            rows = []
+            for row in serialized_page.get("sections") or []:
+                if row.get("section_type_id") == "contact":
+                    row = {**row, "content": {**(row.get("content") or {}), **place}}
+                rows.append(row)
+            serialized_page["sections"] = rows
         if not capabilities.get("show_address", True):
             # Digital-only (§22): no address or map anywhere on the site.
             kept = []
@@ -415,6 +426,10 @@ class WebsitePublishService:
                 # Only the fields a visitor can use: a number to call or
                 # WhatsApp and an email, exactly as the owner published them.
                 "contact": contact,
+                # Where and when to find them, from the main location today
+                # (no address for a digital-only business).
+                "place": {k: v for k, v in place.items()
+                          if k != "address" or capabilities.get("show_address", True)},
             },
             "capabilities": capabilities,
             # §12.2 "Order on WhatsApp": the business's connected number, when
@@ -428,6 +443,23 @@ class WebsitePublishService:
             "is_preview": is_preview,
             "cache_control": "no-store" if is_preview else "public",
         }
+
+
+async def _live_place(session: AsyncSession, business_id: uuid.UUID) -> dict[str, str]:
+    """Address, opening hours and phone of the main location, for the contact
+    section. Only what is saved; a field with nothing saved is left out."""
+    from platform_core.models import BusinessLocation
+    from platform_core.place_words import address_text, hours_text
+
+    loc = (await session.execute(select(BusinessLocation).where(
+        BusinessLocation.business_id == business_id, BusinessLocation.deleted_at.is_(None),
+        BusinessLocation.status == "active").order_by(BusinessLocation.is_primary.desc(),
+                                                       BusinessLocation.created_at))).scalars().first()
+    if loc is None:
+        return {}
+    place = {"address": address_text(loc.address), "hours_summary": hours_text(loc.hours),
+             "phone": (loc.phone or "").strip()}
+    return {k: v for k, v in place.items() if v}
 
 
 def _navigation(

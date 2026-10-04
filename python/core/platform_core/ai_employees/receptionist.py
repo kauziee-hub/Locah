@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platform_core.ai_employees.runtime import AIRuntime, Outcome
 from platform_core.logging import get_logger
 from platform_core.models import AIAction, AIEmployee, Business, BusinessLocation, MessagingConversation, Offering
+from platform_core.place_words import ADDRESS_KEYS, DAYS, address_text, hours_text  # noqa: F401  (shared wording)
 
 _log = get_logger("ai.receptionist")
 
@@ -52,9 +53,6 @@ WANTS = re.compile(r"\b(can i|could i|may i|i want|i need|i'd like|want a|need a
                    r"this week|next week|weekend|morning|evening)\b", re.I)
 INTENTS = ("who", "price", "book", "hours", "address", "contact", "services", "other")
 BOOKABLE = ("service", "experience", "class_session", "accommodation", "rental", "property_project", "property_unit")
-DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-ADDRESS_KEYS = ("line1", "line_1", "line2", "line_2", "street", "area", "locality", "landmark", "city", "district",
-                "state", "postal_code", "pincode", "pin")
 
 
 def _has(said: str, words: tuple[str, ...]) -> bool:
@@ -83,28 +81,6 @@ def match_offering(said: str, offerings: list[Offering]) -> Offering | None:
         if hit and ratio >= 0.5 and ratio > score:
             best, score = o, ratio
     return best
-
-
-def hours_text(hours: dict[str, Any] | None) -> str:
-    """{"mon": [["09:00","18:00"]], ...} → "Mon–Sat 9 am–6 pm; Sun closed" — the
-    way people say it, not a 24-hour clock."""
-    from platform_core.interview.hours import describe
-
-    if not hours or not any(hours.get(d) for d in DAYS):
-        return ""
-    week = {d: [list(s) for s in hours.get(d) or []] for d in DAYS}
-    said = describe(week)
-    note = f" ({hours['note']})" if hours.get("note") else ""
-    return str(said[:1].lower() + said[1:] if said.startswith("Every day") else said) + note
-
-
-def address_text(address: dict[str, Any] | None) -> str:
-    if not address:
-        return ""
-    keyed = [str(address[k]).strip() for k in ADDRESS_KEYS if isinstance(address.get(k), str) and address[k].strip()]
-    rest = [str(v).strip() for k, v in address.items()
-            if k not in ADDRESS_KEYS and isinstance(v, str) and v.strip() and k not in ("country", "lat", "lng")]
-    return ", ".join(dict.fromkeys(keyed or rest))
 
 
 def _price(o: Offering) -> str:

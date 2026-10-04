@@ -1175,6 +1175,18 @@
 .ls-foot__col a:hover {
   color: var(--site-ink);
 }
+/* "Find us": address (to directions), opening hours and phone from the main location. */
+.ls-foot__place span {
+  display: block;
+  padding-block: 0.28rem;
+  font-size: 0.92rem;
+  color: var(--site-muted);
+  max-width: 28ch;
+}
+.ls-foot__place a {
+  max-width: 28ch;
+  overflow-wrap: anywhere;
+}
 .ls-foot__bar {
   max-width: 1120px;
   margin: 2rem auto 0;

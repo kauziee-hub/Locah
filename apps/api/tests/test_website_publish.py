@@ -269,3 +269,40 @@ def test_a_new_website_never_shows_customers_instructions_for_the_owner(
     site = client.get(f"/v1/b/{business['id']}/website", headers=headers).json()["data"]
     text = json.dumps(site["draft"]["pages"])
     assert "Your website starts here" not in text and "business interview" not in text
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_the_contact_section_states_todays_address_and_hours(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    """The site's contact section reads the main location as the owner keeps it in
+    Locations — not the words written when the site was generated."""
+    headers, _ = owner
+    client = TestClient(app)
+    business = _create_business(client, headers)
+    bid, slug = business["id"], business["slug"]
+    site = client.get(f"/v1/b/{bid}/website", headers=headers).json()["data"]
+    home = next(p for p in site["draft"]["pages"] if p["slug"] == "home")
+    # A contact section written at generation time, with the words of that day.
+    added = client.post(f"/v1/b/{bid}/website/pages/{home['id']}/sections", headers=headers, json={
+        "section_type_id": "contact", "content": {"title": "Visit us", "address": "Chennai", "hours_summary": ""}})
+    assert added.status_code == 200, added.text
+    assert client.post(f"/v1/b/{bid}/website/publish", headers=headers).status_code == 200
+    loc = client.get(f"/v1/platform/businesses/{bid}/locations", headers=headers).json()["data"][0]["id"]
+    saved = client.patch(f"/v1/platform/businesses/{bid}/locations/{loc}", headers=headers, json={
+        "address": {"line1": "12, 2nd Avenue", "locality": "Anna Nagar", "city": "Chennai", "postal_code": "600040"},
+        "hours": {d: [["09:00", "22:00"]] for d in ("mon", "tue", "wed", "thu", "fri", "sat")},
+        "phone": "+91 98400 12345"})
+    assert saved.status_code == 200, saved.text
+
+    contact = None
+    for path in ("", "/pages/contact"):
+        page = client.get(f"/v1/public/websites/{slug}{path}")
+        if page.status_code != 200:
+            continue
+        contact = next((s for s in page.json()["data"]["page"]["sections"] if s["section_type_id"] == "contact"), None)
+        if contact:
+            break
+    assert contact is not None
+    content = contact["content"]
+    assert content["address"] == "12, 2nd Avenue, Anna Nagar, Chennai, 600040"
+    assert content["hours_summary"].startswith("Mon") and "Sun closed" in content["hours_summary"]
+    assert content["phone"] == "+91 98400 12345"

@@ -9,6 +9,8 @@ export type PublicWebsitePayload = {
     business_type?: string | null
     /** Only what the owner published: a number to call or WhatsApp, an email. */
     contact?: { phone?: string; whatsapp?: string; email?: string }
+    /** Where and when to find them: the main location as the owner keeps it today. */
+    place?: { address?: string; hours_summary?: string; phone?: string }
   }
   /** What a visitor can actually do here, from the business's live modules.
    *  Sections read this instead of assuming from their own type. */
