@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { sendJson, type ActionResult } from '@/lib/server-send'
 
 export type TraceStep = {
@@ -41,4 +42,46 @@ export async function simulate(businessId: string, scenario: string, message: st
 /** Approve a proposal inside the sandbox: re-checked live, never created. */
 export async function approve(businessId: string, proposal: Proposal): Promise<ActionResult<Approval>> {
   return sendJson<Approval>(`/v1/b/${businessId}/ai-employees/sandbox/approve`, 'POST', proposal)
+}
+
+export type TestRecord = {
+  id: string
+  kind: 'order' | 'booking' | 'lead'
+  kind_label: string
+  reference: string
+  scenario: string
+  summary: string
+  detail: Record<string, unknown>
+  amount: number | null
+  status: string
+  status_label: string
+  payment: { adapter: string; status: string; method: string; reference: string; reason?: string } | null
+  can_pay: boolean
+  created_at: string | null
+}
+export type TestResult = Omit<Approval, 'simulated'> & { record: TestRecord | null }
+
+/** Approve a proposal in Test Mode: re-checked live, then kept as a TEST
+ *  record only — never a real order, booking or enquiry. */
+export async function approveInTestMode(
+  businessId: string, scenario: string, proposal: Proposal,
+): Promise<ActionResult<TestResult>> {
+  const r = await sendJson<TestResult>(`/v1/b/${businessId}/ai-employees/test-records`, 'POST', { ...proposal, scenario })
+  if (r.ok) revalidatePath(`/b/${businessId}/ai-employees/sandbox`)
+  return r
+}
+
+/** A test payment through the test adapter: no provider, no money. */
+export async function payTestRecord(formData: FormData): Promise<void> {
+  const businessId = String(formData.get('businessId'))
+  await sendJson(`/v1/b/${businessId}/ai-employees/test-records/${String(formData.get('recordId'))}/pay`, 'POST', {
+    outcome: String(formData.get('outcome')) === 'fail' ? 'fail' : 'succeed',
+  })
+  revalidatePath(`/b/${businessId}/ai-employees/sandbox`)
+}
+
+export async function clearTestRecords(formData: FormData): Promise<void> {
+  const businessId = String(formData.get('businessId'))
+  await sendJson(`/v1/b/${businessId}/ai-employees/test-records/clear`, 'POST')
+  revalidatePath(`/b/${businessId}/ai-employees/sandbox`)
 }

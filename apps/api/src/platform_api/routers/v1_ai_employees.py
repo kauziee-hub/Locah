@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
-from platform_core.ai_employees import collections, procurement, sandbox
+from platform_core.ai_employees import collections, procurement, sandbox, test_mode
 from platform_core.ai_employees.runtime import AIRuntime
 from platform_core.exceptions import PermissionDenied, ResourceNotFound
 from platform_core.models import AIAction
@@ -81,6 +81,18 @@ class SandboxProposal(BaseModel):
     ends_at: str | None = Field(default=None, max_length=40)
     mode: str | None = Field(default=None, max_length=40)
     message: str | None = Field(default=None, max_length=500)
+
+
+class TestRecordIn(SandboxProposal):
+    """Approve a proposal in Test Mode (AI Employee Studio)."""
+
+    scenario: str = Field(pattern="^[a-z_]{2,40}$")
+
+
+class TestPaymentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: str = Field(pattern="^(succeed|fail)$")
 
 
 def _sandbox_on() -> None:
@@ -208,3 +220,60 @@ async def sandbox_approve(
     _sandbox_on()
     proposal = body.model_dump(mode="json", exclude_none=True)
     return {"data": await sandbox.approve(session, business_id, proposal), "meta": _meta(actor)}
+
+
+# ------------------------------------------------------------------ Test Mode
+# Approved proposals become test records (ai_test_records) — never real
+# orders, bookings or enquiries; payments go through the test adapter only.
+
+@router.get("/{business_id}/ai-employees/test-records")
+async def test_records(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    return {"data": {"records": await test_mode.records(session, business_id), "notice": test_mode.TEST_NOTICE},
+            "meta": _meta(actor)}
+
+
+@router.post("/{business_id}/ai-employees/test-records")
+async def test_record_create(
+    business_id: UUID,
+    body: TestRecordIn,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_MANAGE)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    proposal = body.model_dump(mode="json", exclude_none=True, exclude={"scenario"})
+    data = await test_mode.record(session, business_id, proposal, scenario=body.scenario,
+                                  actor_id=actor.request.identity_id)
+    await session.commit()
+    return {"data": data, "meta": _meta(actor)}
+
+
+@router.post("/{business_id}/ai-employees/test-records/{record_id}/pay")
+async def test_record_pay(
+    business_id: UUID,
+    record_id: UUID,
+    body: TestPaymentIn,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_MANAGE)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    data = await test_mode.pay(session, business_id, record_id, outcome=body.outcome,
+                               actor_id=actor.request.identity_id)
+    await session.commit()
+    return {"data": data, "meta": _meta(actor)}
+
+
+@router.post("/{business_id}/ai-employees/test-records/clear")
+async def test_records_clear(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(AI_EMPLOYEES_MANAGE)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    _sandbox_on()
+    cleared = await test_mode.clear(session, business_id, actor_id=actor.request.identity_id)
+    await session.commit()
+    return {"data": {"cleared": cleared}, "meta": _meta(actor)}

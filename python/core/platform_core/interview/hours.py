@@ -246,7 +246,7 @@ def for_location(week: Week) -> dict[str, list[list[str]]]:
 
 def _say(clock: str) -> str:
     h, m = (int(x) for x in clock.split(":"))
-    if h == 0 and m == 0:
+    if (h == 0 and m == 0) or (h == 23 and m == 59):  # saved hours close at 23:59 for midnight
         return "midnight"
     if h == 12 and m == 0:
         return "noon"

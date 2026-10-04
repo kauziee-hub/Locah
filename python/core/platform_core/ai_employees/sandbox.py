@@ -179,6 +179,12 @@ async def _context(session: AsyncSession, business_id: uuid.UUID) -> dict[str, A
     return {"business": business, "locations": locations, "states": states, "offerings": offerings}
 
 
+def _place(loc: BusinessLocation | None) -> str:
+    """The location's name as a customer would say it — never the default "Primary Location"."""
+    name = (loc.name if loc else "").strip()
+    return "" if name.lower() in ("", "primary location", "main", "main location") else name
+
+
 def _pick_location(locations: list[BusinessLocation], said: str) -> BusinessLocation | None:
     low = said.lower()
     named = next((loc for loc in locations if loc.name and loc.name.lower() in low), None)
@@ -264,7 +270,16 @@ async def simulate(session: AsyncSession, business_id: uuid.UUID, *, scenario: s
         told = hours_text(loc.hours)
         if told:
             _decision(emp, "business_info", trace)
-            return _result(trace, scenario, reply=f"{name} is open {told}.", proposal=None)
+            reply = f"{name} is open {told}."
+            if re.search(r"\b(today|now|tonight|close|closing|innaiku|ippo)\b", said, re.I):
+                # "What time do you close today?" — today first, then the week.
+                from platform_core.services.home_header import open_state
+
+                state = open_state(loc.hours, loc.timezone if loc.timezone != "UTC" else None,
+                                   datetime.now(timezone.utc))
+                if state["state"] != "unknown":
+                    reply = f"{state['text'].replace(' · ', ' — ')}. {name} is open {told}."
+            return _result(trace, scenario, reply=reply, proposal=None)
     if intent == "address" and loc is not None:
         told = address_text(loc.address)
         _read(trace, "business_info", "Location record (Locations, Platform Core)", told or "no address saved")
@@ -326,7 +341,7 @@ async def _order(session: AsyncSession, trace: _Trace, scenario: str, emp: AIEmp
     if states["inventory"]["ready"]:
         stock = (await public_availability(session, business.id, [offering],
                                            location_id=loc.id if loc else None)).get(str(offering.id))
-    where = f" at {loc.name}" if loc else ""
+    where = f" at {_place(loc)}" if loc and _place(loc) else ""
     _read(trace, "list_services", "Offerings Catalog public read" + (" + Inventory public availability"
                                                                       if stock else ""),
           f"{offering.title} · {price or 'price on request'}" + (f" · {stock.replace('_', ' ')}{where}" if stock else ""))
@@ -398,7 +413,7 @@ async def _booking(session: AsyncSession, trace: _Trace, scenario: str, emp: AIE
     trace.add("propose", "Proposed: a booking (needs your approval in the sandbox)",
               f"{offering.title} · {when} {clock(start.time(), None)} · {loc.name}", action="booking")
     reply = (f"{when} {options} free-aa iruku. {clock(start.time(), None)}-ku book pannattuma?" if ta else
-             f"{when} has {options} free for {offering.title} at {loc.name}. "
+             f"{when} has {options} free for {offering.title}{f' at {_place(loc)}' if _place(loc) else ''}. "
              f"Shall I book {clock(start.time(), None)}?")
     return _result(trace, scenario, reply=reply, proposal={
         "action": "booking", "offering_id": str(offering.id), "location_id": str(loc.id),

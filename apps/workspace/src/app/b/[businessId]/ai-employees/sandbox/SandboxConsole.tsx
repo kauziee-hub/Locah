@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { approve, simulate, type Approval, type Proposal, type TraceStep, type Turn } from './sandbox-actions'
+import { approve, approveInTestMode, simulate, type Approval, type Proposal, type TestResult, type TraceStep, type Turn } from './sandbox-actions'
 
 type Scenario = { key: string; label: string; channel: string; about: string }
 type Entry =
   | { who: 'customer'; text: string }
-  | { who: 'ai'; turn: Turn; approval?: Approval }
+  | { who: 'ai'; turn: Turn; approval?: Approval; test?: TestResult }
   | { who: 'error'; text: string }
 
 const STEP_WORDS: Record<string, string> = {
@@ -22,6 +22,7 @@ const STEP_WORDS: Record<string, string> = {
   recheck: 'Live re-check',
   simulate: 'Simulated action',
   sandbox: 'Sandbox',
+  test_record: 'Test Mode',
 }
 
 function Trace({ steps }: { steps: TraceStep[] }) {
@@ -45,11 +46,13 @@ function Trace({ steps }: { steps: TraceStep[] }) {
  * answers from the business's real records, and every step it took is listed.
  * Proposals are approved here only — the API re-checks them and writes nothing.
  */
-export function SandboxConsole({ businessId, scenarios, suggestions, notice }: {
+export function SandboxConsole({ businessId, scenarios, suggestions, notice, canTest }: {
   businessId: string
   scenarios: Scenario[]
   suggestions: Record<string, string[]>
   notice: string
+  /** May approve in Test Mode (ai_employees.manage). */
+  canTest: boolean
 }) {
   const [scenario, setScenario] = useState(scenarios[0]?.key ?? 'whatsapp_manager')
   const [logs, setLogs] = useState<Record<string, Entry[]>>({})
@@ -81,6 +84,21 @@ export function SandboxConsole({ businessId, scenarios, suggestions, notice }: {
             ? { ...entry, approval: r.data }
             : { ...entry, approval: { ok: false, reference: null, result: r.ok ? 'No answer.' : r.message,
                                       trace: [], simulated: true, notice } }
+        }
+        return { ...all, [scenario]: list }
+      })
+    })
+  }
+
+  const testAt = (index: number, proposal: Proposal) => {
+    start(async () => {
+      const r = await approveInTestMode(businessId, scenario, proposal)
+      setLogs((all) => {
+        const list = [...(all[scenario] ?? [])]
+        const entry = list[index]
+        if (entry?.who === 'ai') {
+          list[index] = { ...entry, test: r.ok && r.data ? r.data : {
+            ok: false, reference: null, result: r.ok ? 'No answer.' : r.message, trace: [], notice, record: null } }
         }
         return { ...all, [scenario]: list }
       })
@@ -129,17 +147,32 @@ export function SandboxConsole({ businessId, scenarios, suggestions, notice }: {
                     <span className="bos-bubble__tag">Needs your approval</span>
                     <strong>{e.turn.proposal.summary}</strong>
                   </div>
-                  {e.approval ? (
+                  {e.test ? (
+                    <div className={e.test.ok ? 'bos-sandbox__result is-ok' : 'bos-sandbox__result is-no'}>
+                      <strong>{e.test.ok ? 'Saved in Test Mode' : 'Not completed'}</strong>
+                      <span>{e.test.result}</span>
+                      {e.test.ok ? <span className="bos-hint">It is in Test records below — not in your real orders, bookings or enquiries.</span> : null}
+                      {e.test.trace.length ? <Trace steps={e.test.trace} /> : null}
+                    </div>
+                  ) : e.approval ? (
                     <div className={e.approval.ok ? 'bos-sandbox__result is-ok' : 'bos-sandbox__result is-no'}>
                       <strong>{e.approval.ok ? 'Approved in the sandbox' : 'Not completed'}</strong>
                       <span>{e.approval.result}</span>
                       {e.approval.trace.length ? <Trace steps={e.approval.trace} /> : null}
                     </div>
                   ) : (
-                    <button type="button" className="btn btn-primary" disabled={pending}
-                            onClick={() => approveAt(i, e.turn.proposal as Proposal)}>
-                      Approve (sandbox only)
-                    </button>
+                    <div className="bos-sandbox__choices">
+                      {canTest ? (
+                        <button type="button" className="btn btn-primary" disabled={pending}
+                                onClick={() => testAt(i, e.turn.proposal as Proposal)}>
+                          Approve in Test Mode
+                        </button>
+                      ) : null}
+                      <button type="button" className={canTest ? 'btn btn-ghost' : 'btn btn-primary'} disabled={pending}
+                              onClick={() => approveAt(i, e.turn.proposal as Proposal)}>
+                        Just check it (nothing saved)
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : null}

@@ -146,7 +146,7 @@ def test_the_receptionist_answers_from_records_and_hands_the_rest_to_a_person(mo
 
     assert _set(bid, owner, "receptionist", enabled=True).status_code == 200
     _inbound(owner, bid, "What time do you open tomorrow?")
-    assert any(v == "ai_employee" and b.endswith("is open Mon–Sat 09:00–20:00; Sun closed.")
+    assert any(v == "ai_employee" and b.endswith("is open Mon–Sat 9 am–8 pm; Sun closed.")
                for v, b in _replies(bid)), _replies(bid)
     _inbound(owner, bid, "how much is a haircut?")
     assert any(v == "ai_employee" and "Haircut: ₹300" in b for v, b in _replies(bid)), _replies(bid)
@@ -197,7 +197,7 @@ def test_free_text_reaches_the_receptionist_and_only_owner_matters_reach_a_perso
     _inbound(owner, bid, "how much is personal training?")
     assert last_ai() == "Personal Training: ₹1,500.", _replies(bid)  # the price from the Offering, nothing else
     _inbound(owner, bid, "what time do you open?")
-    assert last_ai().endswith("is open Mon–Sat 09:00–20:00; Sun closed."), _replies(bid)
+    assert last_ai().endswith("is open Mon–Sat 9 am–8 pm; Sun closed."), _replies(bid)
     _inbound(owner, bid, "do you have yoga?")
     assert "Yoga Class — ₹400" in last_ai(), _replies(bid)
     _inbound(owner, bid, "can I book a haircut tomorrow?")

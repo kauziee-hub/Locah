@@ -96,8 +96,8 @@ export default async function ModulesPage({ params }: { params: { businessId: st
       {sandbox ? (
         <p className="bos-hint" style={{ maxWidth: 'none' }}>
           Curious how an AI employee would answer your customers?{' '}
-          <Link href={`${base}/ai-employees/sandbox`}>Try the AI sandbox</Link> — a simulation on your own menu,
-          prices and free times; nothing is sent and nothing is saved.
+          <Link href={`${base}/ai-employees/sandbox`}>Open the AI Employee Studio</Link> — it answers from your own
+          menu, prices and free times, sends nothing, and keeps anything you approve in Test Mode as a test record.
         </p>
       ) : null}
 

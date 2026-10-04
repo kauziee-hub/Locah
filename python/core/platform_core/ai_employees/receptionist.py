@@ -86,18 +86,16 @@ def match_offering(said: str, offerings: list[Offering]) -> Offering | None:
 
 
 def hours_text(hours: dict[str, Any] | None) -> str:
-    """{"mon": [["09:00","18:00"]], ...} → "Mon–Sat 09:00–18:00; Sun closed"."""
-    if not hours:
+    """{"mon": [["09:00","18:00"]], ...} → "Mon–Sat 9 am–6 pm; Sun closed" — the
+    way people say it, not a 24-hour clock."""
+    from platform_core.interview.hours import describe
+
+    if not hours or not any(hours.get(d) for d in DAYS):
         return ""
-    spans = {d: ", ".join(f"{a}–{b}" for a, b in hours.get(d) or []) or "closed" for d in DAYS}
-    parts, start = [], 0
-    for i in range(1, len(DAYS) + 1):
-        if i == len(DAYS) or spans[DAYS[i]] != spans[DAYS[start]]:
-            label = DAYS[start].title() if i - 1 == start else f"{DAYS[start].title()}–{DAYS[i - 1].title()}"
-            parts.append(f"{label} {spans[DAYS[start]]}")
-            start = i
+    week = {d: [list(s) for s in hours.get(d) or []] for d in DAYS}
+    said = describe(week)
     note = f" ({hours['note']})" if hours.get("note") else ""
-    return "; ".join(parts) + note
+    return str(said[:1].lower() + said[1:] if said.startswith("Every day") else said) + note
 
 
 def address_text(address: dict[str, Any] | None) -> str:
