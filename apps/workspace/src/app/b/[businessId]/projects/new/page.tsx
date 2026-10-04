@@ -5,6 +5,7 @@ import { apiTry } from '@/lib/api'
 import { Card, GateNotice, PageHeader } from '@/components/ui'
 import { createProject } from '../actions'
 import { PRIORITY_LABEL, type ProjectSemantics } from '../shared'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ export default async function NewProjectPage({ params }: { params: { businessId:
         breadcrumb={<Link href={base}>← {semantics.noun_plural}</Link>}
       />
 
-      <form action={createProject} style={{ display: 'grid', gap: '1.25rem', maxWidth: '52rem' }}>
+      <SafeForm action={createProject} style={{ display: 'grid', gap: '1.25rem', maxWidth: '52rem' }}>
         <input type="hidden" name="businessId" value={params.businessId} />
 
         <Card style={{ display: 'grid', gap: '0.9rem' }}>
@@ -178,7 +179,7 @@ export default async function NewProjectPage({ params }: { params: { businessId:
             Cancel
           </Link>
         </div>
-      </form>
+      </SafeForm>
     </div>
   )
 }

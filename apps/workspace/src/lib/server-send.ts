@@ -28,7 +28,8 @@ export async function sendJson<T = unknown>(path: string, method: string, body?:
   } catch {
     /* empty or non-JSON body */
   }
-  if (res.ok) return { ok: true, data: payload?.data }
+  // Most routes wrap their answer in { data }; a few (marketing, loyalty) answer bare.
+  if (res.ok) return { ok: true, data: (payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload) as T }
   return { ok: false, message: payload?.error?.message ?? fieldProblem(payload?.detail) ?? 'That did not save. Try again.' }
 }
 
@@ -57,6 +58,17 @@ export function fieldProblem(detail: unknown): string | null {
     string_too_short: 'is too short',
     int_parsing: 'must be a whole number',
     float_parsing: 'must be a number',
+    date_parsing: 'must be a date',
+    date_from_datetime_parsing: 'must be a date',
+    datetime_parsing: 'must be a date and time',
+    datetime_from_date_parsing: 'must be a date and time',
+    time_parsing: 'must be a time',
+    uuid_parsing: 'is not one of the choices',
+    enum: 'is not one of the choices',
+    literal_error: 'is not one of the choices',
+    bool_parsing: 'must be yes or no',
+    string_pattern_mismatch: 'is not in the expected format',
+    value_error: 'is not valid',
     extra_forbidden: 'is not something this form takes',
   }
   const why = says[issue.type ?? ''] ?? (issue.msg ? issue.msg.charAt(0).toLowerCase() + issue.msg.slice(1) : 'is not valid')

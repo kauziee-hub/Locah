@@ -5,6 +5,7 @@ import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { RecommendedTools, type ForYou } from '@/components/RecommendedTools'
 import { setModuleState } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -148,12 +149,12 @@ export default async function ModulesPage({ params }: { params: { businessId: st
                   <strong>{m.label}</strong>
                   <p>{m.does}</p>
                 </div>
-                <form action={setModuleState}>
+                <SafeForm action={setModuleState}>
                   <input type="hidden" name="businessId" value={params.businessId} />
                   <input type="hidden" name="moduleId" value={m.key} />
                   <input type="hidden" name="action" value="enable" />
                   <button type="submit" className="btn-quiet">Turn on</button>
-                </form>
+                </SafeForm>
               </li>
             ))}
           </ul>
@@ -215,12 +216,12 @@ function ToolCard({ m, businessId, sandbox = false }: { m: Pick; businessId: str
         {on && !r?.ready ? (
           <Link className="btn-primary" href={`/b/${businessId}/modules/${m.module}`}>Continue setup</Link>
         ) : null}
-        <form action={setModuleState}>
+        <SafeForm action={setModuleState}>
           <input type="hidden" name="businessId" value={businessId} />
           <input type="hidden" name="moduleId" value={m.module} />
           <input type="hidden" name="action" value={on ? 'deactivate' : 'enable'} />
           <button type="submit" className={on ? 'btn-quiet' : 'btn-primary'}>{on ? 'Turn off' : 'Turn on'}</button>
-        </form>
+        </SafeForm>
       </footer>
     </article>
   )

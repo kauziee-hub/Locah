@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { FilterTabs, GateNotice, PageHeader } from '@/components/ui'
 import { featureReview, replyReview, reportReview } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,10 +58,10 @@ export default async function ReviewsPage({ params, searchParams }: { params: { 
           {review.reply ? <div className="bos-review-card__reply"><strong>Your public response</strong><p>{review.reply.body}</p></div> : null}
           {review.report ? <p className="bos-review-card__report">Reported: {review.report.reason_words} · {review.report.status}</p> : null}
           {review.status === 'published' ? <div className="bos-review-card__actions">
-            {canReply ? <form action={replyReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><label htmlFor={`reply-${review.id}`}>Public response</label><textarea id={`reply-${review.id}`} name="body" defaultValue={review.reply?.body || ''} maxLength={1000} rows={2} placeholder="Thank the customer, or explain how you will put this right." /><button className="btn" type="submit">{review.reply ? 'Update response' : 'Post response'}</button></form> : null}
+            {canReply ? <SafeForm action={replyReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><label htmlFor={`reply-${review.id}`}>Public response</label><textarea id={`reply-${review.id}`} name="body" defaultValue={review.reply?.body || ''} maxLength={1000} rows={2} placeholder="Thank the customer, or explain how you will put this right." /><button className="btn" type="submit">{review.reply ? 'Update response' : 'Post response'}</button></SafeForm> : null}
             {canManage ? <div className="bos-review-card__manage">
-              <form action={featureReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><input type="hidden" name="featured" value={review.featured ? 'false' : 'true'} /><button className="btn-ghost" type="submit">{review.featured ? 'Unfeature' : 'Feature on website'}</button></form>
-              {!review.report ? <form action={reportReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><label htmlFor={`reason-${review.id}`}>Report a policy violation</label><select id={`reason-${review.id}`} name="reason" required><option value="">Select a reason</option>{Object.entries(data.violations).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select><input name="note" maxLength={500} placeholder="Context for moderator (optional)" /><button className="btn-ghost" type="submit">Send report</button></form> : null}
+              <SafeForm action={featureReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><input type="hidden" name="featured" value={review.featured ? 'false' : 'true'} /><button className="btn-ghost" type="submit">{review.featured ? 'Unfeature' : 'Feature on website'}</button></SafeForm>
+              {!review.report ? <SafeForm action={reportReview}><input type="hidden" name="businessId" value={b} /><input type="hidden" name="reviewId" value={review.id} /><label htmlFor={`reason-${review.id}`}>Report a policy violation</label><select id={`reason-${review.id}`} name="reason" required><option value="">Select a reason</option>{Object.entries(data.violations).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select><input name="note" maxLength={500} placeholder="Context for moderator (optional)" /><button className="btn-ghost" type="submit">Send report</button></SafeForm> : null}
             </div> : null}
           </div> : null}
         </article>

@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { addCause, addGift } from '../supply-actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +24,13 @@ export default async function DonationsPage({ params }: { params: { businessId: 
   return (
     <div className="bos-page">
       <PageHeader title="Donations" subtitle="Causes, donors and receipts. A gift is not an order." />
-      <form action={addCause} className="bos-form">
+      <SafeForm action={addCause} className="bos-form">
         <h2>Cause</h2>
         <input type="hidden" name="businessId" value={b} />
         <label>Name<input name="name" required maxLength={160} /></label>
         <button type="submit" className="btn-primary">Open cause</button>
-      </form>
-      <form action={addGift} className="bos-form">
+      </SafeForm>
+      <SafeForm action={addGift} className="bos-form">
         <h2>Record a gift</h2>
         <input type="hidden" name="businessId" value={b} />
         <label>Cause
@@ -40,7 +41,7 @@ export default async function DonationsPage({ params }: { params: { businessId: 
         <label>Donor<input name="donor_name" required maxLength={160} /></label>
         <label>Amount (₹)<input name="rupees" type="number" min="1" step="0.01" required /></label>
         <button type="submit" className="btn-primary">Save gift</button>
-      </form>
+      </SafeForm>
       <h2>Recent gifts</h2>
       {gifts.length === 0 ? <p>No gifts yet.</p> : (
         <ul>

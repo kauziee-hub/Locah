@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader, StatusPill } from '@/components/ModuleState'
 import { approveCampaign, dispatchCampaign, prepareCampaign, saveCampaignBuild } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,7 +83,7 @@ export default async function CampaignBuilderPage({
 
       <section style={{ marginTop: '1.5rem', maxWidth: '36rem' }}>
         <h2>Builder</h2>
-        <form action={saveCampaignBuild} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={saveCampaignBuild} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="campaignId" value={campaign.id} />
           <label>
@@ -136,7 +137,7 @@ export default async function CampaignBuilderPage({
             />
           </label>
           {locked ? null : <button type="submit">Save draft</button>}
-        </form>
+        </SafeForm>
       </section>
 
       <section style={{ marginTop: '1.5rem' }}>
@@ -153,11 +154,11 @@ export default async function CampaignBuilderPage({
           <p style={{ color: 'var(--color-muted)' }}>Submit for approval to count consented contacts.</p>
         )}
         {locked ? null : (
-          <form action={prepareCampaign}>
+          <SafeForm action={prepareCampaign}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="campaignId" value={campaign.id} />
             <button type="submit">Count audience and submit for approval</button>
-          </form>
+          </SafeForm>
         )}
       </section>
 
@@ -167,18 +168,18 @@ export default async function CampaignBuilderPage({
           Only someone with marketing approval can approve. A marketer can draft this page, not send it.
         </p>
         {campaign.status === 'READY_FOR_APPROVAL' || campaign.status === 'DRAFT' ? (
-          <form action={approveCampaign}>
+          <SafeForm action={approveCampaign}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="campaignId" value={campaign.id} />
             <button type="submit">Approve</button>
-          </form>
+          </SafeForm>
         ) : null}
         {campaign.status === 'APPROVED' ? (
-          <form action={dispatchCampaign}>
+          <SafeForm action={dispatchCampaign}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="campaignId" value={campaign.id} />
             <button type="submit">Record fixture send</button>
-          </form>
+          </SafeForm>
         ) : null}
       </section>
 

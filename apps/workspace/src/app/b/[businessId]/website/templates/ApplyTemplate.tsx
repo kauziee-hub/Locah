@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { applyTemplate } from './actions'
+import { SafeForm } from '@/components/SafeForm'
+import { SubmitButton } from '@/components/ActionForm'
 
 /**
  * Choosing a template, with the consequence stated before it happens.
@@ -37,7 +39,6 @@ export function ApplyTemplate({
   disabledReason?: string
 }) {
   const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   if (disabled) {
     return (
@@ -64,7 +65,7 @@ export function ApplyTemplate({
   }
 
   return (
-    <form action={applyTemplate} onSubmit={() => setBusy(true)} className="tpl-confirm">
+    <SafeForm action={applyTemplate} className="tpl-confirm">
       <input type="hidden" name="businessId" value={businessId} />
       <input type="hidden" name="templateId" value={templateId} />
       <p className="tpl-confirm__text">
@@ -75,22 +76,17 @@ export function ApplyTemplate({
             : `Start from ${templateName}? You can change everything on it afterwards.`}
       </p>
       <div className="tpl-confirm__row">
-        <button type="submit" className="btn" disabled={busy}>
-          {busy
-            ? 'Applying…'
-            : relationship === 'generated-from'
-              ? 'Reset to the plain layout'
-              : `Use ${templateName}`}
-        </button>
+        <SubmitButton className="btn" busy="Applying…">
+          {relationship === 'generated-from' ? 'Reset to the plain layout' : `Use ${templateName}`}
+        </SubmitButton>
         <button
           type="button"
           className="btn btn-ghost"
           onClick={() => setConfirming(false)}
-          disabled={busy}
         >
           Keep what I have
         </button>
       </div>
-    </form>
+    </SafeForm>
   )
 }

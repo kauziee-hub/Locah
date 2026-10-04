@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { EmptyState, GateNotice, PageHeader, ROW, StatusPill, TABLE, TD, TH } from '@/components/ModuleState'
 import { createStampCard, earnPoints, issueVoucher, redeemPoints, saveLoyaltyProgram } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,7 +77,7 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
 
       <section style={{ maxWidth: '32rem' }}>
         <h2>Points programme</h2>
-        <form action={saveLoyaltyProgram} style={FORM}>
+        <SafeForm action={saveLoyaltyProgram} style={FORM}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <label>
             Name
@@ -114,7 +115,7 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
             </select>
           </label>
           <button type="submit">Save programme</button>
-        </form>
+        </SafeForm>
         <p style={{ marginTop: '0.6rem' }}>
           <StatusPill value={prog.status} /> <span style={{ color: 'var(--color-muted)' }}>{prog.program_type}</span>
         </p>
@@ -143,21 +144,21 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
                     <td style={TD}>{customer.display_name}</td>
                     <td style={TD}>{pointsOf.get(customer.id) ?? 0}</td>
                     <td style={TD}>
-                      <form action={earnPoints} style={{ display: 'flex', gap: '0.4rem' }}>
+                      <SafeForm action={earnPoints} style={{ display: 'flex', gap: '0.4rem' }}>
                         <input type="hidden" name="businessId" value={params.businessId} />
                         <input type="hidden" name="contact_id" value={customer.id} />
                         <input name="amount_rupees" type="number" min="1" step="1" placeholder="₹" required style={{ width: '5rem' }} />
                         <button type="submit">Earn</button>
-                      </form>
+                      </SafeForm>
                     </td>
                     <td style={TD}>
-                      <form action={redeemPoints} style={{ display: 'flex', gap: '0.4rem' }}>
+                      <SafeForm action={redeemPoints} style={{ display: 'flex', gap: '0.4rem' }}>
                         <input type="hidden" name="businessId" value={params.businessId} />
                         <input type="hidden" name="contact_id" value={customer.id} />
                         <input type="hidden" name="order_amount_paise" value="100000" />
                         <input name="points" type="number" min="1" step="1" placeholder="pts" required style={{ width: '5rem' }} />
                         <button type="submit">Redeem</button>
-                      </form>
+                      </SafeForm>
                     </td>
                   </tr>
                 ))}
@@ -196,13 +197,13 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
             </table>
           </div>
         ) : null}
-        <form action={createStampCard} style={{ ...FORM, marginTop: '1rem' }}>
+        <SafeForm action={createStampCard} style={{ ...FORM, marginTop: '1rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input name="name" required placeholder="Card name, for example Coffee card" style={INPUT} />
           <input name="required_stamps" type="number" min="2" max="100" defaultValue={10} required style={INPUT} />
           <input name="reward_item" required placeholder="Reward, for example Free coffee" style={INPUT} />
           <button type="submit">Add stamp card</button>
-        </form>
+        </SafeForm>
       </section>
 
       <section style={{ marginTop: '2.25rem', maxWidth: '32rem' }}>
@@ -210,7 +211,7 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
         <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>
           This records the balance. Taking the money for the voucher waits on Payments.
         </p>
-        <form action={issueVoucher} style={FORM}>
+        <SafeForm action={issueVoucher} style={FORM}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input name="recipient_name" placeholder="Recipient name" style={INPUT} />
           <label>
@@ -226,7 +227,7 @@ export default async function LoyaltyPage({ params }: { params: { businessId: st
           </label>
           <input name="amount_rupees" type="number" min="1" step="1" required placeholder="Amount in rupees" style={INPUT} />
           <button type="submit">Issue voucher</button>
-        </form>
+        </SafeForm>
       </section>
     </div>
   )

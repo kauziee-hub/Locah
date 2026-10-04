@@ -4,6 +4,7 @@ import { apiTry } from '@/lib/api'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { Card, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { createJob } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,7 +52,7 @@ export default async function JobsPage({ params }: { params: { businessId: strin
     <PageHeader title="Job cards" subtitle="One card for each visit or repair. Bookings reserve time; projects coordinate larger work." />
     <details className="bos-panel" style={{ marginBottom: '1.5rem' }}>
       <summary style={{ cursor: 'pointer', fontWeight: 650 }}>Start a job</summary>
-      <form action={createJob} style={{ display: 'grid', gap: '0.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(13rem, 1fr))', paddingTop: '1rem' }}>
+      <SafeForm action={createJob} style={{ display: 'grid', gap: '0.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(13rem, 1fr))', paddingTop: '1rem' }}>
         <input type="hidden" name="businessId" value={b} />
         <label>Customer<select name="customer_contact_id" required defaultValue=""><option value="">Choose customer</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label>
         <label>Work to do<input name="title" required maxLength={200} placeholder="Repair AC compressor" /></label>
@@ -63,7 +64,7 @@ export default async function JobsPage({ params }: { params: { businessId: strin
         <label>Serial / registration<input name="asset_serial" placeholder="Optional" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Problem or request<textarea name="problem" rows={2} /></label>
         <button className="btn" type="submit" style={{ justifySelf: 'start' }}>Create job card</button>
-      </form>
+      </SafeForm>
     </details>
     {jobs.length === 0 ? <Card><p style={{ margin: 0 }}>No job cards yet. Start with a customer request, then assign the person doing the work.</p></Card> : null}
     {groups.map((group) => group.rows.length ? <section key={group.title} style={{ marginBottom: '1.6rem' }}>

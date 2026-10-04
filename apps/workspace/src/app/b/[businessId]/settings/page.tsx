@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { updatePreferences, updateRegionalSettings } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,7 +67,7 @@ export default async function SettingsPage({ params }: { params: { businessId: s
 
       <section className="ws-settings-section">
         <div><h2>Region and formats</h2><p>How dates, time and money appear across this business.</p></div>
-        <form action={updateRegionalSettings} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={updateRegionalSettings} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <label style={LABEL}>
             Timezone
@@ -111,12 +112,12 @@ export default async function SettingsPage({ params }: { params: { businessId: s
           <button type="submit" style={BUTTON}>
             Save
           </button>
-        </form>
+        </SafeForm>
       </section>
 
       <section className="ws-settings-section">
         <div><h2>Display preferences</h2><p>Choose a format that feels familiar to your team.</p></div>
-        <form action={updatePreferences} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={updatePreferences} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <label style={LABEL}>
             Date format
@@ -153,7 +154,7 @@ export default async function SettingsPage({ params }: { params: { businessId: s
           <button type="submit" style={BUTTON}>
             Save
           </button>
-        </form>
+        </SafeForm>
       </section>
 
       <section className="ws-settings-section">

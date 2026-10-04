@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { createCampaign } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export default async function NewCampaignPage({ params }: { params: { businessId
         <Link href={`/b/${params.businessId}/marketing`}>Campaigns</Link>
       </p>
       <h1>New campaign</h1>
-      <form action={createCampaign} style={{ display: 'grid', gap: '0.6rem', maxWidth: '32rem', marginTop: '1rem' }}>
+      <SafeForm action={createCampaign} style={{ display: 'grid', gap: '0.6rem', maxWidth: '32rem', marginTop: '1rem' }}>
         <input type="hidden" name="businessId" value={params.businessId} />
         <label>
           Name
@@ -40,7 +41,7 @@ export default async function NewCampaignPage({ params }: { params: { businessId
           <input name="budget_rupees" type="number" min="0" step="1" defaultValue={0} style={INPUT} />
         </label>
         <button type="submit">Create draft</button>
-      </form>
+      </SafeForm>
     </div>
   )
 }

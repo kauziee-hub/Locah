@@ -27,14 +27,18 @@ export function KitchenSetup({
   const routed = new Map(routes.map((route) => [route.offering_id, new Set(route.station_ids)]))
   const open = offerings.filter((item) => item.kind === 'menu_item' || routed.has(item.id))
 
-  function run(work: () => Promise<void>) {
+  function run(work: () => Promise<{ ok: true } | { ok: false; message: string } | void>) {
     start(async () => {
       try {
-        await work()
+        const answer = await work()
+        if (answer && !answer.ok) {
+          setError(answer.message)
+          return
+        }
         setError('')
         router.refresh()
       } catch {
-        setError('That did not save.')
+        setError('That did not save. Try again.')
       }
     })
   }
@@ -67,8 +71,9 @@ export function KitchenSetup({
             event.preventDefault()
             if (!name.trim()) return
             run(async () => {
-              await addStation(businessId, { name: name.trim() })
-              setName('')
+              const answer = await addStation(businessId, { name: name.trim() })
+              if (answer.ok) setName('')
+              return answer
             })
           }}
         >

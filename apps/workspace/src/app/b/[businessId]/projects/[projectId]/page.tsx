@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { Card, EmptyState, GateNotice, PageHeader, StatusPill } from '@/components/ui'
-import { AddForm } from '../AddForm'
 import { StageTrack, type StageWhere } from '@/components/StageTrack'
 import {
   addPhase,
@@ -31,6 +30,7 @@ import {
   type ProjectSemantics,
   type ProjectTask,
 } from '../shared'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,7 +151,7 @@ export default async function ProjectDetailPage({
         </li>)}</ul> : <p>No executable jobs linked yet. Keep the project for the overall commitment; create a job card when work needs a technician or parts.</p>}
         <Link href={`/b/${params.businessId}/jobs`}>Open job cards</Link>
         {open && project.customer_contact_id ? (
-          <form action={createJob} style={{ display: 'grid', gap: '0.6rem', marginTop: '0.8rem', maxWidth: '28rem' }}>
+          <SafeForm action={createJob} style={{ display: 'grid', gap: '0.6rem', marginTop: '0.8rem', maxWidth: '28rem' }}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="customer_contact_id" value={project.customer_contact_id} />
             <input type="hidden" name="project_id" value={project.id} />
@@ -159,7 +159,7 @@ export default async function ProjectDetailPage({
             <label>Work for this project<input name="title" required maxLength={200} placeholder="Site visit, install, or repair" /></label>
             <label>What needs doing<textarea name="problem" rows={2} /></label>
             <button type="submit" className="btn">Start a job card</button>
-          </form>
+          </SafeForm>
         ) : null}
       </Card> : null}
 
@@ -290,7 +290,7 @@ function Lifecycle({ businessId, project }: { businessId: string; project: Proje
       <h2 style={{ fontSize: '1.05rem', margin: 0 }}>Where this stands</h2>
       <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {next.map((status) => (
-          <form key={status} action={changeProjectStatus} style={{ display: 'flex', gap: '0.4rem' }}>
+          <SafeForm key={status} action={changeProjectStatus} style={{ display: 'flex', gap: '0.4rem' }}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="projectId" value={project.id} />
             <input type="hidden" name="status" value={status} />
@@ -303,7 +303,7 @@ function Lifecycle({ businessId, project }: { businessId: string; project: Proje
             >
               {STATUS_ACTION_LABEL[status] ?? status}
             </button>
-          </form>
+          </SafeForm>
         ))}
       </div>
     </Card>
@@ -373,7 +373,7 @@ function Phases({
                   {phase.invoice_id ? <span style={{ display: 'block', fontSize: '0.84rem' }}>Linked invoice {phase.invoice_id.slice(0, 8)}…</span> : null}
                 </div>
                 {open ? (
-                  <form action={updatePhase} style={{ display: 'flex', gap: '0.4rem' }}>
+                  <SafeForm action={updatePhase} style={{ display: 'flex', gap: '0.4rem' }}>
                     <input type="hidden" name="businessId" value={businessId} />
                     <input type="hidden" name="projectId" value={project.id} />
                     <input type="hidden" name="phaseId" value={phase.id} />
@@ -387,13 +387,13 @@ function Phases({
                     <button type="submit" className="btn btn-ghost">
                       Save
                     </button>
-                  </form>
+                  </SafeForm>
                 ) : (
                   <span style={{ color: 'var(--color-muted)' }}>
                     {PHASE_STATUS_LABEL[phase.status] ?? phase.status}
                   </span>
                 )}
-                {open && phase.is_milestone ? <form action={assignPhase} style={{ display: 'flex', gap: '0.4rem' }}>
+                {open && phase.is_milestone ? <SafeForm action={assignPhase} style={{ display: 'flex', gap: '0.4rem' }}>
                   <input type="hidden" name="businessId" value={businessId} />
                   <input type="hidden" name="projectId" value={project.id} />
                   <input type="hidden" name="phaseId" value={phase.id} />
@@ -402,7 +402,7 @@ function Phases({
                     {members.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}
                   </select>
                   <button type="submit" className="btn btn-ghost">Assign</button>
-                </form> : null}
+                </SafeForm> : null}
               </li>
             )
           })}
@@ -410,7 +410,8 @@ function Phases({
       )}
 
       {open ? (
-        <AddForm
+        <SafeForm
+          resetOnSuccess
           action={addPhase}
           style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
         >
@@ -425,7 +426,7 @@ function Phases({
           <button type="submit" className="btn btn-ghost">
             Add stage
           </button>
-        </AddForm>
+        </SafeForm>
       ) : null}
     </Card>
   )
@@ -494,7 +495,7 @@ function Tasks({
                   </td>
                   <td>
                     {open ? (
-                      <form action={updateTask} style={{ display: 'flex', gap: '0.35rem' }}>
+                      <SafeForm action={updateTask} style={{ display: 'flex', gap: '0.35rem' }}>
                         <input type="hidden" name="businessId" value={businessId} />
                         <input type="hidden" name="projectId" value={project.id} />
                         <input type="hidden" name="taskId" value={task.id} />
@@ -514,7 +515,7 @@ function Tasks({
                         <button type="submit" className="btn btn-ghost">
                           Set
                         </button>
-                      </form>
+                      </SafeForm>
                     ) : task.assignee_member_id ? (
                       memberName.get(task.assignee_member_id) || 'Assigned'
                     ) : (
@@ -524,7 +525,7 @@ function Tasks({
                   <td>{dayLabel(task.due_on)}</td>
                   <td>
                     {open ? (
-                      <form action={updateTask} style={{ display: 'flex', gap: '0.35rem' }}>
+                      <SafeForm action={updateTask} style={{ display: 'flex', gap: '0.35rem' }}>
                         <input type="hidden" name="businessId" value={businessId} />
                         <input type="hidden" name="projectId" value={project.id} />
                         <input type="hidden" name="taskId" value={task.id} />
@@ -539,7 +540,7 @@ function Tasks({
                         <button type="submit" className="btn btn-ghost">
                           Save
                         </button>
-                      </form>
+                      </SafeForm>
                     ) : (
                       <StatusPill
                         value={TASK_STATUS_LABEL[task.status] ?? task.status}
@@ -555,7 +556,8 @@ function Tasks({
       )}
 
       {open ? (
-        <AddForm
+        <SafeForm
+          resetOnSuccess
           action={addTask}
           style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
         >
@@ -584,7 +586,7 @@ function Tasks({
           <button type="submit" className="btn btn-ghost">
             Add task
           </button>
-        </AddForm>
+        </SafeForm>
       ) : null}
     </Card>
   )

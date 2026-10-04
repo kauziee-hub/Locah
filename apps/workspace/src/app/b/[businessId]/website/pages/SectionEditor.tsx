@@ -1,4 +1,5 @@
 import { saveSectionContent } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 type Props = {
   businessId: string
@@ -21,7 +22,7 @@ export function SectionEditor({
   const body = String(initialContent.body || initialContent.subheadline || '')
 
   return (
-    <form
+    <SafeForm
       action={saveSectionContent}
       style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #ddd' }}
     >
@@ -76,6 +77,6 @@ export function SectionEditor({
       <button type="submit" style={{ marginTop: '0.5rem' }}>
         Save section
       </button>
-    </form>
+    </SafeForm>
   )
 }

@@ -2,10 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { platformUrl } from '@platform/config'
-import { getAccessToken } from '@/lib/supabase/access-token'
-
-const apiUrl = platformUrl('api')
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
 /**
  * Every write goes to the projects API as it stands.
@@ -15,26 +12,8 @@ const apiUrl = platformUrl('api')
  * service's rules, and a second copy of them in the Workspace would be a second
  * opinion about the state of real work.
  */
-async function send(path: string, method: string, body?: unknown): Promise<unknown> {
-  const token = await getAccessToken()
-  if (!token) redirect('/login')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    let message = `Request failed (${res.status})`
-    try {
-      message = JSON.parse(text)?.error?.message || message
-    } catch {
-      // Non-JSON body — the status-derived message is the best available.
-    }
-    throw new Error(message)
-  }
-  return res.json()
+async function send<T = unknown>(path: string, method: string, body?: unknown): Promise<ActionResult<T>> {
+  return sendJson<T>(path, method, body)
 }
 
 function optional(form: FormData, field: string): string | undefined {
@@ -48,7 +27,7 @@ function refresh(businessId: string, projectId?: string): void {
   if (projectId) revalidatePath(`/b/${businessId}/projects/${projectId}`)
 }
 
-export async function createProject(formData: FormData): Promise<void> {
+export async function createProject(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   // An empty phase list is a real choice — a single-visit job has no stages —
   // so it is only sent when the person actually edited the field. Leaving it
@@ -62,7 +41,7 @@ export async function createProject(formData: FormData): Promise<void> {
           .map((line) => line.trim())
           .filter(Boolean)
 
-  const created = (await send(`/v1/platform/businesses/${businessId}/projects`, 'POST', {
+  const created = await send<{ id?: string }>(`/v1/platform/businesses/${businessId}/projects`, 'POST', {
     title: String(formData.get('title') || '').trim(),
     summary: optional(formData, 'summary'),
     internal_notes: optional(formData, 'internal_notes'),
@@ -72,22 +51,23 @@ export async function createProject(formData: FormData): Promise<void> {
     starts_on: optional(formData, 'starts_on'),
     due_on: optional(formData, 'due_on'),
     ...(phases === undefined ? {} : { phases }),
-  })) as { data?: { id?: string } }
-
-  const projectId = created?.data?.id
+  })
+  if (!created.ok) return created
+  const projectId = created.data?.id
   refresh(businessId, projectId)
   redirect(
     projectId
       ? `/b/${businessId}/projects/${projectId}`
       : `/b/${businessId}/projects`
   )
+  return { ok: true }
 }
 
-export async function updateProject(formData: FormData): Promise<void> {
+export async function updateProject(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
   const version = Number(formData.get('version'))
-  await send(`/v1/platform/businesses/${businessId}/projects/${projectId}`, 'PATCH', {
+  const r = await send(`/v1/platform/businesses/${businessId}/projects/${projectId}`, 'PATCH', {
     title: String(formData.get('title') || '').trim(),
     summary: optional(formData, 'summary') ?? null,
     internal_notes: optional(formData, 'internal_notes') ?? null,
@@ -98,35 +78,41 @@ export async function updateProject(formData: FormData): Promise<void> {
     due_on: optional(formData, 'due_on') ?? null,
     ...(Number.isFinite(version) && version >= 1 ? { version } : {}),
   })
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function changeProjectStatus(formData: FormData): Promise<void> {
+export async function changeProjectStatus(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
-  await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/status`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/status`, 'POST', {
     status: String(formData.get('status')),
     reason: optional(formData, 'reason'),
   })
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function addPhase(formData: FormData): Promise<void> {
+export async function addPhase(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
-  await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/phases`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/phases`, 'POST', {
     name: String(formData.get('name') || '').trim(),
     due_on: optional(formData, 'due_on'),
     is_milestone: formData.get('is_milestone') === 'on',
   })
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function updatePhase(formData: FormData): Promise<void> {
+export async function updatePhase(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
   const phaseId = String(formData.get('phaseId'))
-  await send(
+  const r = await send(
     `/v1/platform/businesses/${businessId}/projects/${projectId}/phases/${phaseId}`,
     'PATCH',
     {
@@ -134,33 +120,39 @@ export async function updatePhase(formData: FormData): Promise<void> {
       ...(formData.has('completion_note') ? { completion_note: optional(formData, 'completion_note') } : {}),
     }
   )
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function assignPhase(formData: FormData): Promise<void> {
+export async function assignPhase(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
   const phaseId = String(formData.get('phaseId'))
-  await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/phases/${phaseId}/assign`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/phases/${phaseId}/assign`, 'POST', {
     responsible_member_id: optional(formData, 'responsible_member_id'),
   })
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function addTask(formData: FormData): Promise<void> {
+export async function addTask(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
-  await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/tasks`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/projects/${projectId}/tasks`, 'POST', {
     title: String(formData.get('title') || '').trim(),
     description: optional(formData, 'description'),
     phase_id: optional(formData, 'phase_id'),
     assignee_member_id: optional(formData, 'assignee_member_id'),
     due_on: optional(formData, 'due_on'),
   })
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function updateTask(formData: FormData): Promise<void> {
+export async function updateTask(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const projectId = String(formData.get('projectId'))
   const taskId = String(formData.get('taskId'))
@@ -176,24 +168,29 @@ export async function updateTask(formData: FormData): Promise<void> {
   if (formData.has('blocked_reason')) body.blocked_reason = optional(formData, 'blocked_reason')
   if (Number.isFinite(version) && version >= 1) body.version = version
 
-  await send(
+  const r = await send(
     `/v1/platform/businesses/${businessId}/projects/${projectId}/tasks/${taskId}`,
     'PATCH',
     body
   )
+
+  if (!r.ok) return r
   refresh(businessId, projectId)
+  return { ok: true }
 }
 
-export async function convertQuoteToProject(formData: FormData): Promise<void> {
+export async function convertQuoteToProject(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  const created = (await send(
+  const created = await send<{ id?: string }>(
     `/v1/platform/businesses/${businessId}/quotes/${quoteId}/convert-to-project`,
     'POST',
     {}
-  )) as { data?: { id?: string } }
-  const projectId = created?.data?.id
+  )
+  if (!created.ok) return created
+  const projectId = created.data?.id
   refresh(businessId, projectId)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
   if (projectId) redirect(`/b/${businessId}/projects/${projectId}`)
+  return { ok: true }
 }

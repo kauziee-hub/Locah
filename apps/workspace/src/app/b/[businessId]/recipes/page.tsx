@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { saveRecipe } from '../supply-actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export default async function RecipesPage({ params }: { params: { businessId: st
           </tbody>
         </table>
       )}
-      <form action={saveRecipe} className="bos-form">
+      <SafeForm action={saveRecipe} className="bos-form">
         <h2>Add or replace a recipe</h2>
         <input type="hidden" name="businessId" value={b} />
         <label>Dish
@@ -64,7 +65,7 @@ export default async function RecipesPage({ params }: { params: { businessId: st
           </div>
         ))}
         <button type="submit" className="btn-primary">Save recipe</button>
-      </form>
+      </SafeForm>
     </div>
   )
 }

@@ -1,22 +1,20 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiSend } from '@/lib/api'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-async function send(businessId: string, path: string, body?: unknown) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Sign in to run the queue')
-  await apiSend(`/v1/platform/businesses/${businessId}/queue${path}`, token, 'POST', body)
-  revalidatePath(`/b/${businessId}/queue`)
+async function send(businessId: string, path: string, body?: unknown): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/queue${path}`, 'POST', body)
+  if (r.ok) revalidatePath(`/b/${businessId}/queue`)
+  return r
 }
 
-export async function createQueueLane(form: FormData) {
+export async function createQueueLane(form: FormData): Promise<ActionResult> {
   const businessId = String(form.get('businessId'))
   const department = String(form.get('department') || '').trim()
   const provider = String(form.get('providerId') || '').trim()
   const minutes = String(form.get('avgServiceMinutes') || '').trim()
-  await send(businessId, '/lanes', {
+  const r = await send(businessId, '/lanes', {
     location_id: String(form.get('locationId')),
     name: String(form.get('name')),
     department: department || null,
@@ -25,25 +23,31 @@ export async function createQueueLane(form: FormData) {
     turn_soon_ahead: Number(form.get('turnSoonAhead') || 2),
     avg_service_minutes: minutes ? Number(minutes) : null,
   })
+  if (!r.ok) return r
+  return { ok: true }
 }
 
-export async function issueToken(form: FormData) {
+export async function issueToken(form: FormData): Promise<ActionResult> {
   const businessId = String(form.get('businessId'))
   const booking = String(form.get('bookingId') || '').trim()
   const name = String(form.get('partyLabel') || '').trim()
-  await send(businessId, '/entries', {
+  const r = await send(businessId, '/entries', {
     lane_id: String(form.get('laneId')),
     party_label: booking ? null : name,
     booking_id: booking || null,
     priority: Number(form.get('priority') || 0),
   })
+  if (!r.ok) return r
+  return { ok: true }
 }
 
-export async function queueAct(form: FormData) {
+export async function queueAct(form: FormData): Promise<ActionResult> {
   const businessId = String(form.get('businessId'))
   const action = String(form.get('action'))
   const laneId = String(form.get('laneId') || '')
   const entryId = String(form.get('entryId') || '')
   const path = action === 'call-next' ? `/lanes/${laneId}/call-next` : `/entries/${entryId}/${action}`
-  await send(businessId, path, {})
+  const r = await send(businessId, path, {})
+  if (!r.ok) return r
+  return { ok: true }
 }

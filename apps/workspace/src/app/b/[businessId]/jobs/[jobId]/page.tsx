@@ -5,6 +5,7 @@ import { apiTry } from '@/lib/api'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { Card, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { assignJob, consumePart, moveJob, returnPart } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,12 +73,12 @@ export default async function JobPage({ params }: { params: { businessId: string
       </Card>
       <Card>
         <h2 style={{ marginTop: 0 }}>Next step</h2>
-        {open && !job.assigned_member_id ? <form action={assignJob} style={{ display: 'grid', gap: '0.6rem' }}>
+        {open && !job.assigned_member_id ? <SafeForm action={assignJob} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={b} /><input type="hidden" name="jobId" value={job.id} />
           <label>Assign a person<select name="member_id" required defaultValue=""><option value="">Choose team member</option>{members.filter((m) => m.status !== 'inactive').map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select></label>
           <button type="submit" className="btn">Assign job</button>
-        </form> : null}
-        {open && job.assigned_member_id ? <form action={moveJob} style={{ display: 'grid', gap: '0.6rem' }}>
+        </SafeForm> : null}
+        {open && job.assigned_member_id ? <SafeForm action={moveJob} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={b} /><input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="version" value={job.version} />
           <label>Move to<select name="status" required defaultValue=""><option value="">Choose next step</option>{(next[job.status] || []).map((status) => <option key={status} value={status}>{label[status] || status}</option>)}</select></label>
@@ -85,7 +86,7 @@ export default async function JobPage({ params }: { params: { businessId: string
           <label>Completion note<textarea name="completion_note" rows={2} placeholder="Optional handover note" /></label>
           {job.status === 'awaiting_approval' ? <label>How did the customer approve?<textarea name="approval_note" rows={2} placeholder="Accepted quote, message, or phone confirmation" /></label> : null}
           <button type="submit" className="btn">Update job</button>
-        </form> : null}
+        </SafeForm> : null}
         {!open ? <p style={{ marginBottom: 0 }}>This job is closed. Its work record and parts remain available in the customer history.</p> : null}
       </Card>
     </div>
@@ -99,23 +100,23 @@ export default async function JobPage({ params }: { params: { businessId: string
             <strong>{row.title}</strong>
             <p>{row.location_name} · {row.quantity_out} used{row.quantity_back ? ` · ${row.quantity_back} given back` : ''} · {row.open_text} still out</p>
           </div>
-          {part && row.open > 0 && !row.serial_tracked ? <form action={returnPart} style={{ display: 'flex', gap: '0.4rem', alignItems: 'end' }}>
+          {part && row.open > 0 && !row.serial_tracked ? <SafeForm action={returnPart} style={{ display: 'flex', gap: '0.4rem', alignItems: 'end' }}>
             <input type="hidden" name="businessId" value={b} /><input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="partId" value={part.id} /><input type="hidden" name="idempotency_key" value={randomUUID()} />
             <label>Unused<input name="quantity" type="number" min="1" max={row.open} step="1" required style={{ width: '5rem' }} /></label>
             <button type="submit" className="btn-ghost">Give back</button>
-          </form> : null}
+          </SafeForm> : null}
         </li>
       })}</ul>
         : <p>No business stock consumed on this job.</p>}
-      {open && ['in_progress', 'waiting_parts', 'quality_check'].includes(job.status) && stock.length ? <form action={consumePart} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '0.6rem' }}>
+      {open && ['in_progress', 'waiting_parts', 'quality_check'].includes(job.status) && stock.length ? <SafeForm action={consumePart} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '0.6rem' }}>
         <input type="hidden" name="businessId" value={b} /><input type="hidden" name="jobId" value={job.id} />
         <input type="hidden" name="idempotency_key" value={randomUUID()} />
         <label>Stock item<select name="inventory_record_id" required defaultValue=""><option value="">Choose available stock</option>{stock.map((s) => <option key={s.inventory_record_id} value={s.inventory_record_id}>{s.title} · {s.location_name}{s.is_van ? ' (van)' : ''} · {s.available_text}</option>)}</select></label>
         <label>Quantity in stock units<input name="quantity" type="number" min="1" step="1" required /></label>
         <label>Serials, if tracked<textarea name="serials" rows={2} placeholder="One per line" /></label>
         <button type="submit" className="btn">Record part used</button>
-      </form> : null}
+      </SafeForm> : null}
       {open && !stockRes.ok ? <p style={{ color: 'var(--color-muted)' }}>Enable and configure Inventory to record business-owned parts; customer-owned parts are not stock.</p> : null}
       {open && stockRes.ok && !stock.length && ['in_progress', 'waiting_parts', 'quality_check'].includes(job.status) ? <p style={{ color: 'var(--color-muted)' }}>No free stock at this job&apos;s location or the technician&apos;s van.</p> : null}
     </Card>

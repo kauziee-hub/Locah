@@ -46,14 +46,17 @@ export function SubmitButton({
   children,
   busy = 'Saving…',
   className,
+  disabled = false,
 }: {
   children: ReactNode
   busy?: string
   className?: string
+  /** Not ready to send yet (e.g. a required part is missing). */
+  disabled?: boolean
 }) {
   const { pending } = useFormStatus()
   return (
-    <button type="submit" className={className} disabled={pending} aria-busy={pending}>
+    <button type="submit" className={className} disabled={pending || disabled} aria-busy={pending}>
       {pending ? busy : children}
     </button>
   )

@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { advanceDispatchJob, assignDispatchJob } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,7 @@ export default async function DispatchJobPage({
       </p>
 
       {canAssign && members.length > 0 ? (
-        <form action={assignDispatchJob} style={{ display: 'flex', gap: '0.5rem', alignItems: 'end', marginTop: '1rem' }}>
+        <SafeForm action={assignDispatchJob} style={{ display: 'flex', gap: '0.5rem', alignItems: 'end', marginTop: '1rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="jobId" value={job.id} />
           <label>
@@ -90,25 +91,25 @@ export default async function DispatchJobPage({
             </select>
           </label>
           <button type="submit">Assign</button>
-        </form>
+        </SafeForm>
       ) : null}
 
       <section style={{ marginTop: '1.25rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
         {job.status === 'assigned' ? (
-          <form action={advanceDispatchJob}>
+          <SafeForm action={advanceDispatchJob}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="picked_up" />
             <button type="submit">Picked up</button>
-          </form>
+          </SafeForm>
         ) : null}
         {job.status === 'picked_up' && job.kind === 'delivery' ? (
-          <form action={advanceDispatchJob}>
+          <SafeForm action={advanceDispatchJob}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="out_for_delivery" />
             <button type="submit">Out for delivery</button>
-          </form>
+          </SafeForm>
         ) : null}
       </section>
     </div>

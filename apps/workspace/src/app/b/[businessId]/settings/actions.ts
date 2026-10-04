@@ -1,40 +1,33 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-const apiUrl = platformUrl('api')
-
-async function send(path: string, method: string, body?: unknown) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`)
-  return res.json()
+async function send<T = unknown>(path: string, method: string, body?: unknown): Promise<ActionResult<T>> {
+  return sendJson<T>(path, method, body)
 }
 
-export async function updateRegionalSettings(formData: FormData) {
+export async function updateRegionalSettings(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
-  await send(`/v1/platform/businesses/${businessId}/settings`, 'PATCH', {
+  const r = await send(`/v1/platform/businesses/${businessId}/settings`, 'PATCH', {
     timezone: String(formData.get('timezone')),
     currency: String(formData.get('currency')),
     country: String(formData.get('country')),
     language: String(formData.get('language')),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/settings`)
+  return { ok: true }
 }
 
-export async function updatePreferences(formData: FormData) {
+export async function updatePreferences(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
-  await send(`/v1/platform/businesses/${businessId}/preferences`, 'PATCH', {
+  const r = await send(`/v1/platform/businesses/${businessId}/preferences`, 'PATCH', {
     date_format: String(formData.get('date_format')),
     time_format: String(formData.get('time_format')),
     measurement_system: String(formData.get('measurement_system')),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/settings`)
+  return { ok: true }
 }

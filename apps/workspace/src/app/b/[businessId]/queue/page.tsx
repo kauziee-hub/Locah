@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { createQueueLane, issueToken, queueAct } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,25 +79,25 @@ export default async function QueuePage({ params, searchParams }: {
       {lane && board?.ok ? (
         <>
           {canOperate ? (
-            <form action={issueToken} className="bos-queue__issue">
+            <SafeForm action={issueToken} className="bos-queue__issue">
               <input type="hidden" name="businessId" value={b} />
               <input type="hidden" name="laneId" value={lane.id} />
               <label>Walk-in name<input name="partyLabel" maxLength={80} placeholder="Who is waiting" /></label>
               <label>Or booking id<input name="bookingId" placeholder="Existing booking" /></label>
               <button className="btn" type="submit">Issue token</button>
-            </form>
+            </SafeForm>
           ) : null}
           <div className="bos-queue__board">
             {COLUMNS.map((column) => (
               <section key={column.key} aria-label={column.label}>
                 <h2>{column.label}</h2>
                 {column.key === 'waiting' && canOperate ? (
-                  <form action={queueAct}>
+                  <SafeForm action={queueAct}>
                     <input type="hidden" name="businessId" value={b} />
                     <input type="hidden" name="laneId" value={lane.id} />
                     <input type="hidden" name="action" value="call-next" />
                     <button className="btn" type="submit">Call next</button>
-                  </form>
+                  </SafeForm>
                 ) : null}
                 <ol>
                   {board.data.data.columns[column.key].map((entry) => (
@@ -117,7 +118,7 @@ export default async function QueuePage({ params, searchParams }: {
       {canConfigure && locations.length > 0 ? (
         <section className="bos-queue__setup" aria-labelledby="new-queue">
           <h2 id="new-queue">New queue</h2>
-          <form action={createQueueLane} className="bos-compliance__form">
+          <SafeForm action={createQueueLane} className="bos-compliance__form">
             <input type="hidden" name="businessId" value={b} />
             <label>Name<input name="name" required maxLength={80} placeholder="OPD morning" /></label>
             <label>Location<select name="locationId" required>{locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}</select></label>
@@ -127,7 +128,7 @@ export default async function QueuePage({ params, searchParams }: {
             <label>Your turn soon when this many are ahead<input name="turnSoonAhead" type="number" min={0} max={50} defaultValue={2} /></label>
             <label className="bos-compliance__check"><input type="checkbox" name="allowRequeue" defaultChecked /> Missed tokens can rejoin</label>
             <button className="btn" type="submit">Add queue</button>
-          </form>
+          </SafeForm>
         </section>
       ) : null}
     </div>
@@ -144,12 +145,12 @@ function TokenActions({ businessId, entry, allowRequeue }: { businessId: string;
   return (
     <div className="bos-queue__actions">
       {actions.map((item) => (
-        <form key={item.action} action={queueAct}>
+        <SafeForm key={item.action} action={queueAct}>
           <input type="hidden" name="businessId" value={businessId} />
           <input type="hidden" name="entryId" value={entry.id} />
           <input type="hidden" name="action" value={item.action} />
           <button className="btn-ghost" type="submit">{item.label}</button>
-        </form>
+        </SafeForm>
       ))}
     </div>
   )

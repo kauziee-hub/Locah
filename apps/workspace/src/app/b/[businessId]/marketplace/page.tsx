@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { optInDiscoverable, setVisibility } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,21 +113,21 @@ export default async function MarketplacePresencePage({
       </section>
 
       <section style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <form action={optInDiscoverable}>
+        <SafeForm action={optInDiscoverable}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="confirmed" value="true" />
           <button type="submit">Confirm & become discoverable</button>
-        </form>
-        <form action={setVisibility}>
+        </SafeForm>
+        <SafeForm action={setVisibility}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="visibility" value="unlisted" />
           <button type="submit">Set unlisted</button>
-        </form>
-        <form action={setVisibility}>
+        </SafeForm>
+        <SafeForm action={setVisibility}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="visibility" value="private" />
           <button type="submit">Set private</button>
-        </form>
+        </SafeForm>
       </section>
     </div>
   )

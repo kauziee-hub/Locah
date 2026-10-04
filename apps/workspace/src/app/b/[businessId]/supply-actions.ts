@@ -1,19 +1,18 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiSend } from '@/lib/api'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-async function post(businessId: string, path: string, body: unknown, refresh: string) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Sign in to continue')
-  await apiSend(`/v1/platform/businesses/${businessId}${path}`, token, 'POST', body)
-  revalidatePath(`/b/${businessId}/${refresh}`)
+/** One write for Buying, Expenses, Donations and Recipes; answers with the API's reason when refused. */
+async function post(businessId: string, path: string, body: unknown, refresh: string, method = 'POST'): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}${path}`, method, body)
+  if (r.ok) revalidatePath(`/b/${businessId}/${refresh}`)
+  return r
 }
 
 export async function prepareRequirement(form: FormData) {
   const businessId = String(form.get('businessId'))
-  await post(businessId, '/buying/prepare', {
+  return post(businessId, '/buying/prepare', {
     supplier_id: String(form.get('supplier_id')),
     offering_id: String(form.get('offering_id')),
     demand: Number(form.get('demand') || 0),
@@ -26,13 +25,13 @@ export async function prepareRequirement(form: FormData) {
 export async function approveRequirement(form: FormData) {
   const businessId = String(form.get('businessId'))
   const requisitionId = String(form.get('requisitionId'))
-  await post(businessId, `/buying/requisitions/${requisitionId}/approve`, {}, 'buying')
+  return post(businessId, `/buying/requisitions/${requisitionId}/approve`, {}, 'buying')
 }
 
 export async function receiveGoods(form: FormData) {
   const businessId = String(form.get('businessId'))
   const purchaseOrderId = String(form.get('purchaseOrderId'))
-  await post(businessId, `/buying/purchase-orders/${purchaseOrderId}/receive`, {
+  return post(businessId, `/buying/purchase-orders/${purchaseOrderId}/receive`, {
     location_id: String(form.get('location_id')),
     received_quantity: Number(form.get('received_quantity') || 0),
     damaged_quantity: Number(form.get('damaged_quantity') || 0),
@@ -42,7 +41,7 @@ export async function receiveGoods(form: FormData) {
 
 export async function addSupplier(form: FormData) {
   const businessId = String(form.get('businessId'))
-  await post(businessId, '/suppliers', {
+  return post(businessId, '/suppliers', {
     name: String(form.get('name') || '').trim(),
     contact_name: String(form.get('contact_name') || '') || null,
     phone: String(form.get('phone') || '') || null,
@@ -54,7 +53,7 @@ export async function addSupplier(form: FormData) {
 export async function addExpense(form: FormData) {
   const businessId = String(form.get('businessId'))
   const rupees = Number(form.get('rupees') || 0)
-  await post(businessId, '/expenses', {
+  return post(businessId, '/expenses', {
     category: String(form.get('category') || '').trim(),
     amount_paise: Math.round(rupees * 100),
     method: String(form.get('method') || 'cash'),
@@ -65,13 +64,13 @@ export async function addExpense(form: FormData) {
 
 export async function addCause(form: FormData) {
   const businessId = String(form.get('businessId'))
-  await post(businessId, '/donations/causes', { name: String(form.get('name') || '').trim() }, 'donations')
+  return post(businessId, '/donations/causes', { name: String(form.get('name') || '').trim() }, 'donations')
 }
 
 export async function addGift(form: FormData) {
   const businessId = String(form.get('businessId'))
   const rupees = Number(form.get('rupees') || 0)
-  await post(businessId, '/donations/gifts', {
+  return post(businessId, '/donations/gifts', {
     cause_id: String(form.get('cause_id')),
     donor_name: String(form.get('donor_name') || '').trim(),
     amount_paise: Math.round(rupees * 100),
@@ -80,17 +79,11 @@ export async function addGift(form: FormData) {
 
 export async function saveRecipe(form: FormData) {
   const businessId = String(form.get('businessId'))
-  const token = await getAccessToken()
-  if (!token) throw new Error('Sign in to continue')
   const lines = [0, 1, 2, 3, 4]
     .map((i) => ({
       component_offering_id: String(form.get(`component_${i}`) || ''),
       quantity_per: Number(form.get(`quantity_${i}`) || 0),
     }))
     .filter((line) => line.component_offering_id && line.quantity_per > 0)
-  await apiSend(`/v1/platform/businesses/${businessId}/recipes`, token, 'PUT', {
-    offering_id: String(form.get('offering_id')),
-    lines,
-  })
-  revalidatePath(`/b/${businessId}/recipes`)
+  return post(businessId, '/recipes', { offering_id: String(form.get('offering_id')), lines }, 'recipes', 'PUT')
 }

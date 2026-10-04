@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { Card } from '@/components/ui'
+import { SafeForm } from '@/components/SafeForm'
+import { SubmitButton } from '@/components/ActionForm'
 import { money, qty as fmtQty, type QuoteCharge, type QuoteItem, type QuoteRow } from './shared'
 
 type Customer = { id: string; display_name: string; email?: string | null; phone?: string | null }
@@ -142,7 +144,7 @@ export function QuoteEditor({
   quote?: QuoteRow
   customers: Customer[]
   offerings: Offering[]
-  action: (formData: FormData) => void | Promise<void>
+  action: (formData: FormData) => Promise<{ ok: true; data?: unknown } | { ok: false; message: string } | void>
   submitLabel: string
   cancelHref: string
 }) {
@@ -153,7 +155,6 @@ export function QuoteEditor({
     quote?.charges?.length ? quote.charges.map(chargeFrom) : []
   )
   const [dirty, setDirty] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   const offeringById = useMemo(
     () => new Map(offerings.map((o) => [o.id, o])),
@@ -227,9 +228,8 @@ export function QuoteEditor({
   })
 
   return (
-    <form
+    <SafeForm
       action={action}
-      onSubmit={() => setBusy(true)}
       style={{ display: 'grid', gap: '1.5rem' }}
     >
       <input type="hidden" name="businessId" value={businessId} />
@@ -722,9 +722,9 @@ export function QuoteEditor({
           borderTop: '1px solid var(--color-border)',
         }}
       >
-        <button type="submit" className="btn" disabled={busy || !usable}>
-          {busy ? 'Saving…' : submitLabel}
-        </button>
+        <SubmitButton className="btn" disabled={!usable}>
+          {submitLabel}
+        </SubmitButton>
         <a href={cancelHref} className="btn btn-ghost">
           Cancel
         </a>
@@ -745,7 +745,7 @@ export function QuoteEditor({
           </span>
         ) : null}
       </div>
-    </form>
+    </SafeForm>
   )
 }
 

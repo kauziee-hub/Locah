@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { addSupplier, approveRequirement, prepareRequirement, receiveGoods } from '../supply-actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,7 @@ export default async function BuyingPage({ params, searchParams }: {
             <div><span>Arriving</span><strong>{arriving.length}</strong><small>Partly received</small></div>
             <div><span>Bills due</span><strong>{board.bills_due}</strong><small>Open supplier bills</small></div>
           </div>
-          <form action={addSupplier} className="bos-form">
+          <SafeForm action={addSupplier} className="bos-form">
             <h2>Supplier</h2>
             <input type="hidden" name="businessId" value={b} />
             <label>Name<input name="name" required maxLength={160} /></label>
@@ -85,8 +86,8 @@ export default async function BuyingPage({ params, searchParams }: {
             <label>Phone<input name="phone" maxLength={40} /></label>
             <label>Credit days<input name="credit_days" type="number" min={0} defaultValue={0} /></label>
             <button type="submit" className="btn-primary">Save supplier</button>
-          </form>
-          <form action={prepareRequirement} className="bos-form">
+          </SafeForm>
+          <SafeForm action={prepareRequirement} className="bos-form">
             <h2>What to buy</h2>
             <input type="hidden" name="businessId" value={b} />
             <input type="hidden" name="location_id" value={locationId} />
@@ -104,18 +105,18 @@ export default async function BuyingPage({ params, searchParams }: {
             <label>Pack size<input name="pack_size" type="number" min={1} defaultValue={1} /></label>
             <label>Minimum order<input name="moq" type="number" min={1} defaultValue={1} /></label>
             <button type="submit" className="btn-primary">Calculate requirement</button>
-          </form>
+          </SafeForm>
           <section>
             <h2>Why this quantity</h2>
             {board.requisitions.length === 0 ? <p>No requirement is waiting.</p> : board.requisitions.map((row) => (
               <article key={row.id}>
                 <p>{row.explanation}</p>
                 <p>Demand {row.demand_quantity} + safety {row.safety_stock} − usable {row.usable_on_hand} − inbound {row.confirmed_inbound}. Buy {row.quantity}.</p>
-                <form action={approveRequirement}>
+                <SafeForm action={approveRequirement}>
                   <input type="hidden" name="businessId" value={b} />
                   <input type="hidden" name="requisitionId" value={row.id} />
                   <button type="submit" className="btn-primary">Approve and send</button>
-                </form>
+                </SafeForm>
               </article>
             ))}
           </section>
@@ -124,7 +125,7 @@ export default async function BuyingPage({ params, searchParams }: {
             {board.orders.filter((order) => ['sent', 'acknowledged', 'dispatched'].includes(order.status)).length === 0
               ? <p>Nothing is waiting to be received. A purchase order on its own does not change stock.</p>
               : board.orders.filter((order) => ['sent', 'acknowledged', 'dispatched'].includes(order.status)).map((order) => (
-                <form key={order.id} action={receiveGoods} className="bos-form">
+                <SafeForm key={order.id} action={receiveGoods} className="bos-form">
                   <p>{order.reference}: ordered {order.ordered_quantity}, received so far {order.received_quantity}. {order.explanation}</p>
                   <input type="hidden" name="businessId" value={b} />
                   <input type="hidden" name="purchaseOrderId" value={order.id} />
@@ -132,7 +133,7 @@ export default async function BuyingPage({ params, searchParams }: {
                   <label>Good quantity<input name="received_quantity" type="number" min={0} required /></label>
                   <label>Damaged<input name="damaged_quantity" type="number" min={0} defaultValue={0} /></label>
                   <button type="submit" className="btn-primary">Record receipt</button>
-                </form>
+                </SafeForm>
               ))}
           </section>
         </>

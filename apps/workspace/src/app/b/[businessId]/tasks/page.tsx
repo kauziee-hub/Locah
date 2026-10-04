@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { addChecklistItem, checkChecklistItem, completeTask, createChecklistTemplate, createTask, spawnChecklist } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,41 +86,41 @@ export default async function TasksPage({ params, searchParams }: {
               {selected.checklist.map((item) => (
                 <li key={item.id}>
                   {canComplete && selected.status !== 'completed' && selected.status !== 'cancelled' ? (
-                    <form action={checkChecklistItem}>
+                    <SafeForm action={checkChecklistItem}>
                       <input type="hidden" name="businessId" value={b} />
                       <input type="hidden" name="taskId" value={selected.id} />
                       <input type="hidden" name="itemId" value={item.id} />
                       <input type="hidden" name="done" value={item.done ? '0' : '1'} />
                       <button className="btn-ghost" type="submit">{item.done ? 'Undo' : 'Mark done'}</button>
                       {' '}{item.label}{item.required ? '' : ' (optional)'}{item.photo_required ? ' · photo' : ''}
-                    </form>
+                    </SafeForm>
                   ) : <span>{item.done ? 'Done' : 'Open'} · {item.label}</span>}
                 </li>
               ))}
             </ul>
           ) : <p className="bos-hint">No checklist on this task.</p>}
           {canManage && selected.status !== 'completed' && selected.status !== 'cancelled' ? (
-            <form action={addChecklistItem} className="bos-queue__issue">
+            <SafeForm action={addChecklistItem} className="bos-queue__issue">
               <input type="hidden" name="businessId" value={b} />
               <input type="hidden" name="taskId" value={selected.id} />
               <label>Checklist step<input name="label" required maxLength={200} /></label>
               <label className="bos-compliance__check"><input type="checkbox" name="required" defaultChecked /> Required</label>
               <button className="btn-ghost" type="submit">Add step</button>
-            </form>
+            </SafeForm>
           ) : null}
           {canComplete && (selected.status === 'open' || selected.status === 'in_progress') ? (
-            <form action={completeTask}>
+            <SafeForm action={completeTask}>
               <input type="hidden" name="businessId" value={b} />
               <input type="hidden" name="taskId" value={selected.id} />
               <button className="btn" type="submit">Complete task</button>
-            </form>
+            </SafeForm>
           ) : null}
         </section>
       ) : null}
       {canManage ? (
         <section className="bos-compliance__detail" aria-labelledby="new-task">
           <h2 id="new-task">New task</h2>
-          <form action={createTask} className="bos-compliance__form">
+          <SafeForm action={createTask} className="bos-compliance__form">
             <input type="hidden" name="businessId" value={b} />
             <label>Title<input name="title" required maxLength={160} /></label>
             <label>Details<textarea name="description" maxLength={4000} /></label>
@@ -130,21 +131,21 @@ export default async function TasksPage({ params, searchParams }: {
             <label>Location<select name="locationId"><option value="">Whole business</option>{locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}</select></label>
             <label>Assign<select name="assigneeId"><option value="">Unassigned</option>{people.map((person) => <option key={person.id} value={person.id}>{person.display_name}</option>)}</select></label>
             <button className="btn" type="submit">Add task</button>
-          </form>
+          </SafeForm>
           <h2>Repeatable checklist</h2>
-          <form action={createChecklistTemplate} className="bos-compliance__form">
+          <SafeForm action={createChecklistTemplate} className="bos-compliance__form">
             <input type="hidden" name="businessId" value={b} />
             <label>Name<input name="name" required maxLength={120} placeholder="Opening" /></label>
             <label>Kind<select name="kind"><option value="opening">Opening</option><option value="closing">Closing</option><option value="handover">Handover</option><option value="prep">Prep</option><option value="custom">Custom</option></select></label>
             <label>Steps, one per line<textarea name="items" required placeholder={'Unlock\nCount the till'} /></label>
             <button className="btn" type="submit">Save checklist</button>
-          </form>
-          <form action={spawnChecklist} className="bos-queue__issue">
+          </SafeForm>
+          <SafeForm action={spawnChecklist} className="bos-queue__issue">
             <input type="hidden" name="businessId" value={b} />
             <label>Checklist id<input name="templateId" required /></label>
             <label>For this occurrence<input name="occurrenceKey" required placeholder="2026-09-29-opening" /></label>
             <button className="btn-ghost" type="submit">Start this list</button>
-          </form>
+          </SafeForm>
         </section>
       ) : null}
     </div>

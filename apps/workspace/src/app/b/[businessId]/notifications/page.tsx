@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { EmptyState, GateNotice, PageHeader } from '@/components/ModuleState'
 import { markAllRead, markRead, setPreference } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,12 +91,12 @@ export default async function NotificationsPage({
         subtitle={unread > 0 ? `${unread} unread` : 'You are all caught up.'}
         action={
           unread > 0 ? (
-            <form action={markAllRead}>
+            <SafeForm action={markAllRead}>
               <input type="hidden" name="businessId" value={params.businessId} />
               <button type="submit" style={BUTTON}>
                 Mark all as read
               </button>
-            </form>
+            </SafeForm>
           ) : undefined
         }
       />
@@ -151,13 +152,13 @@ export default async function NotificationsPage({
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 {href ? <Link href={href}>Open</Link> : null}
                 {notification.read_at ? null : (
-                  <form action={markRead}>
+                  <SafeForm action={markRead}>
                     <input type="hidden" name="businessId" value={params.businessId} />
                     <input type="hidden" name="notificationId" value={notification.id} />
                     <button type="submit" style={LINK_BUTTON}>
                       Mark read
                     </button>
-                  </form>
+                  </SafeForm>
                 )}
               </div>
             </article>
@@ -174,7 +175,7 @@ export default async function NotificationsPage({
       <section style={{ marginTop: '2.25rem', maxWidth: '32rem' }}>
         <h2 >What you get notified about</h2>
         {preferences.map((preference) => (
-          <form
+          <SafeForm
             key={preference.category}
             action={setPreference}
             style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '0.5rem' }}
@@ -192,7 +193,7 @@ export default async function NotificationsPage({
             <button type="submit" style={LINK_BUTTON}>
               Save
             </button>
-          </form>
+          </SafeForm>
         ))}
       </section>
     </div>

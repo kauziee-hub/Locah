@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { Card, EmptyState, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { decide, runNow, saveSettings, setEnabled, setPaused } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,13 +96,13 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
                       label={data.paused ? 'Paused' : 'Working'} />
         </div>
         {canManage ? (
-          <form action={setPaused} style={{ marginTop: '.8rem' }}>
+          <SafeForm action={setPaused} style={{ marginTop: '.8rem' }}>
             <input type="hidden" name="businessId" value={b} />
             <input type="hidden" name="paused" value={data.paused ? 'false' : 'true'} />
             <button type="submit" className={data.paused ? 'btn btn-primary' : 'btn btn-ghost'}>
               {data.paused ? 'Resume all' : 'Pause all'}
             </button>
-          </form>
+          </SafeForm>
         ) : null}
       </Card>
 
@@ -117,18 +118,18 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
                 </div>
                 {canManage ? (
                   <div style={{ display: 'flex', gap: '.4rem' }}>
-                    <form action={decide}>
+                    <SafeForm action={decide}>
                       <input type="hidden" name="businessId" value={b} />
                       <input type="hidden" name="actionId" value={a.id} />
                       <input type="hidden" name="approve" value="true" />
                       <button type="submit" className="btn btn-primary">Approve</button>
-                    </form>
-                    <form action={decide}>
+                    </SafeForm>
+                    <SafeForm action={decide}>
                       <input type="hidden" name="businessId" value={b} />
                       <input type="hidden" name="actionId" value={a.id} />
                       <input type="hidden" name="approve" value="false" />
                       <button type="submit" className="btn btn-ghost">Decline</button>
-                    </form>
+                    </SafeForm>
                   </div>
                 ) : null}
               </li>
@@ -149,7 +150,7 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
             </div>
             <p className="bos-hint">{e.role}</p>
             {canManage ? (
-              <form action={setEnabled} style={{ margin: '.4rem 0 .8rem' }}>
+              <SafeForm action={setEnabled} style={{ margin: '.4rem 0 .8rem' }}>
                 <input type="hidden" name="businessId" value={b} />
                 <input type="hidden" name="kind" value={e.kind} />
                 <input type="hidden" name="enabled" value={e.enabled ? 'false' : 'true'} />
@@ -157,9 +158,9 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
                         disabled={!data.module_on && !e.enabled}>
                   {e.enabled ? 'Switch off' : 'Switch on'}
                 </button>
-              </form>
+              </SafeForm>
             ) : null}
-            <form action={saveSettings}>
+            <SafeForm action={saveSettings}>
               <input type="hidden" name="businessId" value={b} />
               <input type="hidden" name="kind" value={e.kind} />
               <label className="bos-label" htmlFor={`${e.kind}-autonomy`}>Autonomy</label>
@@ -185,13 +186,13 @@ export default async function AIEmployeesPage({ params }: { params: { businessId
                 </label>
               ))}
               {canManage ? <button type="submit" className="btn btn-ghost" style={{ marginTop: '.5rem' }}>Save limits</button> : null}
-            </form>
+            </SafeForm>
             {canManage && e.kind !== 'receptionist' ? (
-              <form action={runNow} style={{ marginTop: '.6rem' }}>
+              <SafeForm action={runNow} style={{ marginTop: '.6rem' }}>
                 <input type="hidden" name="businessId" value={b} />
                 <input type="hidden" name="kind" value={e.kind} />
                 <button type="submit" className="btn btn-ghost" disabled={!e.enabled}>Run now</button>
-              </form>
+              </SafeForm>
             ) : null}
           </Card>
         ))}

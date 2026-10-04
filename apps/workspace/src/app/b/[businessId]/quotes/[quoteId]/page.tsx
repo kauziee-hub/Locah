@@ -28,6 +28,7 @@ import {
   STATUS_TONE,
   type QuoteRow,
 } from '../shared'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -119,7 +120,7 @@ export default async function QuoteDetailPage({
           <p style={{ margin: 0, color: 'var(--color-muted)' }}>
             This discount is above the executive&apos;s limit. It cannot be sent until you approve it.
           </p>
-          <form action={approveQuoteDiscount} style={{ display: 'flex', gap: '0.5rem' }}>
+          <SafeForm action={approveQuoteDiscount} style={{ display: 'flex', gap: '0.5rem' }}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="quoteId" value={quote.id} />
             <button className="btn" name="decision" value="approved" type="submit">
@@ -128,7 +129,7 @@ export default async function QuoteDetailPage({
             <button className="btn btn-ghost" name="decision" value="rejected" type="submit">
               Refuse it
             </button>
-          </form>
+          </SafeForm>
         </Card>
       ) : null}
 
@@ -403,7 +404,7 @@ function IssuePanel({ businessId, quote }: { businessId: string; quote: QuoteRow
         Sending fixes the prices and creates the customer&apos;s link. After that the quote can be
         revised, but not edited.
       </p>
-      <form
+      <SafeForm
         action={issueQuote}
         style={{ display: 'flex', gap: '0.6rem', alignItems: 'end', flexWrap: 'wrap' }}
       >
@@ -425,7 +426,7 @@ function IssuePanel({ businessId, quote }: { businessId: string; quote: QuoteRow
         <button type="submit" className="btn">
           Send quote
         </button>
-      </form>
+      </SafeForm>
     </Card>
   )
 }
@@ -439,7 +440,7 @@ function LifecyclePanel({ businessId, quote }: { businessId: string; quote: Quot
       <h2 style={{ fontSize: '1.05rem', margin: 0 }}>Record what happened</h2>
 
       {actions.canDecide ? (
-        <form
+        <SafeForm
           action={recordQuoteDecision}
           style={{ display: 'grid', gap: '0.6rem', maxWidth: '34rem' }}
         >
@@ -465,28 +466,28 @@ function LifecyclePanel({ businessId, quote }: { businessId: string; quote: Quot
               They declined
             </button>
           </div>
-        </form>
+        </SafeForm>
       ) : null}
 
       <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
         {actions.canRevise ? (
-          <form action={reviseQuote}>
+          <SafeForm action={reviseQuote}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="quoteId" value={quote.id} />
             <button type="submit" className="btn btn-ghost">
               Revise as a new version
             </button>
-          </form>
+          </SafeForm>
         ) : null}
         {actions.canCancel ? (
-          <form action={cancelQuote} style={{ display: 'flex', gap: '0.5rem' }}>
+          <SafeForm action={cancelQuote} style={{ display: 'flex', gap: '0.5rem' }}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="quoteId" value={quote.id} />
             <input name="reason" placeholder="Reason (optional)" />
             <button type="submit" className="btn btn-danger">
               Cancel quote
             </button>
-          </form>
+          </SafeForm>
         ) : null}
       </div>
     </Card>
@@ -527,14 +528,14 @@ function HandoffPanel({
       {!target && locked ? (
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {(['order', 'project', 'invoice'] as const).map((choice) => (
-            <form key={choice} action={handOffQuote}>
+            <SafeForm key={choice} action={handOffQuote}>
               <input type="hidden" name="businessId" value={businessId} />
               <input type="hidden" name="quoteId" value={quoteId} />
               <input type="hidden" name="target" value={choice} />
               <button type="submit" className="btn">
                 Hand to {choice}
               </button>
-            </form>
+            </SafeForm>
           ))}
         </div>
       ) : null}
@@ -568,13 +569,13 @@ function ConvertPanel({
       <p style={{ color: 'var(--color-muted)', margin: 0 }}>
         Open a project from this quote. The customer, the title and the agreed value carry over.
       </p>
-      <form action={convertQuoteToProject}>
+      <SafeForm action={convertQuoteToProject}>
         <input type="hidden" name="businessId" value={businessId} />
         <input type="hidden" name="quoteId" value={quoteId} />
         <button type="submit" className="btn">
           Create the project
         </button>
-      </form>
+      </SafeForm>
     </Card>
   )
 }

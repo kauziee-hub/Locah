@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ui'
 import { addExpense } from '../supply-actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export default async function ExpensesPage({ params }: { params: { businessId: s
         <div><span>Cash</span><strong>{rupees(data.cash_paise)}</strong><small>Including petty cash</small></div>
         <div><span>Bank, UPI, card</span><strong>{rupees(data.bank_paise)}</strong><small>Everything that is not cash</small></div>
       </div>
-      <form action={addExpense} className="bos-form">
+      <SafeForm action={addExpense} className="bos-form">
         <h2>Record an expense</h2>
         <input type="hidden" name="businessId" value={b} />
         <label>Category<input name="category" required maxLength={80} /></label>
@@ -43,7 +44,7 @@ export default async function ExpensesPage({ params }: { params: { businessId: s
         </label>
         <label><input type="checkbox" name="petty_cash" /> Petty cash</label>
         <button type="submit" className="btn-primary">Save expense</button>
-      </form>
+      </SafeForm>
     </div>
   )
 }

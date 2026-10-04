@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { EmptyState, GateNotice, PageHeader, ROW, StatusPill, TABLE, TD, TH } from '@/components/ModuleState'
 import { createOffer } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,7 @@ export default async function OffersPage({ params }: { params: { businessId: str
 
       <section id="new-offer" style={{ marginTop: '2rem', maxWidth: '32rem' }}>
         <h2>New offer</h2>
-        <form action={createOffer} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={createOffer} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input name="code" required maxLength={30} placeholder="Code, for example DIWALI10" style={INPUT} />
           <input name="name" required maxLength={80} placeholder="Name" style={INPUT} />
@@ -97,7 +98,7 @@ export default async function OffersPage({ params }: { params: { businessId: str
             <input name="usage_limit_per_customer" type="number" min="1" defaultValue={1} style={INPUT} />
           </label>
           <button type="submit">Create offer</button>
-        </form>
+        </SafeForm>
       </section>
     </div>
   )

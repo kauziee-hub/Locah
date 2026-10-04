@@ -1,18 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-// Returns void: this is passed straight to <form action>, which discards any
-// return value. It previously returned {ok,error} objects that nothing could
-// read, so a failed save was indistinguishable from a successful one.
-// Throwing matches every other server action in this app.
-export async function saveSectionContent(formData: FormData): Promise<void> {
-  const token = await getAccessToken()
-  if (!token) {
-    throw new Error('Unauthorized')
-  }
+/** Save one section's words. Posted by a SafeForm, which shows the reason when it is refused. */
+export async function saveSectionContent(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId') || '')
   const sectionId = String(formData.get('sectionId') || '')
   const sectionTypeId = String(formData.get('sectionTypeId') || '')
@@ -34,17 +26,9 @@ export async function saveSectionContent(formData: FormData): Promise<void> {
     content.body = body
   }
 
-  const apiUrl = platformUrl('api')
-  const res = await fetch(`${apiUrl}/v1/b/${businessId}/website/sections/${sectionId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ content, layout_variant: layoutVariant || null }),
+  const r = await sendJson(`/v1/b/${businessId}/website/sections/${sectionId}`, 'PATCH', {
+    content, layout_variant: layoutVariant || null,
   })
-  if (!res.ok) {
-    throw new Error(`Saving the section failed: ${res.status} ${await res.text()}`)
-  }
-  revalidatePath(`/b/${businessId}/website/pages`)
+  if (r.ok) revalidatePath(`/b/${businessId}/website/pages`)
+  return r
 }

@@ -1145,3 +1145,6 @@ a .ws-card {
   width: 100%;
   min-height: 34px;
 }
+
+/* SafeForm: a fieldset that only disables while saving — it adds no box of its own. */
+fieldset.ws-safeform { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }

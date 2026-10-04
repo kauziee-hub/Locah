@@ -26,35 +26,8 @@ export async function apiGet<T>(path: string, token: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export async function apiSend<T>(
-  path: string,
-  token: string,
-  method: string,
-  body?: unknown
-): Promise<T> {
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`API ${path} failed: ${res.status} ${text}`)
-  }
-  return res.json() as Promise<T>
-}
-
-export async function apiPost<T>(path: string, body: unknown, token: string): Promise<T> {
-  return apiSend<T>(path, token, 'POST', body)
-}
-
-export async function apiPatch<T>(path: string, body: unknown, token: string): Promise<T> {
-  return apiSend<T>(path, token, 'PATCH', body)
-}
+// Writes go through lib/server-send (sendJson), which answers with the API's
+// reason instead of throwing to the error screen.
 
 export type ApiError = {
   status: number

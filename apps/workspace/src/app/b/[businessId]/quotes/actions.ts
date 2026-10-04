@@ -2,10 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { platformUrl } from '@platform/config'
-import { getAccessToken } from '@/lib/supabase/access-token'
-
-const apiUrl = platformUrl('api')
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
 /**
  * Every write goes to the quotes API as it stands.
@@ -16,27 +13,8 @@ const apiUrl = platformUrl('api')
  * one author — `QuoteService`. This file carries intent there and brings the
  * recalculated truth back.
  */
-async function send(path: string, method: string, body?: unknown): Promise<unknown> {
-  const token = await getAccessToken()
-  if (!token) redirect('/login')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    let message = `Request failed (${res.status})`
-    try {
-      const parsed = JSON.parse(text)
-      message = parsed?.error?.message || message
-    } catch {
-      // Non-JSON body — the status-derived message is the best we have.
-    }
-    throw new Error(message)
-  }
-  return res.json()
+async function send<T = unknown>(path: string, method: string, body?: unknown): Promise<ActionResult<T>> {
+  return sendJson<T>(path, method, body)
 }
 
 type QuoteItemInput = {
@@ -226,15 +204,16 @@ function collectBody(formData: FormData): Record<string, unknown> {
   }
 }
 
-export async function createQuote(formData: FormData): Promise<void> {
+export async function createQuote(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const body = collectBody(formData)
-  const created = (await send(
+  const created = await send<{ id?: string }>(
     `/v1/platform/businesses/${businessId}/quotes`,
     'POST',
     { ...body, currency: String(formData.get('currency') || 'INR') }
-  )) as { data?: { id?: string } }
-  const quoteId = created?.data?.id
+  )
+  if (!created.ok) return created
+  const quoteId = created.data?.id
   revalidatePath(`/b/${businessId}/quotes`)
   if (quoteId) {
     redirect(`/b/${businessId}/quotes/${quoteId}`)
@@ -242,7 +221,7 @@ export async function createQuote(formData: FormData): Promise<void> {
   redirect(`/b/${businessId}/quotes`)
 }
 
-export async function saveQuoteDraft(formData: FormData): Promise<void> {
+export async function saveQuoteDraft(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
   const rawVersion = Number(formData.get('version'))
@@ -252,70 +231,83 @@ export async function saveQuoteDraft(formData: FormData): Promise<void> {
   if (Number.isFinite(rawVersion) && rawVersion >= 1) {
     body.version = rawVersion
   }
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}`, 'PATCH', body)
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}`, 'PATCH', body)
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes`)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function issueQuote(formData: FormData): Promise<void> {
+export async function issueQuote(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
   const validDays = optionalNumber(formData, 'valid_days')
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/issue`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/issue`, 'POST', {
     valid_days: validDays && validDays >= 1 ? Math.floor(validDays) : undefined,
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes`)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function recordQuoteDecision(formData: FormData): Promise<void> {
+export async function recordQuoteDecision(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/decision`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/decision`, 'POST', {
     decision: String(formData.get('decision')),
     reason: optionalText(formData, 'reason'),
     decided_by_name: optionalText(formData, 'decided_by_name'),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes`)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function cancelQuote(formData: FormData): Promise<void> {
+export async function cancelQuote(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/cancel`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/cancel`, 'POST', {
     reason: optionalText(formData, 'reason'),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes`)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function approveQuoteDiscount(formData: FormData): Promise<void> {
+export async function approveQuoteDiscount(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/discount-approval`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/discount-approval`, 'POST', {
     decision: String(formData.get('decision') || 'approved'),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function handOffQuote(formData: FormData): Promise<void> {
+export async function handOffQuote(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/conversion`, 'POST', {
+  const r = await send(`/v1/platform/businesses/${businessId}/quotes/${quoteId}/conversion`, 'POST', {
     target: String(formData.get('target') || 'order'),
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
+  return { ok: true }
 }
 
-export async function reviseQuote(formData: FormData): Promise<void> {
+export async function reviseQuote(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const quoteId = String(formData.get('quoteId'))
-  const revised = (await send(
+  const revised = await send<{ id?: string }>(
     `/v1/platform/businesses/${businessId}/quotes/${quoteId}/revise`,
     'POST'
-  )) as { data?: { id?: string } }
-  const nextId = revised?.data?.id
+  )
+  if (!revised.ok) return revised
+  const nextId = revised.data?.id
   revalidatePath(`/b/${businessId}/quotes`)
   revalidatePath(`/b/${businessId}/quotes/${quoteId}`)
   // A revision is a new quote; the person who asked for it wants to edit that

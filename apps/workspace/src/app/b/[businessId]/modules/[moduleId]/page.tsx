@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { setModuleState } from '../actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -185,21 +186,21 @@ export default async function ModuleSetupPage({
       {s.status !== 'unavailable' ? (
         <section className="bos-setup__switch">
           {!s.enabled && canEnable && s.included ? (
-            <form action={setModuleState}>
+            <SafeForm action={setModuleState}>
               <input type="hidden" name="businessId" value={params.businessId} />
               <input type="hidden" name="moduleId" value={params.moduleId} />
               <input type="hidden" name="action" value="enable" />
               <button type="submit" className="btn-primary">Turn on {s.label}</button>
-            </form>
+            </SafeForm>
           ) : null}
           {s.enabled && canTurnOff ? (
-            <form action={setModuleState}>
+            <SafeForm action={setModuleState}>
               <input type="hidden" name="businessId" value={params.businessId} />
               <input type="hidden" name="moduleId" value={params.moduleId} />
               <input type="hidden" name="action" value="deactivate" />
               <button type="submit" className="btn-quiet">Turn off</button>
               <p className="bos-hint">Turning it off hides it and stops new activity. Your records stay and come back if you turn it on again.</p>
-            </form>
+            </SafeForm>
           ) : null}
         </section>
       ) : null}

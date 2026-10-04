@@ -4,6 +4,7 @@ import {
   enableRecommended,
   putOffRecommendation,
 } from '@/app/b/[businessId]/modules/actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export type Evidence = { key: string; kind: 'said' | 'records' | 'trait' | 'profile'; text: string }
 export type Source = 'said' | 'records' | 'trait' | 'fit' | 'profile'
@@ -96,11 +97,11 @@ export function RecommendedTools({
               <li key={m.module}>
                 <strong>{m.label}</strong>
                 {canEnable ? (
-                  <form action={bringBackRecommendation}>
+                  <SafeForm action={bringBackRecommendation}>
                     <input type="hidden" name="businessId" value={businessId} />
                     <input type="hidden" name="moduleId" value={m.module} />
                     <button type="submit" className="btn-quiet">Bring back</button>
-                  </form>
+                  </SafeForm>
                 ) : null}
               </li>
             ))}
@@ -170,20 +171,20 @@ function RecommendedCard({
       ) : null}
       <footer className="bos-rec__foot">
         {canEnable && r.included ? (
-          <form action={enableRecommended}>
+          <SafeForm action={enableRecommended}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="moduleId" value={r.module} />
             <input type="hidden" name="also" value={missing.map((d) => d.module).join(',')} />
             <button type="submit" className="btn-primary">{enableLabel}</button>
-          </form>
+          </SafeForm>
         ) : null}
         <Link className="btn-quiet" href={`/b/${businessId}/modules/${r.module}`}>Learn more</Link>
         {canEnable ? (
-          <form action={putOffRecommendation}>
+          <SafeForm action={putOffRecommendation}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="moduleId" value={r.module} />
             <button type="submit" className="btn-quiet">Not now</button>
-          </form>
+          </SafeForm>
         ) : null}
       </footer>
     </article>

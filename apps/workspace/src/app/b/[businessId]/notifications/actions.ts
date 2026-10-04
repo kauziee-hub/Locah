@@ -1,44 +1,39 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-const apiUrl = platformUrl('api')
-
-async function send(path: string, method: string, body?: unknown) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`)
-  return res.json()
+async function send<T = unknown>(path: string, method: string, body?: unknown): Promise<ActionResult<T>> {
+  return sendJson<T>(path, method, body)
 }
 
-export async function markRead(formData: FormData) {
+export async function markRead(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
   const notificationId = String(formData.get('notificationId'))
-  await send(
+  const r = await send(
     `/v1/platform/businesses/${businessId}/notifications/${notificationId}/read`,
     'POST'
   )
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/notifications`)
+  return { ok: true }
 }
 
-export async function markAllRead(formData: FormData) {
+export async function markAllRead(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
-  await send(`/v1/platform/businesses/${businessId}/notifications/read-all`, 'POST')
+  const r = await send(`/v1/platform/businesses/${businessId}/notifications/read-all`, 'POST')
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/notifications`)
+  return { ok: true }
 }
 
-export async function setPreference(formData: FormData) {
+export async function setPreference(formData: FormData): Promise<ActionResult> {
   const businessId = String(formData.get('businessId'))
-  await send(`/v1/platform/businesses/${businessId}/notification-preferences`, 'PUT', {
+  const r = await send(`/v1/platform/businesses/${businessId}/notification-preferences`, 'PUT', {
     category: String(formData.get('category')),
     in_app_enabled: formData.get('in_app_enabled') === 'on',
   })
+  if (!r.ok) return r
   revalidatePath(`/b/${businessId}/notifications`)
+  return { ok: true }
 }

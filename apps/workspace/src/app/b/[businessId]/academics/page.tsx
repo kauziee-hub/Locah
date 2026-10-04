@@ -4,6 +4,7 @@ import { apiTry } from '@/lib/api'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { Card, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { createBatch, createCourse } from './actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,17 +35,17 @@ export default async function AcademicsPage({ params }: { params: { businessId: 
       <Card>
         <h2 style={{ marginTop: 0 }}>New course</h2>
         <p style={{ color: 'var(--color-muted)' }}>What students come here to learn.</p>
-        <form action={createCourse} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={createCourse} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={b} />
           <label>Name<input name="title" required maxLength={200} placeholder="Foundation Mathematics" /></label>
           <label>Description<textarea name="description" rows={2} /></label>
           <button type="submit" className="btn">Add course</button>
-        </form>
+        </SafeForm>
       </Card>
       <Card>
         <h2 style={{ marginTop: 0 }}>New batch</h2>
         <p style={{ color: 'var(--color-muted)' }}>The actual group, teacher and place.</p>
-        <form action={createBatch} style={{ display: 'grid', gap: '0.6rem' }}>
+        <SafeForm action={createBatch} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={b} />
           <label>Course<select name="course_id" required defaultValue=""><option value="">Choose course</option>{courses.filter((c) => c.status !== 'archived').map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
           <label>Batch name<input name="name" required maxLength={200} placeholder="Morning · 2026" /></label>
@@ -56,7 +57,7 @@ export default async function AcademicsPage({ params }: { params: { businessId: 
           <label>Ends<input name="ends_on" type="date" /></label>
           <label>Online link<input name="meeting_url" type="url" placeholder="Optional" /></label>
           <button type="submit" className="btn" disabled={!courses.length}>Create batch</button>
-        </form>
+        </SafeForm>
       </Card>
     </div>
     <h2>Teaching now</h2>

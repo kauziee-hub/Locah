@@ -3,6 +3,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader, StatusPill } from '@/components/ui'
 import { advanceDispatchJob } from '../dispatch/actions'
+import { SafeForm } from '@/components/SafeForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,38 +52,38 @@ function JobCard({
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         {job.status === 'assigned' ? (
-          <form action={advanceDispatchJob}>
+          <SafeForm action={advanceDispatchJob}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="picked_up" />
             <button type="submit">Picked up</button>
-          </form>
+          </SafeForm>
         ) : null}
         {job.status === 'picked_up' && job.kind === 'delivery' ? (
-          <form action={advanceDispatchJob}>
+          <SafeForm action={advanceDispatchJob}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="out_for_delivery" />
             <button type="submit">Out for delivery</button>
-          </form>
+          </SafeForm>
         ) : null}
         {(job.status === 'out_for_delivery' || (job.status === 'picked_up' && job.kind === 'pickup')) ? (
-          <form action={advanceDispatchJob} style={{ display: 'flex', gap: '0.35rem' }}>
+          <SafeForm action={advanceDispatchJob} style={{ display: 'flex', gap: '0.35rem' }}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="delivered" />
             <input name="proof" required placeholder="Proof note" aria-label="Proof note" />
             <button type="submit">Delivered</button>
-          </form>
+          </SafeForm>
         ) : null}
         {job.status !== 'delivered' && job.status !== 'failed' && job.status !== 'unassigned' ? (
-          <form action={advanceDispatchJob} style={{ display: 'flex', gap: '0.35rem' }}>
+          <SafeForm action={advanceDispatchJob} style={{ display: 'flex', gap: '0.35rem' }}>
             <input type="hidden" name="businessId" value={businessId} />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="status" value="failed" />
             <input name="reason" required placeholder="Why it failed" aria-label="Why it failed" />
             <button type="submit">Failed</button>
-          </form>
+          </SafeForm>
         ) : null}
       </div>
     </article>
