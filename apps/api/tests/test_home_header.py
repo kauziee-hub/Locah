@@ -72,3 +72,12 @@ def test_quick_actions_need_the_tool_on_and_the_permission() -> None:
     labels = [a["label"] for a in quick_actions(can)]
     assert labels == ["New order", "Add an enquiry", "Add an item", "Edit your website"]  # Invoices is off
     assert quick_actions(lambda perm, module=None: False) == []
+    # A salon with Bookings on: its own word for its list, and today's bookings.
+    salon = {"offerings.create", "bookings.read", "customers.update", "website.edit"}
+
+    def salon_can(perm: str, module: str | None = None) -> bool:
+        return perm in salon and (module is None or module in {"offerings-catalog", "bookings", "customer-relationships"})
+
+    assert [a["label"] for a in quick_actions(salon_can, "Services")] == [
+        "Today's bookings", "Add a service", "Add a customer", "Edit your website"]
+    assert quick_actions(can, "Menu")[2]["label"] == "Add to your menu"

@@ -21,6 +21,7 @@ _AREA_KEYS = ("locality", "area", "neighbourhood", "city")
 # the viewer may take are shown.
 QUICK_ACTIONS: tuple[tuple[str, str | None, str, str], ...] = (
     ("orders.create", "orders", "/orders/new", "New order"),
+    ("bookings.read", "bookings", "/bookings", "Today's bookings"),
     ("pos.use", "pos", "/pos/shifts", "Open the counter"),
     ("invoices.issue", "invoicing", "/invoices/new", "New bill"),
     ("quotes.create", "quotes", "/quotes/new", "New quotation"),
@@ -109,7 +110,12 @@ def open_state(hours: dict[str, Any] | None, tz: str | None, now: datetime) -> d
     return {"state": "closed", "text": f"Closed · opens {_clock(upcoming.time())}{day_word}"}
 
 
-def quick_actions(can: Any) -> list[dict[str, str]]:
+# "Add an item" in the Business's own word for its list (Workspace terms).
+ITEM_WORDS = {"Menu": "Add to your menu", "Services": "Add a service", "Plans": "Add a plan", "Rooms": "Add a room"}
+
+
+def quick_actions(can: Any, offerings_word: str | None = None) -> list[dict[str, str]]:
     """What this person most often starts from Home, given what is on and what they may do."""
-    out = [{"label": label, "href": href} for perm, module, href, label in QUICK_ACTIONS if can(perm, module)]
+    out = [{"label": ITEM_WORDS.get(offerings_word or "", label) if href == "/offerings/new" else label, "href": href}
+           for perm, module, href, label in QUICK_ACTIONS if can(perm, module)]
     return out[:MAX_ACTIONS]

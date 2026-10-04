@@ -86,6 +86,7 @@ class RoleHomeService:
         can = lambda perm, module=None: perm in permissions and (module is None or module in live_modules)  # noqa: E731
         ctx = _Ctx(session, business.id, now, can, key)
         from platform_core.authorization.role_templates import OWNER, ROLE_TEMPLATES
+        from platform_core.services.workspace_projection import terms_for
 
         tpl = OWNER if key == "owner" else ROLE_TEMPLATES.get(key)
         question = tpl.home if tpl else "Your work today"
@@ -114,7 +115,7 @@ class RoleHomeService:
             "role": {"key": key, "label": tpl.label if tpl else "Team member", "question": question},
             "location_scoped": scoped,
             "header": await ctx.header(business),
-            "quick_actions": home_header.quick_actions(can),
+            "quick_actions": home_header.quick_actions(can, (await terms_for(session, business)).get("offerings")),
             "bands": [b for b in bands if b is not None],
         }
 
