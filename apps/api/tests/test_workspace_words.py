@@ -40,7 +40,12 @@ TRANSLATED = ["components/AppSidebar.tsx", "components/MoneyPanel.tsx", "compone
               "app/b/[businessId]/orders/[orderId]/page.tsx", "app/b/[businessId]/orders/[orderId]/ChangeOrder.tsx",
               "app/b/[businessId]/orders/[orderId]/OrderBill.tsx", "app/b/[businessId]/orders/ItemPicker.tsx",
               "app/b/[businessId]/orders/new/page.tsx", "app/b/[businessId]/orders/new/PhoneOrder.tsx",
-              "app/b/[businessId]/orders/production/page.tsx", "components/StageTrack.tsx"]
+              "app/b/[businessId]/orders/production/page.tsx", "components/StageTrack.tsx",
+              "app/b/[businessId]/bookings/page.tsx", "app/b/[businessId]/bookings/[bookingId]/page.tsx",
+              "app/b/[businessId]/bookings/resources/page.tsx", "app/b/[businessId]/workforce/page.tsx",
+              "app/b/[businessId]/workforce/[memberId]/page.tsx", "app/b/[businessId]/locations/page.tsx",
+              "app/b/[businessId]/locations/[locationId]/page.tsx",
+              "app/b/[businessId]/locations/[locationId]/OpeningHours.tsx"]
 
 
 def _said() -> dict[str, str]:
@@ -107,6 +112,18 @@ def test_every_word_on_the_translated_workspace_surfaces_has_tamil_and_hindi() -
     assert len(said) > 60, f"the translated surfaces go through t() ({len(said)} phrases found)"
     missing = [f"{where}: {text!r}" for text, where in said.items() if text not in TABLE]
     assert missing == [], "Workspace phrases without Tamil/Hindi wording:\n" + "\n".join(missing)
+
+
+def test_the_booking_staff_and_location_word_tables_have_their_wording() -> None:
+    """Words those pages look up from a table (t(STATUS_WORDS[x])) rather than write out."""
+    words = _table_values("app/b/[businessId]/bookings/words.ts", "STATUS_WORDS", "MODE_WORDS", "PAYMENT_WORDS",
+                          "CHANNEL_WORDS") | _table_values("app/b/[businessId]/locations/words.ts", "ZONES")
+    booking_words = (WS / "app" / "b" / "[businessId]" / "bookings" / "words.ts").read_text(encoding="utf-8")
+    for key in ("label", "confirm", "yes", "plural", "seats", "help"):
+        words |= set(re.findall(rf"\b{key}: '([^']+)'", booking_words))
+    words |= {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
+    missing = sorted(w for w in words if w not in TABLE)
+    assert missing == [], "booking / staff / location words without Tamil/Hindi:\n" + "\n".join(missing)
 
 
 def test_the_navigation_and_order_words_have_their_wording() -> None:

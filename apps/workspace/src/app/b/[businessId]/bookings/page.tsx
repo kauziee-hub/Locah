@@ -7,6 +7,8 @@ import { ActionButton } from '@/components/ActionButton'
 import { ActionForm, SubmitButton } from '@/components/ActionForm'
 import { BusinessEmpty } from '@/components/BusinessEmpty'
 import { dayTimeLabel, rupees, timeLabel } from '@/lib/when'
+import { pageWords, wsLang } from '@/lib/ws-lang'
+import { WS_LOCALE } from '@/lib/ws-words'
 import { saveBookingsPolicy, withdrawWaitlist } from './actions'
 import { FILTERS, MODE_WORDS, PAYMENT_WORDS, STATUS_TONE, STATUS_WORDS } from './words'
 
@@ -38,6 +40,8 @@ export default async function BookingsPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const t = pageWords()
+  const locale = WS_LOCALE[wsLang()]
   const b = params.businessId
   const base = `/b/${b}`
   const qs = searchParams?.status ? `?status=${encodeURIComponent(searchParams.status)}` : ''
@@ -54,8 +58,8 @@ export default async function BookingsPage({
   if (!listRes.ok) {
     return (
       <div>
-        <PageHeader title="Bookings" />
-        <GateNotice error={listRes.error} businessId={b} moduleLabel="Bookings" />
+        <PageHeader title={t('Bookings')} />
+        <GateNotice error={listRes.error} businessId={b} moduleLabel={t('Bookings')} />
       </div>
     )
   }
@@ -74,23 +78,24 @@ export default async function BookingsPage({
         waitlist_enabled: false, waitlist_offer_minutes: 60 }
   const places = new Set(bookings.map((x) => x.location_name).filter(Boolean))
   const toConfirm = bookings.filter((x) => x.status === 'pending').length
+  const filterLabel = FILTERS.find((f) => f.value === searchParams?.status)?.label
 
   return (
     <div>
-      <PageHeader title="Bookings" subtitle={canSetPolicy
-        ? 'Who is coming and when. Confirm new ones, mark who arrived, and set your booking rules below.'
-        : 'Your appointments: confirm them, and mark who arrived.'}
-        actions={canSetPolicy ? <Link className="btn btn-ghost" href={`${base}/bookings/resources`}>Tables, rooms & equipment</Link> : null} />
+      <PageHeader title={t('Bookings')} subtitle={canSetPolicy
+        ? t('Who is coming and when. Confirm new ones, mark who arrived, and set your booking rules below.')
+        : t('Your appointments: confirm them, and mark who arrived.')}
+        actions={canSetPolicy ? <Link className="btn btn-ghost" href={`${base}/bookings/resources`}>{t('Tables, rooms & equipment')}</Link> : null} />
       {toConfirm && !searchParams?.status ? (
         <p className="bos-status" role="status">
-          {toConfirm === 1 ? '1 booking is' : `${toConfirm} bookings are`} waiting for you to confirm.{' '}
-          <Link href={`${base}/bookings?status=pending`}>Show them</Link>
+          {toConfirm === 1 ? t('1 booking is waiting for you to confirm.') : t('{n} bookings are waiting for you to confirm.', { n: toConfirm })}{' '}
+          <Link href={`${base}/bookings?status=pending`}>{t('Show them')}</Link>
         </p>
       ) : null}
       <FilterTabs
         current={searchParams?.status}
         hrefFor={(v) => `${base}/bookings${v ? `?status=${v}` : ''}`}
-        options={FILTERS}
+        options={FILTERS.map((f) => ({ ...f, label: t(f.label) }))}
       />
       <DataTable
         rows={bookings}
@@ -98,80 +103,81 @@ export default async function BookingsPage({
         columns={[
           {
             key: 'booking',
-            header: 'Booking',
+            header: t('Booking'),
             render: (x) => (
               <div>
-                <Link href={`${base}/bookings/${x.id}`}>{x.title || MODE_WORDS[x.reservation_mode] || 'Booking'}</Link>
+                <Link href={`${base}/bookings/${x.id}`}>{x.title || t(MODE_WORDS[x.reservation_mode] ?? 'Booking')}</Link>
                 <div className="bos-hint" style={{ margin: 0 }}>
-                  {x.customer?.name ?? 'No customer recorded'}
-                  {x.party_size && x.party_size > 1 ? ` · ${x.party_size} people` : ''}
+                  {x.customer?.name ?? t('No customer recorded')}
+                  {x.party_size && x.party_size > 1 ? ` · ${t('{n} people', { n: x.party_size })}` : ''}
                 </div>
               </div>
             ),
           },
           {
             key: 'when',
-            header: 'When',
+            header: t('When'),
             render: (x) => (
-              <span style={{ whiteSpace: 'nowrap' }}>{dayTimeLabel(x.starts_at)}<span className="bos-hint"> – {timeLabel(x.ends_at)}</span></span>
+              <span style={{ whiteSpace: 'nowrap' }}>{dayTimeLabel(x.starts_at, locale)}<span className="bos-hint"> – {timeLabel(x.ends_at, locale)}</span></span>
             ),
           },
           {
             key: 'with',
-            header: 'With',
+            header: t('With'),
             render: (x) => (
               <span>
-                {x.provider_name ?? (x.reservation_mode === 'appointment' ? 'Anyone free' : MODE_WORDS[x.reservation_mode] ?? '—')}
+                {x.provider_name ?? (x.reservation_mode === 'appointment' ? t('Anyone free') : MODE_WORDS[x.reservation_mode] ? t(MODE_WORDS[x.reservation_mode]) : '—')}
                 {places.size > 1 && x.location_name ? <span className="bos-hint"> · {x.location_name}</span> : null}
               </span>
             ),
           },
           {
             key: 'status',
-            header: 'Status',
-            render: (x) => <StatusPill value={x.status} tone={STATUS_TONE[x.status]} label={STATUS_WORDS[x.status] ?? x.status} />,
+            header: t('Status'),
+            render: (x) => <StatusPill value={x.status} tone={STATUS_TONE[x.status]} label={STATUS_WORDS[x.status] ? t(STATUS_WORDS[x.status]) : x.status} />,
           },
           {
             key: 'payment',
-            header: 'Payment',
+            header: t('Payment'),
             render: (x) => (
               <span className="bos-hint" style={{ margin: 0 }}>
-                {PAYMENT_WORDS[x.payment_status] ?? '—'}
-                {x.deposit_required && x.deposit_amount ? ` · deposit ${rupees(x.deposit_amount)}` : ''}
+                {PAYMENT_WORDS[x.payment_status] ? t(PAYMENT_WORDS[x.payment_status]) : '—'}
+                {x.deposit_required && x.deposit_amount ? ` · ${t('deposit {amount}', { amount: rupees(x.deposit_amount) })}` : ''}
               </span>
             ),
           },
         ]}
         empty={
           searchParams?.status ? (
-            <EmptyState title="No bookings here">
-              {`Nothing marked “${FILTERS.find((f) => f.value === searchParams.status)?.label ?? searchParams.status}”.`}
+            <EmptyState title={t('No bookings here')}>
+              {t('Nothing marked “{what}”.', { what: filterLabel ? t(filterLabel) : searchParams.status })}
             </EmptyState>
           ) : (
-            <BusinessEmpty businessId={b} module="bookings" fallbackTitle="No bookings here"
-                           fallback="Reservations made on your website appear here for you to confirm." />
+            <BusinessEmpty businessId={b} module="bookings" fallbackTitle={t('No bookings here')}
+                           fallback={t('Reservations made on your website appear here for you to confirm.')} />
           )
         }
       />
 
       {waiting.length ? (
-        <Section title="Waitlist">
+        <Section title={t('Waitlist')}>
           <p className="bos-hint" style={{ marginTop: 0 }}>
-            When a place opens up, the first person waiting is offered it on WhatsApp. Nobody is booked until they take it.
+            {t('When a place opens up, the first person waiting is offered it on WhatsApp. Nobody is booked until they take it.')}
           </p>
           <ul className="bos-waitlist">
             {waiting.map((w) => (
               <li key={w.id}>
                 <span>
-                  <strong>{dayTimeLabel(w.starts_at)}</strong> · {w.party_size === 1 ? '1 person' : `${w.party_size} people`}
-                  {' · '}{w.status === 'offered' ? 'offered the place' : 'waiting'}
-                  {w.status === 'offered' && w.offer_expires_at ? ` until ${timeLabel(w.offer_expires_at)}` : ''}
+                  <strong>{dayTimeLabel(w.starts_at, locale)}</strong>
+                  {' · '}{w.party_size === 1 ? t('1 person') : t('{n} people', { n: w.party_size })}
+                  {' · '}{w.status === 'offered' ? t('offered the place') : t('waiting')}
+                  {w.status === 'offered' && w.offer_expires_at ? ` ${t('until {time}', { time: timeLabel(w.offer_expires_at, locale) })}` : ''}
                 </span>
                 {w.offer_link ? (
-                  <input readOnly value={w.offer_link} aria-label="Offer link to share" className="bos-waitlist__link" />
+                  <input readOnly value={w.offer_link} aria-label={t('Offer link to share')} className="bos-waitlist__link" />
                 ) : null}
-                <ActionButton className="btn-quiet" label="Remove" busyLabel="Removing…" confirmLabel="Yes, remove"
-                  confirm="Take this person off the waitlist?" run={withdrawWaitlist.bind(null, b, w.id)} />
+                <ActionButton className="btn-quiet" label={t('Remove')} busyLabel={t('Removing…')} confirmLabel={t('Yes, remove')}
+                  confirm={t('Take this person off the waitlist?')} run={withdrawWaitlist.bind(null, b, w.id)} />
               </li>
             ))}
           </ul>
@@ -179,34 +185,34 @@ export default async function BookingsPage({
       ) : null}
 
       {canSetPolicy ? (
-        <Section title="Booking rules">
-          <ActionForm action={saveBookingsPolicy} success="Saved." className="bos-policy" aria-label="Booking rules">
+        <Section title={t('Booking rules')}>
+          <ActionForm action={saveBookingsPolicy} success={t('Saved.')} className="bos-policy" aria-label={t('Booking rules')}>
             <input type="hidden" name="businessId" value={b} />
             <label className="bos-check">
               <input type="checkbox" name="require_deposit" defaultChecked={policy.require_deposit} />
-              Ask for a deposit to hold a booking
+              {t('Ask for a deposit to hold a booking')}
             </label>
             <label>
-              Deposit (₹)
+              {t('Deposit (₹)')}
               <input name="deposit_amount" type="number" min={0} step="1" defaultValue={policy.deposit_amount ?? ''} />
             </label>
             <label>
-              Customers can cancel up to (hours before)
+              {t('Customers can cancel up to (hours before)')}
               <input name="cancel_window_hours" type="number" min={0} max={720} defaultValue={policy.cancel_window_hours} />
             </label>
             <label>
-              Hold an unpaid online deposit for (minutes)
+              {t('Hold an unpaid online deposit for (minutes)')}
               <input name="hold_minutes" type="number" min={5} max={1440} defaultValue={policy.hold_minutes} />
             </label>
             <label className="bos-check">
               <input type="checkbox" name="waitlist_enabled" defaultChecked={policy.waitlist_enabled} />
-              Keep a waitlist when a time is full
+              {t('Keep a waitlist when a time is full')}
             </label>
             <label>
-              Keep an offered place for (minutes)
+              {t('Keep an offered place for (minutes)')}
               <input name="waitlist_offer_minutes" type="number" min={5} max={2880} defaultValue={policy.waitlist_offer_minutes} />
             </label>
-            <SubmitButton className="btn">Save booking rules</SubmitButton>
+            <SubmitButton className="btn" busy={t('Saving…')}>{t('Save booking rules')}</SubmitButton>
           </ActionForm>
         </Section>
       ) : null}

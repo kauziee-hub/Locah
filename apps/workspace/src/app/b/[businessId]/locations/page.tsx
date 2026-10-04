@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DataTable, EmptyState, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { ActionForm, SubmitButton } from '@/components/ActionForm'
+import { pageWords } from '@/lib/ws-lang'
 import { createLocation } from './actions'
 import { addressLine, zoneWords } from './words'
 
@@ -19,13 +20,14 @@ type LocationRow = {
 export default async function LocationsPage({ params }: { params: { businessId: string } }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const t = pageWords()
   const b = params.businessId
   const res = await apiTry<{ data: LocationRow[] }>(`/v1/platform/businesses/${b}/locations`, token)
   if (!res.ok) {
     return (
       <div>
-        <PageHeader title="Locations" />
-        <GateNotice error={res.error} businessId={b} moduleLabel="Locations" />
+        <PageHeader title={t('Locations')} />
+        <GateNotice error={res.error} businessId={b} moduleLabel={t('Locations')} />
       </div>
     )
   }
@@ -35,8 +37,8 @@ export default async function LocationsPage({ params }: { params: { businessId: 
   return (
     <div>
       <PageHeader
-        title="Locations"
-        subtitle="Where you serve customers: the address, contact and opening hours your website, bookings and AI use. One is the main place."
+        title={t('Locations')}
+        subtitle={t('Where you serve customers: the address, contact and opening hours your website, bookings and AI use. One is the main place.')}
       />
       <DataTable
         rows={locations}
@@ -44,52 +46,52 @@ export default async function LocationsPage({ params }: { params: { businessId: 
         columns={[
           {
             key: 'name',
-            header: 'Place',
+            header: t('Place'),
             render: (l) => (
               <div>
                 <Link href={`/b/${b}/locations/${l.id}`}>{l.name}</Link>
-                {l.is_primary ? <span className="bos-hint"> · main place</span> : null}
-                <div className="bos-hint" style={{ margin: 0 }}>{addressLine(l.address) || 'No address yet'}</div>
+                {l.is_primary ? <span className="bos-hint"> · {t('main place')}</span> : null}
+                <div className="bos-hint" style={{ margin: 0 }}>{addressLine(l.address) || t('No address yet')}</div>
               </div>
             ),
           },
           {
             key: 'contact',
-            header: 'Contact',
+            header: t('Contact'),
             render: (l) => (l.phone ? <a href={`tel:${l.phone.replace(/[^+\d]/g, '')}`}>{l.phone}</a> : l.email || <span className="bos-hint">—</span>),
           },
           {
             key: 'hours',
-            header: 'Hours',
-            render: (l) => <span className="bos-hint" style={{ margin: 0 }}>{l.hours && Object.keys(l.hours).some((k) => k !== 'note') ? 'Set' : 'Not set'}{l.timezone !== 'Asia/Kolkata' ? ` · ${zoneWords(l.timezone)}` : ''}</span>,
+            header: t('Hours'),
+            render: (l) => <span className="bos-hint" style={{ margin: 0 }}>{l.hours && Object.keys(l.hours).some((k) => k !== 'note') ? t('Set') : t('Not set')}{l.timezone !== 'Asia/Kolkata' ? ` · ${t(zoneWords(l.timezone))}` : ''}</span>,
           },
           {
             key: 'status',
-            header: 'Status',
-            render: (l) => <StatusPill value={l.status} tone={l.status === 'active' ? 'good' : 'neutral'} label={l.status === 'active' ? 'Open' : 'Archived'} />,
+            header: t('Status'),
+            render: (l) => <StatusPill value={l.status} tone={l.status === 'active' ? 'good' : 'neutral'} label={l.status === 'active' ? t('Open') : t('Archived')} />,
           },
         ]}
-        empty={<EmptyState title="No locations yet">Add the first one below.</EmptyState>}
+        empty={<EmptyState title={t('No locations yet')}>{t('Add the first one below.')}</EmptyState>}
       />
 
-      <Section title="Add a location">
-        <ActionForm action={createLocation} success="Added. Open it to set its opening hours." resetOnSuccess
-          className="bos-resource-form" aria-label="Add a location">
+      <Section title={t('Add a location')}>
+        <ActionForm action={createLocation} success={t('Added. Open it to set its opening hours.')} resetOnSuccess
+          className="bos-resource-form" aria-label={t('Add a location')}>
           <input type="hidden" name="businessId" value={b} />
-          <label>Name<input name="name" required maxLength={120} placeholder="Anna Nagar branch" /></label>
-          <label>Street and building<input name="line1" maxLength={160} placeholder="12, 2nd Avenue" /></label>
-          <label>Area<input name="locality" maxLength={80} placeholder="Anna Nagar" /></label>
-          <label>City<input name="city" maxLength={80} placeholder="Chennai" /></label>
-          <label>PIN code<input name="postal_code" inputMode="numeric" maxLength={6} placeholder="600040" /></label>
-          <label>Phone<input name="phone" type="tel" maxLength={20} placeholder="+91…" /></label>
-          <label>Time zone
+          <label>{t('Name')}<input name="name" required maxLength={120} placeholder={t('Anna Nagar branch')} /></label>
+          <label>{t('Street and building')}<input name="line1" maxLength={160} placeholder="12, 2nd Avenue" /></label>
+          <label>{t('Area')}<input name="locality" maxLength={80} placeholder="Anna Nagar" /></label>
+          <label>{t('City')}<input name="city" maxLength={80} placeholder="Chennai" /></label>
+          <label>{t('PIN code')}<input name="postal_code" inputMode="numeric" maxLength={6} placeholder="600040" /></label>
+          <label>{t('Phone')}<input name="phone" type="tel" maxLength={20} placeholder="+91…" /></label>
+          <label>{t('Time zone')}
             <select name="timezone" defaultValue="Asia/Kolkata">
               {['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'Australia/Sydney'].map((tz) => (
-                <option key={tz} value={tz}>{zoneWords(tz)}</option>
+                <option key={tz} value={tz}>{t(zoneWords(tz))}</option>
               ))}
             </select>
           </label>
-          <SubmitButton className="btn" busy="Adding…">Add location</SubmitButton>
+          <SubmitButton className="btn" busy={t('Adding…')}>{t('Add location')}</SubmitButton>
         </ActionForm>
       </Section>
     </div>

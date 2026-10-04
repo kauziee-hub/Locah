@@ -20,24 +20,30 @@ export const PAYMENT_WORDS: Record<string, string> = {
 }
 
 /** The next steps a booking's state allows (validation/booking.py ALLOWED_TRANSITIONS), as buttons. */
-export const NEXT_STEPS: Record<string, { to: string; label: string; reason?: string; confirm?: string; quiet?: boolean }[]> = {
+export const NEXT_STEPS: Record<string, { to: string; label: string; reason?: string; confirm?: string; yes?: string; quiet?: boolean }[]> = {
   pending: [
     { to: 'confirmed', label: 'Confirm' },
     { to: 'rejected', label: 'Decline', reason: 'Declined by the business', quiet: true,
-      confirm: 'Decline this booking? The time is freed for others.' },
+      confirm: 'Decline this booking? The time is freed for others.', yes: 'Yes, decline' },
   ],
   confirmed: [
     { to: 'checked_in', label: 'Mark as arrived' },
     { to: 'no_show', label: 'Did not come', reason: 'Did not arrive', quiet: true,
-      confirm: 'Mark this booking as a no-show?' },
+      confirm: 'Mark this booking as a no-show?', yes: 'Yes, they did not come' },
     { to: 'cancelled', label: 'Cancel', reason: 'Cancelled by the business', quiet: true,
-      confirm: 'Cancel this booking? The time is freed for others.' },
+      confirm: 'Cancel this booking? The time is freed for others.', yes: 'Yes, cancel' },
   ],
   checked_in: [
     { to: 'completed', label: 'Mark as done' },
     { to: 'cancelled', label: 'Cancel', reason: 'Cancelled by the business', quiet: true,
-      confirm: 'Cancel this booking?' },
+      confirm: 'Cancel this booking?', yes: 'Yes, cancel' },
   ],
+}
+
+// services/booking.py keeps one of these, or none.
+export const CHANNEL_WORDS: Record<string, string> = {
+  web: 'Your website', whatsapp: 'WhatsApp', phone: 'Phone', workspace: 'Entered by your team',
+  marketplace: 'Marketplace',
 }
 
 export const FILTERS = [
