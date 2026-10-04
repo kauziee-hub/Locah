@@ -53,6 +53,10 @@ class WebsiteService:
         website = Website(business_id=business_id, status="draft")
         session.add(website)
         await session.flush()
+        from platform_core.models import Business
+
+        business = await session.get(Business, business_id)
+        name = (business.display_name if business else "") or "Welcome"
 
         draft = WebsiteVersion(
             website_id=website.id,
@@ -83,10 +87,9 @@ class WebsiteService:
                 business_id=business_id,
                 section_type_id="hero",
                 layout_variant="centered",
-                content={
-                    "headline": "Your website starts here",
-                    "subheadline": "Complete your business interview to create a draft, or edit this page yourself.",
-                },
+                # Customer-facing from the first moment: the business's own name,
+                # never instructions to the owner (those live in the editor).
+                content={"headline": name},
                 sort_order=0,
                 is_visible=True,
             )

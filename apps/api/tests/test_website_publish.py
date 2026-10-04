@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -254,3 +255,17 @@ def test_preview_resolves_while_business_is_still_private(
 
     # Tenant isolation must be unchanged: no token, no public site.
     assert client.get(f"/v1/public/websites/{slug}").status_code == 404
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_a_new_website_never_shows_customers_instructions_for_the_owner(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """The first draft is customer-facing from the start: publishing it before the
+    interview must not show "complete your business interview" to customers."""
+    headers, _ = owner
+    client = TestClient(app)
+    business = _create_business(client, headers)
+    site = client.get(f"/v1/b/{business['id']}/website", headers=headers).json()["data"]
+    text = json.dumps(site["draft"]["pages"])
+    assert "Your website starts here" not in text and "business interview" not in text

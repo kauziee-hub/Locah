@@ -125,6 +125,9 @@ def test_valid_tracking_token(owner: tuple[dict[str, str], uuid.UUID]) -> None:
     body = resp.json()["data"]
     assert body["state"] in {"ok", "delayed", "failed", "cancelled"}
     assert body["fulfilment"]["customer_status"]
+    # The customer sees what they ordered and its total.
+    assert body["items"] == [{"title": "Cup", "quantity": 1, "line_total": 20.0}]
+    assert body["order"]["total_amount"] == 20.0
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")

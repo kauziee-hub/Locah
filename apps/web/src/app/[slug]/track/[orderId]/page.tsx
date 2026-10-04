@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
+import { Fragment } from 'react'
 import { notFound } from 'next/navigation'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
 import { fetchTracking } from '@/lib/checkout-api'
@@ -10,6 +11,9 @@ import { siteWords, type Words } from '@/lib/site-words'
 import { SiteFrame } from '@/components/website/SiteFrame'
 
 export const dynamic = 'force-dynamic'
+
+const rupees = (v: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v)
 
 /** The customer reads plain words, never stored states (Founder refinement — Payments §13). */
 const paymentWords = (t: Words): Record<string, string> => ({
@@ -132,6 +136,29 @@ export default async function TrackOrderPage({
           {data.state === 'failed' ? <p className="ls-offer__error" role="alert">{t('This could not be completed. Contact the business for help.')}</p> : null}
           {data.state === 'cancelled' ? <p className="ls-meta">{t('This was cancelled.')}</p> : null}
         </section>
+        {data.items?.length ? (
+          <section className="ls-bill__card" aria-label={t('Items')}>
+            <dl className="ls-bill__totals">
+              {data.items.map((item: { title: string; quantity: number; line_total: number }, i: number) => (
+                <Fragment key={`${item.title}-${i}`}>
+                  <dt>{item.quantity} × {item.title}</dt>
+                  <dd>{rupees(item.line_total)}</dd>
+                </Fragment>
+              ))}
+              <dt className="is-total">{t('Total')}</dt>
+              <dd className="is-total">{rupees(data.order.total_amount)}</dd>
+            </dl>
+          </section>
+        ) : null}
+        {data.pickup ? (
+          <section className="ls-bill__card" aria-label={t('Pickup')}>
+            <p className="ls-meta">{t('Collect it from')}</p>
+            <p>{[data.pickup.name, data.pickup.address].filter(Boolean).join(' · ') || name}</p>
+            {data.pickup.phone ? (
+              <p><a href={`tel:${data.pickup.phone.replace(/[^+\d]/g, '')}`}>{t('Call {phone}', { phone: data.pickup.phone })}</a></p>
+            ) : null}
+          </section>
+        ) : null}
       </>
     )
   }

@@ -15,6 +15,7 @@ from platform_core.context_resolver import bind_public_context
 from platform_core.exceptions import ModuleNotActive, ResourceNotFound, ValidationError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import (
+    BusinessLocation,
     BusinessModuleState,
     FulfilmentJob,
     FulfilmentSettings,
@@ -688,4 +689,29 @@ class FulfilmentService:
             },
             "fulfilment": FulfilmentService.serialize_job(job, public=True),
             "state": state,
+            "items": await FulfilmentService._public_items(session, order.id),
+            "pickup": await FulfilmentService._pickup_place(session, order.location_id) if job.mode == "pickup" else None,
         }
+
+    @staticmethod
+    async def _public_items(session: AsyncSession, order_id: uuid.UUID) -> list[dict[str, Any]]:
+        """What the customer ordered, as their tracking page lists it."""
+        from platform_core.models import OrderLineItem
+
+        rows = (await session.execute(select(OrderLineItem).where(OrderLineItem.order_id == order_id)
+                                      .order_by(OrderLineItem.created_at))).scalars().all()
+        return [{"title": r.title, "quantity": int(r.quantity), "line_total": float(r.line_total)} for r in rows]
+
+    @staticmethod
+    async def _pickup_place(session: AsyncSession, location_id: uuid.UUID) -> dict[str, Any] | None:
+        """Where to collect it: the location's public address and phone (what the website shows)."""
+        loc = await session.get(BusinessLocation, location_id)
+        if loc is None:
+            return None
+        a = loc.address or {}
+        keys = ("line1", "line2", "street", "area", "locality", "landmark", "city", "postal_code")
+        parts = [str(a[k]).strip() for k in keys if isinstance(a.get(k), str) and str(a[k]).strip()]
+        named = loc.name if loc.name and loc.name.lower() not in ("primary location", "main") else None
+        if not parts and not named and not loc.phone:
+            return None
+        return {"name": named, "address": ", ".join(dict.fromkeys(parts)) or None, "phone": loc.phone}
