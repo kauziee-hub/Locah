@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from platform_api.main import app
 
 from platform_core.catalog.recommendation_evidence import Evidence, Signals, rank, record_evidence
-from platform_testing.phase_b import create_business, new_identity, sql
+from platform_testing.phase_b import create_business, new_identity, primary_location, sql
 
 needs_db = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 client = TestClient(app)
@@ -260,3 +260,18 @@ def test_setup_names_a_plan_restriction_and_a_waiting_dependency(monkeypatch: An
     s = _setup(owner, bid, "leads")
     assert (s["status"], s["included"]) == ("restricted", False)
     assert client.get(f"/v1/b/{bid}/modules/not-a-tool/setup", headers=owner).status_code == 404
+
+
+@needs_db
+def test_bookings_working_without_hours_says_customers_cannot_pick_a_time(monkeypatch: Any) -> None:
+    """Hours are advice, not a setup step: classes and staff schedules carry their
+    own times. Without them an appointment has no times, and the page says so."""
+    owner, bid = _business(monkeypatch, "beauty", "salon", "offerings-catalog", "bookings")
+    _offering(owner, bid, "Haircut", "service", attributes={"duration_minutes": 30})
+    s = _setup(owner, bid, "bookings")
+    assert s["status"] == "ready"
+    assert s["tips"] and s["tips"][0]["href"] == "/locations" and "opening hours" in s["tips"][0]["text"]
+    loc = primary_location(client, owner, bid)
+    client.patch(f"/v1/platform/businesses/{bid}/locations/{loc}", headers=owner,
+                 json={"hours": {"mon": [["10:00", "19:00"]]}})
+    assert _setup(owner, bid, "bookings")["tips"] == []

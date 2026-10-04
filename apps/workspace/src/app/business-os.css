@@ -1171,3 +1171,8 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
 .bos-tests__pay { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; }
 @media (max-width: 640px) { .bos-tests__row { grid-template-columns: 1fr; } }
 .bos-empty__actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
+/* Advice that does not block a tool from working (setup pages). */
+.bos-tip {
+  margin: .6rem 0 0; padding: .6rem .9rem; border-radius: var(--radius); font-size: .9rem;
+  border: 1px solid var(--status-warn-bd); background: var(--status-warn-bg); color: var(--status-warn-fg);
+}

@@ -88,6 +88,13 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
         {"label": STEP_ACTIONS[s["key"]][1], "href": STEP_ACTIONS[s["key"]][0]},
     } for s in row.get("steps") or []]
     blocked = set(row.get("blocked_by") or [])
+    tips: list[dict[str, str]] = []
+    if module_id == "bookings" and not await _hours_saved(session, business_id):
+        # Not a setup step (classes and staff schedules carry their own times),
+        # but without hours an appointment has no times to offer.
+        tips.append({"text": "No opening hours are saved, so customers type the time they want and you check it. "
+                             "Save your hours and they pick from times that are really free.",
+                     "label": "Set opening hours", "href": "/locations"})
     return {
         "module": module_id,
         "label": info.label,
@@ -107,4 +114,16 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
         } for dep, state in deps.items()],
         "website": [SITE_WORDS[s] for s in info.site if s in SITE_WORDS],
         "home": HOMES.get(module_id),
+        "tips": tips,
     }
+
+
+async def _hours_saved(session: AsyncSession, business_id: uuid.UUID) -> bool:
+    from sqlalchemy import select
+
+    from platform_core.models import BusinessLocation
+
+    rows = (await session.execute(select(BusinessLocation.hours).where(
+        BusinessLocation.business_id == business_id, BusinessLocation.deleted_at.is_(None),
+        BusinessLocation.status == "active"))).scalars().all()
+    return any(isinstance(h, dict) and any(h.values()) for h in rows)

@@ -135,6 +135,22 @@ def test_receptionist_offers_a_real_free_time_and_rechecks_it_on_approval(monkey
 
 
 @DB
+def test_without_opening_hours_the_receptionist_never_says_fully_booked(monkeypatch: Any) -> None:
+    """No hours saved means no times to offer — not "no free time". Like the
+    booking page, the customer is asked for the time they want, to be checked;
+    the owner is shown the fix."""
+    _, owner = new_identity(monkeypatch)
+    bid = create_business(client, owner, business_type="salon", modules=("offerings-catalog", "bookings"))
+    client.post(f"/v1/platform/businesses/{bid}/products", json={
+        "title": "Haircut", "offering_type": "service", "status": "active", "visibility": "public",
+        "price_amount": 300, "price_type": "fixed", "attributes": {"duration_minutes": 30}}, headers=owner)
+    data = _simulate(owner, bid, "receptionist", "Can I book a haircut on Saturday?")
+    assert data["proposal"] is None and "What time would you like" in data["reply"], data["reply"]
+    assert "no free time" not in data["reply"].lower()
+    assert any(s["kind"] == "note" and "opening hours" in s["label"].lower() for s in data["trace"]), data["trace"]
+
+
+@DB
 def test_discounts_and_rule_changes_go_to_a_person(monkeypatch: Any) -> None:
     _, owner = new_identity(monkeypatch)
     bid = create_business(client, owner, modules=("offerings-catalog",))

@@ -211,6 +211,12 @@ class CatalogueImportService:
         results = validate_rows(rows, existing=ctx["existing"], kinds=_kind_words(), default_kind=kind,
                                 bookable_kinds=bookable_kinds(), location_names=ctx["locations"],
                                 stock_allowed=ctx["stock_allowed"])
+        for r in results:
+            # Imported anyway, but say now what will hold it back from going live.
+            k = KINDS.get(str(r.values.get("kind")))
+            if r.status != "error" and k and r.values.get("duration") is None and any(
+                    f.required and f.key == "duration_minutes" for f in k.fields):
+                r.notes.append("No duration — it comes in as a draft; add how long it takes before it goes live")
         counts = Counter(r.status for r in results)
         return {
             "default_kind": kind,

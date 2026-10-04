@@ -24,6 +24,8 @@ type Setup = {
   dependencies: Dependency[]
   website: string[]
   home: string | null
+  /** Advice that does not block "Working" (e.g. Bookings without opening hours). */
+  tips?: { text: string; label: string; href: string }[]
 }
 type ModuleDetail = { module_id: string; display_name: string; module_class: string; description: string | null }
 
@@ -109,6 +111,11 @@ export default async function ModuleSetupPage({
         ) : s.status === 'deactivated' ? (
           <p className="bos-hint">Switched off: nothing new happens through it, and everything recorded is kept for when you turn it back on.</p>
         ) : null}
+        {(s.tips ?? []).map((tip) => (
+          <p key={tip.href} className="bos-tip">
+            {tip.text} <Link href={`${base}${tip.href}`}>{tip.label} →</Link>
+          </p>
+        ))}
 
         {s.steps.length > 0 ? (
           <ol className="bos-setup__steps" aria-label={`${s.label} setup`}>

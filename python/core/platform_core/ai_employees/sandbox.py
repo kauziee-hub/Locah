@@ -401,6 +401,15 @@ async def _booking(session: AsyncSession, trace: _Trace, scenario: str, emp: AIE
                                                               if window else ""))
     # Tanglish replies keep roman day names ("Sat 03 Oct"); Tamil script would not match the reply.
     when = day_words(day, None)
+    if not found.get("hours_known", True):
+        # Not "fully booked": there are no hours to book within. Say so, and tell the owner the fix.
+        trace.add("note", "No opening hours saved yet",
+                  "Without hours the AI can only take the time a customer asks for, to be checked. "
+                  "Add your opening hours (Locations) so it can offer times that are really free.")
+        return _result(trace, scenario, reply=(
+            f"{when} {offering.title}-ku endha time venum-nu sollunga — check panni confirm pannrom."
+            if ta else f"What time would you like {offering.title} on {when}? Tell me and we'll check it and "
+            "confirm."), proposal=None)
     if not free:
         return _result(trace, scenario, reply=(f"{when} {offering.title}-ku slot illa. Vera naal paakkalaama?" if ta
                                                else f"There's no free time for {offering.title} on {when}"

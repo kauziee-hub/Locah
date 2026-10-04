@@ -257,6 +257,9 @@ def test_an_item_without_a_price_waits_and_a_member_without_permission_cannot_im
     assert item["price_type"] == "enquiry" and item["can_go_live"] is True  # price on request is honest
     # A service without a duration can't be booked, so it waits in review with the reason.
     read = _read(owner, bid, "svc.csv", "Service,Price\nHead massage,400\n".encode("utf-8"))
+    checked = client.post(f"/v1/platform/businesses/{bid}/catalogue-import/check", headers=owner,
+                          json={"rows": _mapped(read), "default_kind": "service"}).json()["data"]
+    assert any("No duration" in n for n in checked["rows"][0]["notes"])  # warned before importing
     done = _import(owner, bid, read, _mapped(read), kind="service")
     batch = client.get(f"/v1/platform/businesses/{bid}/catalogue-import/{done['id']}", headers=owner).json()["data"]
     assert batch["items"][0]["can_go_live"] is False and batch["items"][0]["problem"] == "Add how long it takes first"
