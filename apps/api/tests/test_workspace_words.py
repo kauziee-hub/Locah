@@ -98,6 +98,7 @@ def _home_labels() -> set[str]:
 
     out |= {"Good morning", "Good afternoon", "Good evening", "Opening hours not set", "Closed"}
     out |= {label for _, _, _, label in home_header.QUICK_ACTIONS}
+    out |= set(home_header.ITEM_WORDS.values())
     return out
 
 
