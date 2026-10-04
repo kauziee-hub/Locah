@@ -310,6 +310,11 @@ class PaymentCollectService:
         from platform_core.resolvers.payment_resolver import PaymentResolver
 
         labels: dict[tuple[str, str], str] = {}
+        # A provider refund not yet confirmed: the payment is not "refunded" yet.
+        pending_refund = {r[0] for r in (await session.execute(text(
+            "SELECT DISTINCT payment_attempt_id FROM payments_refunds WHERE business_id = CAST(:b AS uuid) "
+            "AND kind = 'provider' AND status IN ('requested', 'processing') AND payment_attempt_id = ANY(:ids)"),
+            {"b": str(business_id), "ids": [a.id for a in payments]})).all()} if payments else set()
         out = []
         for a in payments:
             key = (a.source_type, str(a.source_id))
@@ -322,7 +327,8 @@ class PaymentCollectService:
             out.append(PaymentResolver.serialize_attempt(a) | {
                 "for": labels[key],
                 "method_label": ATTEMPT_METHOD_WORDS.get(a.payment_method, a.payment_method),
-                "status_label": PaymentCollectService.status_label(a),
+                "status_label": "Refund in progress" if a.id in pending_refund
+                else PaymentCollectService.status_label(a),
                 "purpose_label": PURPOSES.get(str(a.purpose or ""), None),
                 "verified_at": a.verified_at.isoformat() if a.verified_at else None,
             })
@@ -788,7 +794,8 @@ class PaymentCollectService:
             "AND verification = 'to_verify'"), b)).scalar() or 0)
         owed = await PaymentCollectService._owed(session, business_id)
         refunds = (await session.execute(text(
-            "SELECT r.id, r.amount, r.status, r.reason, r.created_at, a.source_type, a.source_id "
+            "SELECT r.id, r.amount, r.status, r.reason, r.created_at, a.source_type, a.source_id, r.kind, "
+            "r.failure_reason "
             "FROM payments_refunds r JOIN payments_payment_attempts a ON a.id = r.payment_attempt_id "
             "WHERE r.business_id = CAST(:b AS uuid) AND r.created_at >= now() - interval '30 days' "
             "ORDER BY r.created_at DESC LIMIT 20"), b)).all()
@@ -816,7 +823,8 @@ class PaymentCollectService:
             "needs_attention": [PaymentCollectService._attempt_row(a) | {"for": await label(a)} for a in needs],
             "owed": owed,
             "refunds": [{"id": str(r[0]), "amount": float(r[1]), "status": r[2], "reason": r[3],
-                         "created_at": r[4].isoformat(), "source_type": r[5], "source_id": str(r[6])}
+                         "created_at": r[4].isoformat(), "source_type": r[5], "source_id": str(r[6]),
+                         "kind": r[7], "failure_reason": r[8]}
                         for r in refunds],
         }
 

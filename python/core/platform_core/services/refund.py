@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, cast
 
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platform_core.exceptions import ConflictError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import PaymentAttempt, PaymentRefund
+from platform_core.payments.refunds import refundable_by_provider, request_refund
 from platform_core.resolvers.payment_resolver import PaymentResolver
 from platform_core.services.audit import AuditService
 from platform_core.services.business import BusinessService
@@ -99,15 +101,44 @@ class RefundService:
         max_refundable = Decimal(str(payment.amount)) - Decimal(str(payment.refunded_amount))
         validated = validate_refund_payload(payload, max_amount=max_refundable)
         before_payment = PaymentAttemptService.serialize(payment)
+        # An online payment a provider collected is refunded THROUGH the provider
+        # (unless the owner says they gave it back themselves); anything else is
+        # money the owner handed back, recorded here.
+        through_provider = refundable_by_provider(payment) and not bool(payload.get("manual"))
         refund = PaymentRefund(
             business_id=business_id,
             payment_attempt_id=payment.id,
             amount=float(validated["amount"]),
-            status="succeeded",
+            status="requested" if through_provider else "succeeded",
+            kind="provider" if through_provider else "recorded",
             reason=validated["reason"],
             idempotency_key=key,
+            completed_at=None if through_provider else datetime.now(timezone.utc),
         )
         session.add(refund)
+        await session.flush()
+        if through_provider:
+            asked = await request_refund(payment, amount=validated["amount"], refund_id=refund.id,
+                                         reason=validated["reason"])
+            refund.provider_reference = asked.reference
+            if not asked.accepted:
+                # Nothing moved: the provider refused. Kept with its words; no amount reserved.
+                refund.status = "failed"
+                refund.failure_reason = asked.detail
+                refund.completed_at = datetime.now(timezone.utc)
+                await session.flush()
+                await AuditService.record(
+                    session, event_type="payment.refund_failed", actor_identity_id=actor_id,
+                    actor_context="business", business_id=business_id, resource_type="payment_refund",
+                    resource_id=refund.id, action="refund_refused",
+                    before_state={"payment": before_payment},
+                    after_state={"refund": RefundService.serialize(refund)})
+                return refund, payment
+            refund.status = asked.status
+            if asked.status == "succeeded":
+                refund.completed_at = datetime.now(timezone.utc)
+        # The amount is spoken for from the moment the provider accepts the refund,
+        # so a second refund can never exceed what was paid; a failure releases it.
         payment.refunded_amount = float(
             Decimal(str(payment.refunded_amount)) + validated["amount"]
         )
@@ -122,30 +153,79 @@ class RefundService:
         await session.flush()
         await PaymentAttemptService._sync_source_payment_status(session, payment)
         after_payment = PaymentAttemptService.serialize(payment)
+        done = refund.status == "succeeded"
         refund_payload = {
             "business_id": str(business_id),
             "payment_id": str(payment.id),
             "refund_id": str(refund.id),
             "amount": float(refund.amount),
             "payment_status": payment.status,
+            "kind": refund.kind,
         }
         await OutboxService.publish(
             session,
-            event_type="payment.refunded",
+            event_type="payment.refunded" if done else "payment.refund_requested",
             payload=refund_payload,
             business_id=business_id,
             correlation_id=correlation_id,
         )
         await AuditService.record(
             session,
-            event_type="payment.refunded",
+            event_type="payment.refunded" if done else "payment.refund_requested",
             actor_identity_id=actor_id,
             actor_context="business",
             business_id=business_id,
             resource_type="payment_refund",
             resource_id=refund.id,
-            action="refunded",
+            action="refunded" if done else "refund_requested",
             before_state={"payment": before_payment},
             after_state={"payment": after_payment, "refund": RefundService.serialize(refund)},
         )
         return refund, payment
+
+    @staticmethod
+    async def settle_provider_refund(
+        session: AsyncSession,
+        *,
+        refund: PaymentRefund,
+        outcome: str,
+        failure_reason: str | None,
+        correlation_id: str,
+    ) -> str:
+        """The provider's final word on a refund it accepted (a refund webhook).
+        Idempotent: a refund already settled is left as it is."""
+        if refund.status in ("succeeded", "failed"):
+            return str(refund.status)
+        payment = (await session.execute(
+            select(PaymentAttempt).where(PaymentAttempt.id == refund.payment_attempt_id).with_for_update()
+            .execution_options(populate_existing=True))).scalars().one()
+        business = await BusinessService.get_by_id(session, payment.business_id)
+        before = RefundService.serialize(refund)
+        refund.completed_at = datetime.now(timezone.utc)
+        if outcome == "succeeded":
+            refund.status = "succeeded"
+            event = "payment.refunded"
+        else:
+            refund.status = "failed"
+            refund.failure_reason = (failure_reason or "The provider could not complete the refund")[:500]
+            # Release the amount it had reserved; the owner is told on Payments.
+            payment.refunded_amount = max(
+                float(Decimal(str(payment.refunded_amount)) - Decimal(str(refund.amount))), 0.0)
+            payment.status = "partially_refunded" if payment.refunded_amount > 0 else "succeeded"
+            payment.attention = "refund_failed"
+            payment.version += 1
+            event = "payment.refund_failed"
+        await session.flush()
+        await PaymentAttemptService._sync_source_payment_status(session, payment)
+        await OutboxService.publish(
+            session, event_type=event,
+            payload={"business_id": str(payment.business_id), "payment_id": str(payment.id),
+                     "refund_id": str(refund.id), "amount": float(refund.amount),
+                     "payment_status": payment.status, "kind": refund.kind},
+            business_id=payment.business_id, correlation_id=correlation_id)
+        await AuditService.record(
+            session, event_type=event, actor_identity_id=business.primary_owner_identity_id,
+            actor_context="system", business_id=payment.business_id, resource_type="payment_refund",
+            resource_id=refund.id, action="provider_settled", before_state={"refund": before},
+            after_state={"refund": RefundService.serialize(refund), "payment_status": payment.status})
+        return str(refund.status)

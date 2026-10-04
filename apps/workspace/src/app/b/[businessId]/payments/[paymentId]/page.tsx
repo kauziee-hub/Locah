@@ -32,10 +32,24 @@ type Payment = {
   verified_at: string | null
 }
 
-type Refund = { id: string; amount: number; reason: string | null; status: string; created_at: string }
+type Refund = {
+  id: string
+  amount: number
+  reason: string | null
+  status: string
+  kind: string
+  failure_reason: string | null
+  provider_reference: string | null
+  created_at: string
+  completed_at: string | null
+}
 
-const REFUND_WORDS: Record<string, string> = {
-  succeeded: 'Refunded', pending: 'Being refunded', processing: 'Being refunded', failed: 'Refund failed',
+function refundWords(r: Refund): string {
+  if (r.status === 'failed') return 'Refund failed'
+  if (r.kind === 'provider') {
+    return r.status === 'succeeded' ? 'Refunded by the provider' : 'Refund in progress'
+  }
+  return 'Recorded — you gave it back'
 }
 // Payments a person settles by hand; online ones settle themselves.
 const SETTLED_BY_HAND = new Set(['cod', 'pay_at_business', 'pay_later'])
@@ -109,7 +123,8 @@ export default async function PaymentDetailPage({ params }: { params: { business
       ) : null}
       {canRefund ? (
         <RefundForm businessId={params.businessId} paymentId={p.id} refundable={p.refundable_amount}
-                    online={p.payment_method === 'online'} />
+                    viaProvider={p.payment_method === 'online' && !!p.provider_reference
+                      && ['razorpay', 'stub'].includes(p.provider ?? '')} />
       ) : null}
 
       {refunds.length > 0 ? (
@@ -120,9 +135,14 @@ export default async function PaymentDetailPage({ params }: { params: { business
               <li key={r.id}>
                 <div>
                   <strong>{rupees(r.amount)}</strong>
-                  <p>{r.reason || 'Refund'} · {dayTimeLabel(r.created_at)}</p>
+                  <p>
+                    {r.reason || 'Refund'} · {dayTimeLabel(r.created_at)}
+                    {r.status === 'failed' && r.failure_reason ? ` · ${r.failure_reason}` : ''}
+                    {r.provider_reference ? ` · ref ${r.provider_reference}` : ''}
+                  </p>
                 </div>
-                <StatusPill value={r.status} label={REFUND_WORDS[r.status] ?? 'Being processed'} />
+                <StatusPill value={r.status === 'succeeded' ? 'succeeded' : r.status === 'failed' ? 'failed' : 'pending'}
+                            label={refundWords(r)} />
               </li>
             ))}
           </ul>

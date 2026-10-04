@@ -1584,6 +1584,9 @@ class PaymentRefund(Base):
     idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # recorded: the owner gave it back themselves; provider: LOCAH asked the provider.
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'recorded'"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
 
 

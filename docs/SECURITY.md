@@ -70,6 +70,11 @@
   A payment's own rules refusing the update (e.g. a written-off UPI claim) are
   recorded and not retried.
 - Refunds lock the payment, are capped by what was paid, and take an
-  `idempotency_key` (the Workspace sends one per refund form): a retried request
-  returns the refund already made. API callers that omit the key get no retry
-  protection beyond the cap and the optional `version` check.
+  `idempotency_key` (the Workspace sends one per refund form). An online payment a
+  provider collected is refunded through the provider adapter
+  (`payments/refunds.py`): "processing" once the provider accepts it (amount
+  reserved), "succeeded"/"failed" only on the provider's refund webhook (a failure
+  releases the amount and flags the payment). A provider refusal is recorded as a
+  failed refund and moves nothing. Offline money, or an online payment the owner
+  gave back themselves, is a *recorded* refund — LOCAH moved no money and says so.
+  Live Razorpay refunds need the platform Razorpay account activated (external).

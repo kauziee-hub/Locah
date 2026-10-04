@@ -24,7 +24,7 @@ export async function markPaymentReceived(businessId: string, paymentId: string)
 export async function recordRefund(
   businessId: string,
   paymentId: string,
-  body: { amount: number; reason: string; idempotency_key: string },
+  body: { amount: number; reason: string; idempotency_key: string; manual?: boolean },
 ): Promise<ActionResult> {
   const r = await sendJson(`/v1/platform/businesses/${businessId}/payments/${paymentId}/refunds`, 'POST', body)
   if (r.ok) {

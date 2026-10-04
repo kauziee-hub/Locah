@@ -55,6 +55,9 @@ class RefundPaymentRequest(VersionedBody):
     reason: str
     # Send the same key again (a retry, a double-click) and get the same refund back.
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=80)
+    # True: the owner gave an online payment back themselves (cash, UPI, bank) —
+    # recorded, not sent through the provider.
+    manual: bool = False
 
 
 class MerchantConnectionRequest(BaseModel):
@@ -376,7 +379,8 @@ async def create_refund(
         payment_id=payment_id,
         actor_id=actor.request.identity_id,
         correlation_id=actor.request.correlation_id,
-        payload={"amount": body.amount, "reason": body.reason, "idempotency_key": body.idempotency_key},
+        payload={"amount": body.amount, "reason": body.reason, "idempotency_key": body.idempotency_key,
+                 "manual": body.manual},
         expected_version=body.version,
     )
     await session.commit()

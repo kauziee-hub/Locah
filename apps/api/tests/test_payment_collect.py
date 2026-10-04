@@ -556,12 +556,15 @@ def _retry_due(event_id: str) -> int:
 
     sql("update payments_webhook_receipts set next_attempt_at = now() - interval '1 second' "
         "where provider_event_id = :e", e=event_id)
+    receipt = uuid.UUID(str(sql("select id from payments_webhook_receipts where provider_event_id = :e",
+                                e=event_id)[0][0]))
 
     async def run() -> int:
         engine = create_async_engine(db_url(), poolclass=NullPool)
         try:
             async with AsyncSession(engine) as session:
-                return await PaymentWebhookService.run_due(session, "test-worker")
+                # Only this test's receipt: the test database is shared by parallel tests.
+                return await PaymentWebhookService.run_due(session, "test-worker", only=[receipt])
         finally:
             await engine.dispose()
 

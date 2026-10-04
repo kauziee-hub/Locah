@@ -301,3 +301,63 @@ async def create_route_order(
         fee_paise,
         f"Razorpay returned {resp.status_code} creating an order: {_razorpay_error_description(resp.text)}",
     )
+
+
+@dataclass(frozen=True)
+class RefundResult:
+    """What Razorpay said to a refund request: accepted with its refund id and
+    status ("pending" / "processed"), or refused with the reason."""
+
+    ok: bool
+    refund_id: str | None
+    status: str
+    detail: str
+
+
+async def create_refund(
+    *,
+    payment_reference: str,
+    amount: Decimal,
+    receipt: str,
+    notes: dict[str, str] | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> RefundResult:
+    """Refund a captured Route payment from the platform account.
+
+    `reverse_all` takes the business's transferred share back from its linked
+    account, so the refund does not come out of the platform's fee balance.
+    The outcome arrives later as a `refund.processed` / `refund.failed` webhook.
+    """
+    creds = platform_credentials()
+    if creds is None:
+        return RefundResult(False, None, "failed", "Platform Razorpay credentials are not configured.")
+    if not payment_reference.startswith("pay_"):
+        return RefundResult(False, None, "failed",
+                            "This payment has no Razorpay payment id yet, so it cannot be refunded online.")
+    body: dict[str, Any] = {
+        "amount": _to_paise(amount),
+        "speed": "normal",
+        "receipt": receipt[:40],
+        "notes": notes or {},
+        "reverse_all": 1,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, transport=transport) as client:
+            resp = await client.post(
+                f"{_V1}/payments/{payment_reference}/refund",
+                json=body,
+                auth=(creds.key_id, creds.key_secret),
+            )
+    except httpx.TimeoutException:
+        return RefundResult(False, None, "failed", "Razorpay did not respond in time. Try again.")
+    except httpx.HTTPError as exc:
+        return RefundResult(False, None, "failed", f"Could not reach Razorpay: {exc}")
+    if resp.status_code in {200, 201}:
+        data = resp.json()
+        refund_id = str(data.get("id") or "")
+        if not refund_id:
+            return RefundResult(False, None, "failed", "Razorpay accepted the refund without an id.")
+        return RefundResult(True, refund_id, str(data.get("status") or "pending"), "ok")
+    return RefundResult(False, None, "failed",
+                        f"Razorpay refused the refund ({resp.status_code}): "
+                        f"{_razorpay_error_description(resp.text)}")

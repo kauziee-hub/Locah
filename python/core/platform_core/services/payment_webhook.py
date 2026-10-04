@@ -122,6 +122,8 @@ class PaymentWebhookService:
         await session.flush()  # the attempt counts even if what follows rolls back
         payload = dict(receipt.raw_payload or {})
         event = normalize_payment_event(provider, payload)
+        if event.get("refund_reference"):
+            return await PaymentWebhookService._attempt_refund(session, receipt, event, correlation_id=correlation_id)
         target = str(event.get("status") or "").lower()
         if not (event.get("payment_id") or event.get("order_id")) or not target:
             return await PaymentWebhookService._close(receipt, "ignored", "Missing payment_id/order_id or status")
@@ -157,6 +159,46 @@ class PaymentWebhookService:
         receipt.last_error = None
         await session.flush()
         return {"status": "processed", "event_id": event_id, "payment_id": str(payment_id)}
+
+    @staticmethod
+    async def _attempt_refund(session: AsyncSession, receipt: PaymentWebhookReceipt, event: dict[str, Any], *,
+                              correlation_id: str) -> dict[str, Any]:
+        """The provider's outcome for a refund LOCAH asked it to make."""
+        from platform_core.models import PaymentRefund
+        from platform_core.services.refund import RefundService
+
+        outcome = {"succeeded": "succeeded", "processed": "succeeded", "failed": "failed"}.get(
+            str(event.get("refund_status") or "").lower())
+        if outcome is None:
+            return await PaymentWebhookService._close(receipt, "ignored", "Refund event without a final status")
+        reference = str(event["refund_reference"])
+        try:
+            async with session.begin_nested():
+                refund = (await session.execute(select(PaymentRefund).where(
+                    PaymentRefund.provider_reference == reference))).scalars().first()
+                if refund is None:
+                    raise NotYet("Refund not found yet")
+                payment_id = refund.payment_attempt_id
+                settled = await RefundService.settle_provider_refund(
+                    session, refund=refund, outcome=outcome, failure_reason=event.get("failure_reason"),
+                    correlation_id=correlation_id)
+        except NotYet as exc:
+            return await PaymentWebhookService._retry(session, receipt, str(exc), payment_id=None)
+        except PlatformError as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            return await PaymentWebhookService._close(receipt, "failed", str(detail.get("message") or exc),
+                                                      refused=True)
+        except Exception as exc:  # noqa: BLE001 — anything else is worth another try
+            logger.error("payment_webhook.refund_processing_failed", provider=receipt.provider,
+                         event_id=receipt.provider_event_id, correlation_id=correlation_id, exc_info=exc)
+            return await PaymentWebhookService._retry(session, receipt, f"{type(exc).__name__}: {exc}", payment_id=None)
+        receipt.status = "processed"
+        receipt.processed_at = datetime.now(timezone.utc)
+        receipt.payment_attempt_id = payment_id
+        receipt.next_attempt_at = None
+        receipt.last_error = None
+        await session.flush()
+        return {"status": "processed", "event_id": receipt.provider_event_id, "refund": settled}
 
     @staticmethod
     async def _find_payment(session: AsyncSession, event: dict[str, Any]) -> PaymentAttempt | None:
@@ -294,16 +336,21 @@ class PaymentWebhookService:
 
     # ------------------------------------------------------------------ retry lane
     @staticmethod
-    async def run_due(session: AsyncSession, worker_id: str, *, limit: int = 20) -> int:
+    async def run_due(session: AsyncSession, worker_id: str, *, limit: int = 20,
+                      only: list[uuid.UUID] | None = None) -> int:
         """Apply receipts whose next try is due. Each is locked (SKIP LOCKED) and
-        committed on its own, so one failure never undoes another's success."""
+        committed on its own, so one failure never undoes another's success.
+        `only` narrows the lane to given receipts (operators, tests)."""
         done = 0
         for _ in range(limit):
+            query = select(PaymentWebhookReceipt).where(
+                PaymentWebhookReceipt.status.in_(("received", "retrying")),
+                PaymentWebhookReceipt.next_attempt_at <= datetime.now(timezone.utc),
+            )
+            if only is not None:
+                query = query.where(PaymentWebhookReceipt.id.in_(only))
             receipt = (await session.execute(
-                select(PaymentWebhookReceipt).where(
-                    PaymentWebhookReceipt.status.in_(("received", "retrying")),
-                    PaymentWebhookReceipt.next_attempt_at <= datetime.now(timezone.utc),
-                ).order_by(PaymentWebhookReceipt.next_attempt_at).limit(1).with_for_update(skip_locked=True)
+                query.order_by(PaymentWebhookReceipt.next_attempt_at).limit(1).with_for_update(skip_locked=True)
             )).scalars().first()
             if receipt is None:
                 break

@@ -200,6 +200,8 @@ _CATALOGUE: dict[str, frozenset[str]] = {
             "payment.completed",
             "payment.failed",
             "payment.refunded",
+            "payment.refund_requested",
+            "payment.refund_failed",
             "payment.updated",
             "payment.webhook_processed",
             "payment.merchant.updated",

@@ -43,32 +43,40 @@ export function MarkReceived({ businessId, paymentId, amount }: { businessId: st
 
 const REASONS = ['Order cancelled', 'Item not available', 'Customer returned it', 'Paid twice', 'Charged too much']
 
+type RefundAnswer = { refund?: { status: string; kind: string; failure_reason: string | null } }
+
 /**
- * Record money given back. LOCAH records the refund (and keeps the order and
- * totals right); the money itself goes back the way the owner chooses.
+ * Give money back. An online payment a provider collected is refunded THROUGH
+ * that provider (LOCAH asks it; the refund shows "in progress" until the
+ * provider confirms). Anything else — or an online payment the owner already
+ * gave back another way — is recorded: LOCAH moves no money then.
  */
 export function RefundForm({
   businessId,
   paymentId,
   refundable,
-  online,
+  viaProvider,
 }: {
   businessId: string
   paymentId: string
   refundable: number
-  online: boolean
+  /** An online payment a provider collected: refunds go through the provider. */
+  viaProvider: boolean
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [amount, setAmount] = useState(String(refundable))
   const [reason, setReason] = useState('')
   const [other, setOther] = useState('')
+  const [manual, setManual] = useState(!viaProvider)
   const [step, setStep] = useState<'form' | 'confirm' | 'done'>('form')
+  const [outcome, setOutcome] = useState<'recorded' | 'processing' | 'succeeded'>('recorded')
   const [error, setError] = useState<string | null>(null)
   // One key for this form: a double-click or a retry records the refund once.
   const [key, setKey] = useState(() => crypto.randomUUID())
   const value = Number(amount)
   const why = reason === 'Other' ? other.trim() : reason
+  const throughProvider = viaProvider && !manual
   const invalid = !(value > 0) ? 'Enter how much to refund.'
     : value > refundable ? `You can refund up to ${rupees(refundable)}.`
     : !why ? 'Choose why you are refunding.'
@@ -77,12 +85,18 @@ export function RefundForm({
   if (step === 'done') {
     return (
       <section className="bos-card bos-pay__action" aria-live="polite">
-        <h2>Refund recorded</h2>
-        <p className="bos-hint">{rupees(value)} is recorded as refunded.</p>
+        <h2>{outcome === 'processing' ? 'Refund requested' : outcome === 'succeeded' ? 'Refunded' : 'Refund recorded'}</h2>
+        <p className="bos-hint">
+          {outcome === 'processing'
+            ? `The payment provider accepted the refund of ${rupees(value)}. It shows as in progress here until the provider confirms it has gone back to the customer — usually within 5–7 working days.`
+            : outcome === 'succeeded'
+              ? `The payment provider has sent ${rupees(value)} back to the customer.`
+              : `${rupees(value)} is recorded as given back. LOCAH did not move this money — you did.`}
+        </p>
         <button type="button" className="btn-ghost" onClick={() => {
           setStep('form')
           setKey(crypto.randomUUID())
-        }}>Record another refund</button>
+        }}>Another refund</button>
       </section>
     )
   }
@@ -91,8 +105,8 @@ export function RefundForm({
     <section className="bos-card bos-pay__action" aria-labelledby="pay-refund">
       <h2 id="pay-refund">Refund</h2>
       <p className="bos-hint">
-        {online
-          ? 'Send the money back to the customer, then record it here so the order and your totals stay right.'
+        {throughProvider
+          ? 'LOCAH asks the payment provider to send the money back to the customer’s card or UPI.'
           : 'Give the money back (cash, UPI or bank transfer), then record it here so the order and your totals stay right.'}
       </p>
       {step === 'form' ? (
@@ -109,6 +123,12 @@ export function RefundForm({
             <input aria-label="Reason" maxLength={200} placeholder="Say why" value={other}
                    onChange={(e) => setOther(e.target.value)} />
           ) : null}
+          {viaProvider ? (
+            <label className="bos-field__check">
+              <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />{' '}
+              I already gave it back myself (cash, UPI or bank) — just record it
+            </label>
+          ) : null}
           {invalid && (amount !== String(refundable) || reason) ? <p className="bos-fieldhelp">{invalid}</p> : null}
           <div>
             <button type="button" disabled={!!invalid} onClick={() => { setError(null); setStep('confirm') }}>
@@ -118,20 +138,33 @@ export function RefundForm({
         </div>
       ) : (
         <div className="bos-pay__confirm" role="group" aria-label="Confirm the refund">
-          <p><strong>Record a refund of {rupees(value)}?</strong> Reason: {why}. This can&apos;t be undone.</p>
+          <p>
+            <strong>{throughProvider ? `Ask the provider to refund ${rupees(value)}?` : `Record a refund of ${rupees(value)}?`}</strong>{' '}
+            Reason: {why}. This can&apos;t be undone.
+          </p>
           <button type="button" className="btn-danger" disabled={pending} onClick={() => {
             setError(null)
             start(async () => {
-              const r = await recordRefund(businessId, paymentId, { amount: value, reason: why, idempotency_key: key })
+              const r = await recordRefund(businessId, paymentId,
+                { amount: value, reason: why, idempotency_key: key, manual: !throughProvider })
               if (!r.ok) {
                 setError(r.message)
                 return
               }
+              const refund = (r.data as RefundAnswer | undefined)?.refund
+              if (refund?.status === 'failed') {
+                // Nothing moved. A fresh key lets the owner try again or record it another way.
+                setError(`The payment provider did not accept the refund: ${refund.failure_reason ?? 'no reason given'}. Nothing was refunded.`)
+                setKey(crypto.randomUUID())
+                setStep('form')
+                return
+              }
+              setOutcome(refund?.kind === 'provider' ? (refund.status === 'succeeded' ? 'succeeded' : 'processing') : 'recorded')
               setStep('done')
               router.refresh()
             })
           }}>
-            {pending ? 'Recording…' : `Record refund of ${rupees(value)}`}
+            {pending ? 'Sending…' : throughProvider ? `Refund ${rupees(value)}` : `Record refund of ${rupees(value)}`}
           </button>
           <button type="button" className="btn-ghost" disabled={pending} onClick={() => setStep('form')}>Back</button>
         </div>

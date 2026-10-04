@@ -103,6 +103,8 @@ class PaymentResolver:
             "reason": refund.reason,
             "provider_reference": refund.provider_reference,
             "failure_reason": refund.failure_reason,
+            "kind": refund.kind,
+            "completed_at": refund.completed_at.isoformat() if refund.completed_at else None,
             "version": refund.version,
             "created_at": refund.created_at.isoformat(),
             "updated_at": refund.updated_at.isoformat(),

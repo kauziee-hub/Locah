@@ -67,9 +67,19 @@ def normalize_payment_event(provider: str, payload: dict[str, Any]) -> dict[str,
             "provider_reference": payload.get("provider_reference"),
             "failure_code": payload.get("failure_code"),
             "failure_reason": payload.get("failure_reason"),
+            # A refund's outcome: the provider's refund reference and its final status.
+            "refund_reference": payload.get("refund_reference"),
+            "refund_status": payload.get("refund_status"),
         }
 
     event = str(payload.get("event") or "")
+    if event.startswith("refund."):
+        refund = ((payload.get("payload") or {}).get("refund") or {}).get("entity") or {}
+        return {
+            "refund_reference": refund.get("id"),
+            "refund_status": {"refund.processed": "succeeded", "refund.failed": "failed"}.get(event),
+            "failure_reason": refund.get("error_description") or (refund.get("notes") or {}).get("failure"),
+        }
     payment_entity = ((payload.get("payload") or {}).get("payment") or {}).get("entity") or {}
     order_entity = ((payload.get("payload") or {}).get("order") or {}).get("entity") or {}
     entity = payment_entity or order_entity

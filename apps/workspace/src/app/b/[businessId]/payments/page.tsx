@@ -46,7 +46,7 @@ type Overview = {
   counter_upi_to_verify: number
   needs_attention: Row[]
   owed: { total: number; rows: Owed[] }
-  refunds: { id: string; amount: number; status: string; reason: string | null; created_at: string; source_type: string; source_id: string }[]
+  refunds: { id: string; amount: number; status: string; reason: string | null; created_at: string; source_type: string; source_id: string; kind?: string; failure_reason?: string | null }[]
 }
 
 type MerchantConnection = {
@@ -64,7 +64,11 @@ type MerchantConnection = {
   provider_metadata?: { mode?: string; connection_mode?: string }
 } | null
 
-const REFUND_WORDS: Record<string, string> = { succeeded: 'Refunded', pending: 'Being refunded', processing: 'Being refunded', failed: 'Refund failed' }
+function refundWords(r: { status: string; kind?: string }): string {
+  if (r.status === 'failed') return 'Refund failed'
+  if (r.kind === 'provider') return r.status === 'succeeded' ? 'Refunded by the provider' : 'Refund in progress'
+  return 'Recorded — you gave it back'
+}
 /**
  * Money in (Founder refinement — Payments §14): what arrived today, what is
  * waiting for you to confirm, what failed and needs you, who still owes what,
@@ -168,6 +172,8 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
                       ? 'Paid twice on the same link — refund the extra payment.'
                       : a.attention === 'refund_due'
                         ? 'The order was cancelled — refund what was paid.'
+                      : a.attention === 'refund_failed'
+                        ? 'The payment provider could not complete a refund — nothing went back. Open it to refund again or record that you gave it back.'
                       : a.attention === 'provider_update_failed'
                         ? 'An update from the payment provider could not be applied after several tries — check this payment in your provider dashboard. It is also listed for the LOCAH team.'
                       : a.failure_reason || 'Payment failed.'}
@@ -209,7 +215,7 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
               <li key={r.id}>
                 <div>
                   <strong>{rupees(r.amount)}</strong>
-                  <p>{r.reason || 'Refund'} · {REFUND_WORDS[r.status] || 'Being processed'}</p>
+                  <p>{r.reason || 'Refund'} · {refundWords(r)}{r.status === 'failed' && r.failure_reason ? ` — ${r.failure_reason}` : ''}</p>
                 </div>
                 <Link href={sourceHref(params.businessId, r.source_type, r.source_id)}>Open</Link>
               </li>
