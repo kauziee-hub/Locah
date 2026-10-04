@@ -82,6 +82,19 @@ def test_salon_with_services_is_told_to_take_bookings_and_plan_its_people(monkey
 
 
 @needs_db
+def test_home_service_is_told_to_book_visits_and_run_field_jobs(monkeypatch: Any) -> None:
+    owner, bid = _business(monkeypatch, "home_services", "ac_service", "offerings-catalog")
+    for service in ("AC gas refill", "AC deep cleaning", "AC installation"):
+        _offering(owner, bid, service, "service", attributes={"duration_minutes": 60})
+    data = _for_you(owner, bid)
+    names = _modules(data)
+    assert names[0] == "bookings" and _card(data, "bookings")["reason"].startswith("You list 3 services")
+    assert {"jobs", "dispatch", "workforce"} <= set(names)  # work happens at the customer's place
+    assert "the customer's place" in _card(data, "jobs")["reason"]
+    assert not {"orders", "kitchen", "pos"} & set(names)  # no cart, no kitchen, no counter
+
+
+@needs_db
 def test_clothing_shop_with_sizes_is_told_to_track_stock(monkeypatch: Any) -> None:
     owner, bid = _business(monkeypatch, "retail", "clothing", "offerings-catalog")
     _offering(owner, bid, "Cotton kurta", "product", track_inventory=True)

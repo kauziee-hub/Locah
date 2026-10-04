@@ -457,6 +457,7 @@ class BusinessInterviewOrchestrator:
             r"write (?:a|some) code|ignore .*instructions)\b",
             text, re.I,
         ))
+        meta = "" if field or off_topic else _meta_question(text)
         signal = ti.owner_signal
         if signal == "none":
             signal = "wants_to_finish" if reading.finish else "redundant" if reading.redundant else "none"
@@ -468,7 +469,10 @@ class BusinessInterviewOrchestrator:
         source = "USER_STATEMENT" if field or fallback else "AI_EXTRACTION"
         # What a correction changes is said back ("Updated — hours: …").
         said_before = {k: f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items() if k in UPDATED_FACT}
-        if not off_topic:
+        from platform_core.interview.understanding import offer_groups
+
+        groups_before = {g["name"].casefold() for g in offer_groups(bp)}
+        if not off_topic and not meta:
             understood += _merge_facts(bp, ti, text, source)
             if field:
                 target = next((t for t in TARGETS if t.fact == field), None)
@@ -547,7 +551,17 @@ class BusinessInterviewOrchestrator:
         next_item: planner.Ranked | None = None
         question = ""
         asked_name = False
-        if built and not off_topic:
+        added = [g["name"] for g in offer_groups(bp) if g["name"].casefold() not in groups_before]
+        if meta:
+            answer = _answer_meta(bp, meta, lang, business_type)
+            pending = ""
+            if not built and not bp.readiness.ready:
+                next_item = planner.choose(bp, "", business_type)
+                pending = planner.phrase(next_item.ask, bp, lang) if next_item else ""
+            elif not built:
+                pending = planner.READY_AGAIN[lang]
+            reply = " ".join(p for p in (answer, pending) if p)
+        elif built and not off_topic:
             reply = " ".join(p for p in (ack if understood else "", media_note,
                                          planner.UPDATED[lang] if understood else planner.HELP_EDIT[lang]) if p)
         elif name_question and signal != "wants_to_finish":
@@ -575,9 +589,14 @@ class BusinessInterviewOrchestrator:
             if bp.refining:
                 next_item = planner.choose(bp, ti.next_target, business_type)
                 question = _question(bp, ti, next_item, text, lang) if next_item else planner.NOTHING_LEFT[lang]
+            elif added:
+                # Say back what was added, by name ("Added sandwiches.").
+                question = planner.ADDED_THESE[lang].format(items=_join_words(added[:4], lang)) + " " + \
+                    planner.READY_AGAIN[lang]
             else:
-                question = planner.AFTER_READY[lang]
-            opener = NO_PROBLEM[lang] if reading.decline and all(a.status == "declined" for a in ti.answered) else ack
+                question = planner.AFTER_READY[lang] if understood else planner.READY_AGAIN[lang]
+            opener = NO_PROBLEM[lang] if reading.decline and all(a.status == "declined" for a in ti.answered) else (
+                ack if understood and not added else "")
             reply = " ".join(p for p in (opener, media_note, question) if p)
         else:
             next_item = planner.choose(bp, ti.next_target, business_type)
@@ -1056,6 +1075,12 @@ def _read_for_question(
     if not model_ok and lead not in {"offerings.main", "offerings.structure"} and rd.group_items(text):
         # "Chicken - curry cut, boneless. Mutton - chops" is the range, whatever was asked.
         understood_any = offer([], rd.group_items(text)) or understood_any
+    if not model_ok and lead not in {"offerings.main", "offerings.structure", "business.identity"}:
+        # Explicit additions to the range are accepted whatever question was
+        # pending. A bare noun answer still belongs only to an offerings ask.
+        volunteered = rd.offer_statement(text) or rd.ta_offer_list(text)
+        if volunteered:
+            understood_any = offer(volunteered, rd.group_items(text)) or understood_any
     has_place_cue = re.search(r"\b(located|based|we are in|we're in|shop is (?:in|at|on)|address)\b", text, re.I)
     if not _answered(ti, "contact.location") and lead != "contact.location" and (
             has_place_cue or (reading.phone and rd._PLACE_WORDS.search(text))):
@@ -1239,3 +1264,92 @@ def _record_media_intent(bp: BusinessBlueprint, intent: str, image_available: bo
         reason="Image generation isn't available on this environment right now.",
     ))
     return LOGO_UNAVAILABLE[lang] if role == "logo" else ""
+
+
+# ---------------------------------------------------------------- questions about the conversation
+_RECAP = re.compile(
+    r"\b(what (?:have|did) you (?:understood?|got|learn(?:ed|t)?|note[d]?)|what do you (?:know|have) "
+    r"(?:about|so far)|summari[sz]e|recap|what('?s| is) (?:my|the) (?:info|details))\b"
+    r"|enna purinjudhu|enna therinjudhu|ippo varaikkum enna|என்ன புரிஞ்சுது|என்ன புரிந்தது|இதுவரை என்ன",
+    re.I)
+_TOOLS = re.compile(
+    r"\b((?:which|what) (?:tools?|modules?|features?)\b.*\b(?:help|need|use|should|recommend|useful)|"
+    r"what should i (?:turn on|enable|switch on|use)|(?:recommend|suggest) (?:some )?(?:tools?|modules?|features?)|"
+    r"which tools?|what tools?)"
+    r"|enna tools?|edhu useful|என்ன கருவிகள்|எது பயனுள்ள",
+    re.I)
+
+
+def _meta_question(text: str) -> str:
+    """'recap' or 'tools' when the owner asks about the conversation itself, else ''."""
+    said = re.sub(r"^please\s+", "", " ".join(text.split()), flags=re.I)
+    if len(said) > 160:
+        return ""
+    if _RECAP.match(said):
+        return "recap"
+    if _TOOLS.match(said):
+        return "tools"
+    return ""
+
+
+def _join_words(items: list[str], lang: str) -> str:
+    items = [i.lower() if i[:1].isupper() and len(i.split()) == 1 else i for i in items]
+    if len(items) <= 1:
+        return "".join(items)
+    tail = " and " if lang == "en" else ", "
+    return ", ".join(items[:-1]) + tail + items[-1]
+
+
+RECAP_INTRO = {"en": "Here's what I have so far:", "ta_en": "Ippo varaikkum enakku therinjadhu:",
+               "ta": "இதுவரை எனக்குத் தெரிந்தது:"}
+RECAP_NOTHING = {"en": "I don't know much yet — tell me what your business does.",
+                 "ta_en": "Innum adhigam theriyala — unga business enna pannudhu-nu sollunga.",
+                 "ta": "இன்னும் அதிகம் தெரியலை — உங்க தொழில் என்ன செய்யுது-ன்னு சொல்லுங்க."}
+TOOLS_INTRO = {"en": "From what you've told me, these would help most:",
+               "ta_en": "Neenga sonnadha vechu, idhu ellaam useful-aa irukkum:",
+               "ta": "நீங்க சொன்னதை வைத்து, இவை உதவும்:"}
+TOOLS_NOTHING = {"en": "Tell me a little more about how customers buy from you, and I'll suggest the tools that fit.",
+                 "ta_en": "Customers eppadi vaanguvaanga-nu konjam sollunga, appo sariyaana tools sollren.",
+                 "ta": "வாடிக்கையாளர்கள் எப்படி வாங்குவாங்க-ன்னு கொஞ்சம் சொல்லுங்க, பொருத்தமான கருவிகளைச் சொல்றேன்."}
+TOOLS_AFTER = {"en": "Nothing turns on until you choose it in Tools.",
+               "ta_en": "Neenga Tools-la choose pannaama edhuvum on aagaadhu.",
+               "ta": "நீங்க தேர்ந்தெடுக்காம எதுவும் இயங்காது."}
+
+
+def _answer_meta(bp: BusinessBlueprint, meta: str, lang: str, business_type: str | None) -> str:
+    """Answer "what have you understood?" and "which tools would help?" from what
+    is actually known — never by guessing, never by switching anything on."""
+    from platform_core.interview.understanding import read_back, synthesis
+
+    if meta == "recap":
+        said = read_back(bp, "checkpoint") if lang == "en" else ""
+        said = said or synthesis(bp, lang)
+        if not said:
+            return RECAP_NOTHING[lang]
+        name = bp.identity.get("display_name")
+        if name and name.value and name.value not in said:
+            said = f"{name.value} — {said}"
+        facts = {**bp.known_facts, **bp.unconfirmed_facts}
+        extra = []
+        hours = facts.get("opening_hours")
+        if hours and hours.value and lang == "en":
+            extra.append(f"Hours: {hours.value}.")
+        return " ".join([RECAP_INTRO[lang], said.rstrip(".") + "."] + extra)
+    from platform_core.interview.capabilities import FRIENDLY, ModuleRegistry, recommend
+
+    picks = [(r.label, r.reason, r.strength) for r in bp.recommended_modules
+             if r.choice != "declined" and r.strength != "dependency"]
+    if not picks:
+        # The API fills entitlement-aware cards after a turn. During the turn,
+        # use the same evidence reader for advice, without claiming activation
+        # or changing any previously declined choice.
+        picks = [(FRIENDLY.get(key, definition.display_name), reason, strength)
+                 for key, (strength, reason, _, _) in recommend(bp, business_type).items()
+                 if key not in bp.declined_modules and (definition := ModuleRegistry.get(key))]
+    picks.sort(key=lambda r: 0 if r[2] == "strong" else 1)
+    if not picks:
+        return TOOLS_NOTHING[lang]
+    lines = [f"{label} — {reason.rstrip('.')}." if lang == "en" else label
+             for label, reason, _ in picks[:3]]
+    return " ".join([TOOLS_INTRO[lang], " ".join(lines) if lang == "en" else ", ".join(lines) + ".",
+                     TOOLS_AFTER[lang]])

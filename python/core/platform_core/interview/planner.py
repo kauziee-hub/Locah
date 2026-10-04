@@ -411,6 +411,18 @@ AFTER_READY = {
     "ta_en": "Seri, add pannitten. Ready-na build pannalaam — vera edhaavadhu venumnaalum sollunga.",
     "ta": "சேர்த்துட்டேன். தயாரா இருந்தா உருவாக்கலாம் — வேற ஏதாவது வேணும்னாலும் சொல்லுங்க.",
 }
+# After the first version is possible, a message that added nothing new.
+READY_AGAIN = {
+    "en": "Build whenever you're ready — or tell me anything else you'd like on the site.",
+    "ta_en": "Ready-na build pannalaam — vera edhaavadhu venumnaalum sollunga.",
+    "ta": "தயாரா இருந்தா உருவாக்கலாம் — வேற ஏதாவது வேணும்னாலும் சொல்லுங்க.",
+}
+# Something new was added: said back by name.
+ADDED_THESE = {
+    "en": "Added {items}.",
+    "ta_en": "{items} add pannitten.",
+    "ta": "{items} சேர்த்துட்டேன்.",
+}
 NOTHING_LEFT = {
     "en": "That's everything I'd want to know — build whenever you're ready.",
     "ta_en": "Enakku therinjukka vendiyadhu ellaam therinjiduchu — ready-na build pannalaam.",

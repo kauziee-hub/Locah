@@ -392,6 +392,7 @@ def offer_statement(text: str) -> list[str]:
         listed = listed[:stop.start()] if stop else listed
         clause = re.split(r"\b(?:to|for|in|at|from|since|with|which|who|and (?:we|people|customers))\b",
                           listed, maxsplit=1, flags=re.I)[0]
+        clause = re.sub(r"\s+(?:now|too|also)\s*$", "", clause, flags=re.I)
         for name in offering_names(clause):
             if name.casefold() not in {n.casefold() for n in names} and len(name.split()) <= 5:
                 names.append(name)

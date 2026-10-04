@@ -302,7 +302,9 @@ export function DataTable<T>({
               : rows.map((row) => (
                   <tr key={rowKey(row)}>
                     {columns.map((c) => (
-                      <td key={c.key} data-num={c.align === 'num' || undefined}>
+                      // data-label: on a phone each row becomes a card that names its fields.
+                      <td key={c.key} data-num={c.align === 'num' || undefined}
+                          data-label={typeof c.header === 'string' && c.header ? c.header : undefined}>
                         {c.render(row)}
                       </td>
                     ))}

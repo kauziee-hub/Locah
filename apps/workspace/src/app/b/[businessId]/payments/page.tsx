@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
-import { GateNotice, PageHeader, ROW, StatusPill, TABLE, TD, TH } from '@/components/ModuleState'
+import { DataTable, GateNotice, PageHeader, StatusPill } from '@/components/ModuleState'
 import { dayTimeLabel, rupees } from '@/lib/when'
 import { sourceHref } from './links'
 import { RazorpayConnect } from './RazorpayConnect'
@@ -242,33 +242,18 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
       {payments.length ? (
         <details className="bos-section">
           <summary>All payments ({payments.length}{payments.length >= 200 ? ', latest 200' : ''})</summary>
-          <div className="ws-tablewrap" style={{ marginTop: '.8rem' }}>
-            <table style={TABLE}>
-              <thead>
-                <tr>
-                  <th style={TH}>For</th>
-                  <th style={TH}>Amount</th>
-                  <th style={TH}>Method</th>
-                  <th style={TH}>Status</th>
-                  <th style={TH}>When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} style={ROW}>
-                    <td style={TD}>
-                      <Link href={`/b/${params.businessId}/payments/${p.id}`}>{p.for}</Link>
-                    </td>
-                    <td style={{ ...TD, fontVariantNumeric: 'tabular-nums' }}>{rupees(p.amount)}</td>
-                    <td style={TD}>{p.method_label}</td>
-                    <td style={TD}>
-                      <StatusPill value={p.status} label={p.status_label} />
-                    </td>
-                    <td style={TD}>{dayTimeLabel(p.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginTop: '.8rem' }}>
+            <DataTable
+              rows={payments}
+              rowKey={(p) => p.id}
+              columns={[
+                { key: 'for', header: 'For', render: (p) => <Link href={`/b/${params.businessId}/payments/${p.id}`}>{p.for}</Link> },
+                { key: 'amount', header: 'Amount', align: 'num', render: (p) => rupees(p.amount) },
+                { key: 'method', header: 'Method', render: (p) => p.method_label },
+                { key: 'status', header: 'Status', render: (p) => <StatusPill value={p.status} label={p.status_label} /> },
+                { key: 'when', header: 'When', render: (p) => dayTimeLabel(p.created_at) },
+              ]}
+            />
           </div>
         </details>
       ) : null}

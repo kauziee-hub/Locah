@@ -564,7 +564,7 @@ def _retry_due(event_id: str) -> int:
         try:
             async with AsyncSession(engine) as session:
                 # Only this test's receipt: the test database is shared by parallel tests.
-                return await PaymentWebhookService.run_due(session, "test-worker", only=[receipt])
+                return int(await PaymentWebhookService.run_due(session, "test-worker", only=[receipt]))
         finally:
             await engine.dispose()
 
