@@ -64,5 +64,7 @@
 - Payment webhooks are verified, deduplicated and applied within the request;
   failures are recorded on the receipt but are not yet re-queued to the worker or
   surfaced as dead letters.
-- A refund request does not take an idempotency key yet (the amount is still
-  capped by what was paid).
+- Refunds lock the payment, are capped by what was paid, and take an
+  `idempotency_key` (the Workspace sends one per refund form): a retried request
+  returns the refund already made. API callers that omit the key get no retry
+  protection beyond the cap and the optional `version` check.

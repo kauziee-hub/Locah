@@ -1580,6 +1580,8 @@ class PaymentRefund(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The same key on the same payment returns this refund instead of a second one.
+    idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))

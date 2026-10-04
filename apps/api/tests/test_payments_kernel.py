@@ -663,3 +663,39 @@ def test_two_refunds_at_once_never_refund_more_than_was_paid(owner: tuple[dict[s
                p=payment_id)
     refunded = sql("select refunded_amount from payments_payment_attempts where id = :p", p=payment_id)[0][0]
     assert rows[0][0] == 1 and float(rows[0][1]) == part and float(refunded) == part
+
+
+def test_a_retried_refund_with_the_same_key_refunds_once(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    """A double-click or a retried request carries the same idempotency key: the
+    first refund comes back, nothing is refunded twice, and the key cannot be
+    reused for another amount. A new key is a new refund."""
+    from platform_testing.phase_b import sql
+
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    location_id = _primary_location_id(client, headers, business_id)
+    product_id = _create_tracked_product(client, headers, business_id)
+    _stock_product(client, headers, business_id, product_id, location_id)
+    order = _create_order(client, headers, business_id, location_id, product_id)
+    payment_id = client.post(f"/v1/platform/businesses/{business_id}/payments", json={
+        "source_type": "order", "source_id": order["id"], "amount": order["total_amount"],
+        "payment_method": "online"}, headers=headers).json()["data"]["id"]
+    raw = json.dumps({"event_id": str(uuid.uuid4()), "payment_id": payment_id, "status": "succeeded",
+                      "provider_reference": "stub-retry"}).encode()
+    assert client.post("/v1/webhooks/payments/stub", content=raw, headers={
+        "Content-Type": "application/json", "x-payment-signature": _webhook_signature(raw)}).status_code == 200
+    part = round(float(order["total_amount"]) * 0.3, 2)
+    url = f"/v1/platform/businesses/{business_id}/payments/{payment_id}/refunds"
+    body = {"amount": part, "reason": "Customer returned one", "idempotency_key": "refund-form-1"}
+
+    first = client.post(url, json=body, headers=headers)
+    again = client.post(url, json=body, headers=headers)
+    assert first.status_code == 200 and again.status_code == 200, (first.text, again.text)
+    assert again.json()["data"]["refund"]["id"] == first.json()["data"]["refund"]["id"]
+    other = client.post(url, json={**body, "amount": round(part / 2, 2)}, headers=headers)
+    assert other.status_code == 409 and other.json()["error"]["code"] == "CONFLICT"
+    assert client.post(url, json={**body, "idempotency_key": "refund-form-2"}, headers=headers).status_code == 200
+    rows = sql("select count(*) from payments_refunds where payment_attempt_id = cast(:p as uuid)", p=payment_id)
+    refunded = sql("select refunded_amount from payments_payment_attempts where id = cast(:p as uuid)", p=payment_id)
+    assert rows[0][0] == 2 and round(float(refunded[0][0]), 2) == round(part * 2, 2)

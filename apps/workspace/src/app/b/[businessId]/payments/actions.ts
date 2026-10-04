@@ -36,6 +36,7 @@ export async function refundPayment(formData: FormData) {
   await send(`/v1/platform/businesses/${businessId}/payments/${paymentId}/refunds`, 'POST', {
     amount: Number(formData.get('amount')),
     reason: String(formData.get('reason')),
+    idempotency_key: String(formData.get('idempotency_key') || '') || undefined,
   })
   revalidatePath(`/b/${businessId}/payments`)
   revalidatePath(`/b/${businessId}/payments/${paymentId}`)

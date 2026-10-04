@@ -70,6 +70,19 @@ class RefundService:
                 .execution_options(populate_existing=True)
             )
         ).scalars().one()
+        key = str(payload.get("idempotency_key") or "").strip()[:80] or None
+        if key is not None:
+            # A retried or double-clicked request: the refund it already made.
+            # Checked before the version, which the first attempt moved on.
+            done = (await session.execute(select(PaymentRefund).where(
+                PaymentRefund.business_id == business_id, PaymentRefund.payment_attempt_id == payment.id,
+                PaymentRefund.idempotency_key == key))).scalars().first()
+            if done is not None:
+                cent = Decimal("0.01")
+                if Decimal(str(done.amount)).quantize(cent) != Decimal(str(payload.get("amount"))).quantize(cent):
+                    raise ConflictError("This refund request was already used for a different amount",
+                                        details={"refund_id": str(done.id)})
+                return done, payment
         if expected_version is not None and payment.version != expected_version:
             raise ConflictError(
                 "Stale payment version",
@@ -92,6 +105,7 @@ class RefundService:
             amount=float(validated["amount"]),
             status="succeeded",
             reason=validated["reason"],
+            idempotency_key=key,
         )
         session.add(refund)
         payment.refunded_amount = float(

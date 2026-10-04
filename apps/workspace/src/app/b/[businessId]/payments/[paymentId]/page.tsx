@@ -114,6 +114,8 @@ export default async function PaymentDetailPage({
           <form action={refundPayment} style={{ display: 'grid', gap: '0.6rem' }}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="paymentId" value={params.paymentId} />
+            {/* One key per form shown: a double-click or a retried submit refunds once. */}
+            <input type="hidden" name="idempotency_key" value={crypto.randomUUID()} />
             <input
               name="amount"
               type="number"
