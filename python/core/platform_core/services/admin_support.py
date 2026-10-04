@@ -197,9 +197,10 @@ class AdminSupportService:
         dead_letters = (
             await session.execute(
                 text("""
-                    SELECT id, source_table, event_type, final_error, attempt_count, created_at
+                    SELECT id, source_table, source_id, event_type, final_error, attempt_count, created_at,
+                           resolved_at, resolution_note
                     FROM platform_dead_letter_events
-                    ORDER BY created_at DESC
+                    ORDER BY (resolved_at IS NULL) DESC, created_at DESC
                     LIMIT :limit
                 """),
                 {"limit": limit},
@@ -251,10 +252,13 @@ class AdminSupportService:
                 {
                     "id": str(r.id),
                     "source_table": r.source_table,
+                    "source_id": str(r.source_id),
                     "event_type": r.event_type,
                     "final_error": r.final_error,
                     "attempt_count": r.attempt_count,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
+                    "resolution_note": r.resolution_note,
                 }
                 for r in dead_letters
             ],

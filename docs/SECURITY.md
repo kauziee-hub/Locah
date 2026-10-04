@@ -61,9 +61,14 @@
 
 ## Known limits
 
-- Payment webhooks are verified, deduplicated and applied within the request;
-  failures are recorded on the receipt but are not yet re-queued to the worker or
-  surfaced as dead letters.
+- Payment webhooks are verified (an invalid signature is refused and nothing is
+  stored), deduplicated by provider event id, and the receipt is committed before
+  its effect is applied. An effect that cannot be applied yet (the payment is not
+  saved yet, or a transient error) is retried by the worker with backoff (1, 2, 4 …
+  minutes, at most an hour, 8 tries), then dead-lettered: it appears on the admin
+  System page (with Retry) and the payment is flagged on the owner's Payments page.
+  A payment's own rules refusing the update (e.g. a written-off UPI claim) are
+  recorded and not retried.
 - Refunds lock the payment, are capped by what was paid, and take an
   `idempotency_key` (the Workspace sends one per refund form): a retried request
   returns the refund already made. API callers that omit the key get no retry

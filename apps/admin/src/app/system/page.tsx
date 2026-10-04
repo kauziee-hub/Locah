@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
+import { retryPaymentWebhook } from './actions'
 import { AdminNotice, EmptyState, MONO, PageHeader, Pill, ROW, TABLE, TD, TH } from '@/components/AdminNotice'
 
 export const dynamic = 'force-dynamic'
@@ -8,10 +9,13 @@ type SystemHealth = {
   dead_letters: Array<{
     id: string
     source_table: string
+    source_id: string
     event_type: string
     final_error: string | null
     attempt_count: number | null
     created_at: string | null
+    resolved_at: string | null
+    resolution_note: string | null
   }>
   outbox_by_status: Array<{ status: string; count: number; oldest: string | null }>
   failed_jobs: Array<{
@@ -123,6 +127,7 @@ export default async function AdminSystemHealthPage() {
                 <th style={TH}>Event</th>
                 <th style={TH}>Attempts</th>
                 <th style={TH}>Final error</th>
+                <th style={TH}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -135,6 +140,16 @@ export default async function AdminSystemHealthPage() {
                   <td style={{ ...TD, ...MONO }}>{d.event_type}</td>
                   <td style={{ ...TD, fontVariantNumeric: 'tabular-nums' }}>{d.attempt_count ?? '?'}</td>
                   <td style={{ ...TD, opacity: 0.85 }}>{d.final_error ?? '—'}</td>
+                  <td style={TD}>
+                    {d.resolved_at ? (
+                      <span style={{ opacity: 0.7 }}>{d.resolution_note || 'Resolved'}</span>
+                    ) : d.source_table === 'payments_webhook_receipts' ? (
+                      <form action={retryPaymentWebhook}>
+                        <input type="hidden" name="receiptId" value={d.source_id} />
+                        <button type="submit">Retry</button>
+                      </form>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -168,6 +168,8 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
                       ? 'Paid twice on the same link — refund the extra payment.'
                       : a.attention === 'refund_due'
                         ? 'The order was cancelled — refund what was paid.'
+                      : a.attention === 'provider_update_failed'
+                        ? 'An update from the payment provider could not be applied after several tries — check this payment in your provider dashboard. It is also listed for the LOCAH team.'
                       : a.failure_reason || 'Payment failed.'}
                   </p>
                 </div>

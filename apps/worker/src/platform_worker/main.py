@@ -52,6 +52,15 @@ async def _poll_lanes(session_factory: Any, worker_id: str) -> None:
         if schedule_count:
             logger.info("worker.schedules_materialized", count=schedule_count)
 
+    # Payment webhooks whose effect could not be applied yet: retried with
+    # backoff, then dead-lettered — never lost (services/payment_webhook.py).
+    async with session_factory() as session:
+        from platform_core.services.payment_webhook import PaymentWebhookService
+
+        webhook_count = await PaymentWebhookService.run_due(session, worker_id)
+        if webhook_count:
+            logger.info("worker.payment_webhooks_retried", count=webhook_count)
+
     async with session_factory() as session:
         job_count = await poll_and_execute_jobs(session, worker_id)
         if job_count:

@@ -267,3 +267,27 @@ async def admin_system_health(
     """
     health = await AdminSupportService.system_health(session, limit=limit)
     return {"data": health, "meta": {"correlation_id": ctx.correlation_id}}
+
+
+@router.post("/payment-webhooks/{receipt_id}/retry")
+async def admin_retry_payment_webhook(
+    receipt_id: UUID,
+    ctx: RequestContext = Depends(require_super_admin()),
+    session: AsyncSession = Depends(get_service_db_session),
+) -> dict[str, Any]:
+    """Put a dead-lettered payment webhook back into the retry lane (audited)."""
+    from platform_core.services.payment_webhook import PaymentWebhookService
+
+    result = await PaymentWebhookService.requeue(session, receipt_id, actor_id=ctx.identity_id)
+    await AuditService.record(
+        session,
+        event_type="payment.webhook_requeued",
+        actor_identity_id=ctx.identity_id,
+        actor_context="admin",
+        resource_type="payment_webhook",
+        resource_id=receipt_id,
+        action="requeue",
+        after_state=result,
+    )
+    await session.commit()
+    return {"data": result, "meta": {"correlation_id": ctx.correlation_id}}

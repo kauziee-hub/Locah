@@ -527,3 +527,156 @@ def test_a_business_without_the_counter_sets_its_upi_id_from_payments(monkeypatc
     assert ok.status_code == 200, ok.text
     assert client.get(base, headers=owner).json()["data"]["upi_vpa"] == "nilacafe@okicici"
     assert sql("select upi_vpa from pos_settings where business_id = cast(:b as uuid)", b=bid) == [("nilacafe@okicici",)]
+
+
+# ---------------------------------------------------------------- webhooks are kept and retried
+def _signed(body: dict[str, Any]) -> tuple[bytes, dict[str, str]]:
+    raw = json.dumps(body).encode()
+    sig = hmac.new(WEBHOOK_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+    return raw, {"Content-Type": "application/json", "x-payment-signature": sig}
+
+
+def _receipt(event_id: str) -> dict[str, Any]:
+    rows = sql("select status, attempt_count, last_error, cast(payment_attempt_id as text) "
+               "from payments_webhook_receipts where provider_event_id = :e", e=event_id)
+    assert rows, f"no receipt kept for {event_id}"
+    status, attempts, error, payment = rows[0]
+    return {"status": status, "attempts": attempts, "error": error, "payment": payment}
+
+
+def _retry_due(event_id: str) -> int:
+    """Make the receipt due now and run the worker's retry lane once."""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from platform_core.services.payment_webhook import PaymentWebhookService
+    from platform_testing.phase_b import db_url
+
+    sql("update payments_webhook_receipts set next_attempt_at = now() - interval '1 second' "
+        "where provider_event_id = :e", e=event_id)
+
+    async def run() -> int:
+        engine = create_async_engine(db_url(), poolclass=NullPool)
+        try:
+            async with AsyncSession(engine) as session:
+                return await PaymentWebhookService.run_due(session, "test-worker")
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run())
+
+
+def _paid_attempt(monkeypatch: Any) -> tuple[dict[str, str], dict[str, Any], str]:
+    owner, shop = _shop(monkeypatch)
+    order = _order(owner, shop)
+    link = _ask(owner, shop, "order", order["id"], 1000, "full")
+    return owner, shop, _online_attempt(shop, order["id"], link["id"], 1000)
+
+
+@DB
+def test_a_webhook_is_kept_applied_once_and_a_bad_signature_keeps_nothing(monkeypatch: Any) -> None:
+    _, _, payment = _paid_attempt(monkeypatch)
+    event = str(uuid.uuid4())
+    raw, headers = _signed({"event_id": event, "payment_id": payment, "status": "succeeded",
+                            "provider_reference": "pay_123"})
+    first = client.post("/v1/webhooks/payments/stub", content=raw, headers=headers)
+    assert first.status_code == 200 and first.json()["data"]["status"] == "processed", first.text
+    again = client.post("/v1/webhooks/payments/stub", content=raw, headers=headers)
+    assert again.status_code == 200 and again.json()["data"]["status"] == "duplicate"
+    assert _receipt(event)["status"] == "processed" and _receipt(event)["attempts"] == 1
+    assert sql("select status from payments_payment_attempts where id = cast(:p as uuid)", p=payment) == [("succeeded",)]
+
+    forged = client.post("/v1/webhooks/payments/stub", content=raw.replace(b"succeeded", b"failed"),
+                         headers=headers)
+    assert forged.status_code in (400, 422)
+    assert sql("select count(*) from payments_webhook_receipts where provider_event_id = :e", e=event) == [(1,)]
+
+
+@DB
+def test_an_event_that_arrives_before_its_payment_is_retried_until_it_applies(monkeypatch: Any) -> None:
+    """Out of order: the provider's success lands before LOCAH saved the attempt."""
+    owner, shop = _shop(monkeypatch)
+    order = _order(owner, shop)
+    link = _ask(owner, shop, "order", order["id"], 1000, "full")
+    early = str(uuid.uuid4())
+    event = str(uuid.uuid4())
+    raw, headers = _signed({"event_id": event, "payment_id": early, "status": "succeeded"})
+    r = client.post("/v1/webhooks/payments/stub", content=raw, headers=headers)
+    assert r.status_code == 200 and r.json()["data"]["status"] == "retrying", r.text  # kept, not bounced
+    assert _receipt(event)["status"] == "retrying"
+    sql("INSERT INTO payments_payment_attempts (id, business_id, source_type, source_id, amount, payment_method, "
+        "status, provider, request_id, purpose) VALUES (CAST(:id AS uuid), CAST(:b AS uuid), 'order', "
+        "CAST(:o AS uuid), 1000, 'online', 'processing', 'stub', CAST(:r AS uuid), 'full')",
+        id=early, b=shop["bid"], o=order["id"], r=link["id"])
+    assert _retry_due(event) == 1
+    assert _receipt(event)["status"] == "processed" and _receipt(event)["attempts"] == 2
+    assert sql("select payment_status from orders_orders where id = cast(:o as uuid)", o=order["id"]) == [("paid",)]
+
+
+@DB
+def test_a_transient_failure_is_retried_and_succeeds(monkeypatch: Any) -> None:
+    from platform_core.services.payment_attempt import PaymentAttemptService
+
+    _, _, payment = _paid_attempt(monkeypatch)
+    real = PaymentAttemptService.apply_status
+
+    async def flaky(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("database briefly unavailable")
+
+    monkeypatch.setattr(PaymentAttemptService, "apply_status", flaky)
+    event = str(uuid.uuid4())
+    raw, headers = _signed({"event_id": event, "payment_id": payment, "status": "succeeded"})
+    r = client.post("/v1/webhooks/payments/stub", content=raw, headers=headers)
+    assert r.status_code == 200 and r.json()["data"]["status"] == "retrying", r.text
+    kept = _receipt(event)
+    assert kept["status"] == "retrying" and "briefly unavailable" in kept["error"]
+    assert sql("select status from payments_payment_attempts where id = cast(:p as uuid)", p=payment) == [("processing",)]
+
+    monkeypatch.setattr(PaymentAttemptService, "apply_status", real)
+    assert _retry_due(event) == 1
+    assert _receipt(event)["status"] == "processed"
+    assert sql("select status from payments_payment_attempts where id = cast(:p as uuid)", p=payment) == [("succeeded",)]
+
+
+@DB
+def test_a_webhook_that_keeps_failing_is_dead_lettered_and_shown(monkeypatch: Any) -> None:
+    from platform_core.services.payment_attempt import PaymentAttemptService
+
+    owner, shop, payment = _paid_attempt(monkeypatch)
+    real = PaymentAttemptService.apply_status
+
+    async def broken(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("provider payload not understood")
+
+    monkeypatch.setattr(PaymentAttemptService, "apply_status", broken)
+    event = str(uuid.uuid4())
+    raw, headers = _signed({"event_id": event, "payment_id": payment, "status": "succeeded"})
+    assert client.post("/v1/webhooks/payments/stub", content=raw, headers=headers).status_code == 200
+    sql("update payments_webhook_receipts set max_attempts = 3 where provider_event_id = :e", e=event)
+    _retry_due(event)
+    assert _receipt(event)["status"] == "retrying"
+    _retry_due(event)
+    assert _receipt(event)["status"] == "dead_letter"
+    assert _retry_due(event) == 0  # given up: no retry storm
+    dead = sql("select event_type, attempt_count from platform_dead_letter_events "
+               "where source_table = 'payments_webhook_receipts' and payload->>'event_id' = :e", e=event)
+    assert dead == [("payment.webhook.stub", 3)]
+    flagged = client.get(f"{shop['base']}/collect/overview", headers=owner).json()["data"]["needs_attention"]
+    assert [(a["id"], a["attention"]) for a in flagged] == [(payment, "provider_update_failed")]
+
+    # Once the cause is fixed, a platform admin puts it back into the retry lane.
+    receipt_id = sql("select cast(id as text) from payments_webhook_receipts where provider_event_id = :e", e=event)[0][0]
+    assert client.post(f"/v1/admin/payment-webhooks/{receipt_id}/retry", headers=owner).status_code == 403
+    admin_id, admin = new_identity(monkeypatch)
+    sql("insert into platform_admin_grants (identity_id, granted_by, reason) values "
+        "(cast(:i as uuid), cast(:i as uuid), 'payment webhook test')", i=str(admin_id))
+    requeued = client.post(f"/v1/admin/payment-webhooks/{receipt_id}/retry", headers=admin)
+    assert requeued.status_code == 200, requeued.text
+    monkeypatch.setattr(PaymentAttemptService, "apply_status", real)  # the cause is fixed
+    assert _retry_due(event) == 1
+    assert _receipt(event)["status"] == "processed"
+    assert sql("select status from payments_payment_attempts where id = cast(:p as uuid)", p=payment) == [("succeeded",)]
+    assert sql("select resolution_note from platform_dead_letter_events where source_id = cast(:r as uuid)",
+               r=receipt_id) == [("Requeued for retry",)]
