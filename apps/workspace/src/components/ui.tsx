@@ -376,9 +376,9 @@ export function DetailShell({
 
 /* ---------------------------------------------------------------- Section */
 
-export function Section({ title, children, style }: { title?: string; children: ReactNode; style?: CSSProperties }) {
+export function Section({ title, children, style, id }: { title?: string; children: ReactNode; style?: CSSProperties; id?: string }) {
   return (
-    <section className="ws-section" style={{ marginTop: '1.5rem', ...style }}>
+    <section className="ws-section" id={id} style={{ marginTop: '1.5rem', ...style }}>
       {title ? <h2 style={{ marginBottom: '0.75rem' }}>{title}</h2> : null}
       {children}
     </section>

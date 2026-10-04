@@ -1,9 +1,14 @@
-"""Sector playbook families (Capability Universe §21) — GENERATED, do not edit.
+"""Sector playbook families — the maintained registry.
 
-Regenerate with `uv run python tools/codegen/families.py`. Each family
-configures modules built once in §6; `core` modules are on by default and
-`rec` modules are pre-ticked (owner can untick). Hints in parentheses are
-the configuration the source names (e.g. inventory (yield)).
+Each family configures modules built once; `core` modules are pre-ticked when
+a business's traits justify them and `rec` modules are the family's "usually
+add" (the owner can untick either). Hints in parentheses are the
+configuration a module needs for that family (e.g. inventory (yield)). Module
+names are parsed by `catalog.source_tables.parse_module_list`.
+
+This file was first generated from the Capability Universe tables; that
+document was retired, so this registry is now edited directly and checked by
+apps/api/tests/test_taxonomy_recommendations.py.
 """
 
 from __future__ import annotations

@@ -181,6 +181,26 @@ class BusinessTrait(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class BusinessModuleDismissal(Base):
+    """A recommended tool the owner put off ("Not now"), with the reasons known then.
+
+    It comes back only when a reason appears that is not in `evidence_keys`
+    (catalog.recommendation_evidence.rank). `restored_at` set = brought back."""
+
+    __tablename__ = "business_module_dismissals"
+
+    business_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("businesses.id"), primary_key=True
+    )
+    module_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    evidence_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    dismissed_by: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("platform_identities.id"), nullable=False
+    )
+    dismissed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class BusinessProfile(Base):
     __tablename__ = "business_profiles"
 

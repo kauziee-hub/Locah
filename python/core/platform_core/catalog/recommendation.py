@@ -252,7 +252,7 @@ TRIGGERS: tuple[tuple[Callable[[Traits], bool], tuple[str, ...], str], ...] = (
     (_any("order_led"), ("orders",), "customers order from you"),
     (_any("booking_led"), ("bookings",), "customers book with you"),
     (_any("quote_led"), ("quotes",), "you quote before you sell"),
-    (_any("enquiry_led"), ("leads",), "business starts with an enquiry"),
+    (_any("enquiry_led"), ("leads",), "your business starts with an enquiry"),
     (_any("subscription_led"), ("memberships",), "customers subscribe or renew"),
     (_any("project_led"), ("projects",), "your work runs as projects"),
     (_any("donation_led", "nonprofit"), ("donations",), "you receive donations"),
@@ -363,6 +363,38 @@ def _triggered(traits: Iterable[str]) -> dict[str, str]:
         if when(t):
             for m in modules:
                 out.setdefault(m, reason)
+    return out
+
+
+def trigger_reasons(traits: Iterable[str]) -> dict[str, str]:
+    """module -> why these traits switch it on, in the owner's words
+    ("you quote before you sell"), for modules whose requirement holds.
+
+    When several rules switch a module on, the most specific one speaks: "you
+    quote before you sell" says more about Quotes than "you sell to businesses",
+    which switches on four tools at once."""
+    t = frozenset(traits)
+    out: dict[str, tuple[int, str]] = {}
+    for when, modules, reason in TRIGGERS:
+        if not when(t):
+            continue
+        for m in modules:
+            if _requirement_holds(m, t) and (m not in out or len(modules) < out[m][0]):
+                out[m] = (len(modules), reason)
+    return {m: r for m, (_, r) in out.items()}
+
+
+def triggered_by_trait(traits: Iterable[str]) -> dict[str, str]:
+    """module -> the single trait (of these) that switches it on, by the §4.3 rules.
+
+    Used to say which of the owner's own answers makes a tool worth having
+    ("You told LOCAH: “We deliver locally”"). Rules that need two traits at
+    once are left out: no one trait is the reason for them."""
+    out: dict[str, str] = {}
+    for trait in sorted(set(traits)):
+        for module in _triggered([trait]):
+            if _requirement_holds(module, frozenset(traits)):
+                out.setdefault(module, trait)
     return out
 
 

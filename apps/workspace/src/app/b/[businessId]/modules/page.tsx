@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
+import { RecommendedTools, type ForYou } from '@/components/RecommendedTools'
 import { setModuleState } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -50,8 +51,9 @@ const ALWAYS_LABEL: Record<string, string> = {
 export default async function ModulesPage({ params }: { params: { businessId: string } }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const [recRes, catRes, ctxRes] = await Promise.all([
+  const [recRes, forYouRes, catRes, ctxRes] = await Promise.all([
     apiTry<{ data: Recommendations }>(`/v1/platform/businesses/${params.businessId}/module-recommendations`, token),
+    apiTry<{ data: ForYou }>(`/v1/platform/businesses/${params.businessId}/module-recommendations/for-you`, token),
     apiTry<{ data: { modules: CatalogueModule[] } }>(`/v1/public/taxonomy`, token),
     apiTry<{ data: { features?: Record<string, boolean>; permissions: string[] } }>(
       '/v1/me/context', token, businessHeaders(params.businessId)),
@@ -70,13 +72,16 @@ export default async function ModulesPage({ params }: { params: { businessId: st
   // as a navigation area of its own.
   const sandbox = ctxRes.ok && ctxRes.data.data.features?.ai_sandbox === true
     && ctxRes.data.data.permissions.includes('ai_employees.read')
+  const forYou = forYouRes.ok ? forYouRes.data.data : null
+  const canEnable = ctxRes.ok && ctxRes.data.data.permissions.includes('modules.enable')
   const built = rec.modules.filter((m) => m.built)
   // Only what is really there: a Storefront tool LOCAH has not built yet is not claimed.
   const always = rec.modules.filter((m) => m.tier === 'always' && m.built)
   const running = built.filter((m) => m.tier !== 'always' && m.readiness?.enabled)
-  const essential = built.filter((m) => m.tier === 'core' && !m.readiness?.enabled)
-  const suggested = built.filter((m) => m.tier === 'recommended' && !m.readiness?.enabled)
-  const useful = built.filter((m) => m.tier === 'optional' && !m.readiness?.enabled)
+  // Everything else for businesses like this one, minus what is already
+  // recommended above with its own reason (or put off by the owner).
+  const shown = new Set([...(forYou?.recommended ?? []).map((r) => r.module), ...(forYou?.put_off ?? []).map((r) => r.module)])
+  const others = built.filter((m) => m.tier !== 'always' && !m.readiness?.enabled && !shown.has(m.module))
   const known = new Set(rec.modules.map((m) => m.module))
   const more = (catRes.ok ? catRes.data.data.modules : []).filter((m) => m.built && !m.future && !known.has(m.key))
 
@@ -85,11 +90,7 @@ export default async function ModulesPage({ params }: { params: { businessId: st
     <div className="bos-page bos-modules">
       <PageHeader
         title="Tools for your business"
-        subtitle={
-          rec.family_label
-            ? `Recommended for ${rec.family_label.toLowerCase()}, adjusted to how you work. Nothing turns on until you choose it.`
-            : 'Tell LOCAH what kind of business you run to get recommendations. Nothing turns on until you choose it.'
-        }
+        subtitle="Switch on what helps your business run. Each suggestion says why — and nothing turns on until you choose it."
         actions={<Link className="btn-quiet" href={`${base}/settings/business`}>How your business works</Link>}
       />
       {sandbox ? (
@@ -100,6 +101,24 @@ export default async function ModulesPage({ params }: { params: { businessId: st
         </p>
       ) : null}
 
+      <section aria-labelledby="for-you-h" className="bos-section">
+        <h2 id="for-you-h" className="bos-section__title">
+          Recommended for your Business <span>{forYou?.recommended.length ?? 0}</span>
+        </h2>
+        <p className="bos-hint">From what you told LOCAH, what you have added and how you work.</p>
+        {forYou ? (
+          <RecommendedTools businessId={params.businessId} data={forYou} canEnable={canEnable} />
+        ) : (
+          <p className="bos-empty">Recommendations could not load just now.</p>
+        )}
+        {forYou && forYou.recommended.length === 0 && running.length === 0 ? (
+          <p className="bos-empty">
+            Tell LOCAH what you sell and how customers buy, and recommendations will follow.{' '}
+            <Link href={`${base}/settings/business`}>How your business works</Link>
+          </p>
+        ) : null}
+      </section>
+
       {running.length > 0 ? (
         <section aria-labelledby="running-h" className="bos-section">
           <h2 id="running-h" className="bos-section__title">Running <span>{running.length}</span></h2>
@@ -109,39 +128,11 @@ export default async function ModulesPage({ params }: { params: { businessId: st
         </section>
       ) : null}
 
-      {essential.length > 0 ? (
-        <section aria-labelledby="essential-h" className="bos-section">
-          <h2 id="essential-h" className="bos-section__title">Essential for you <span>{essential.length}</span></h2>
-          <p className="bos-hint">What businesses like yours run every day.</p>
-          <div className="bos-grid">
-            {essential.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
-          </div>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="suggested-h" className="bos-section">
-        <h2 id="suggested-h" className="bos-section__title">
-          Recommended <span>{suggested.length}</span>
-        </h2>
-        {suggested.length > 0 ? (
-          <div className="bos-grid">
-            {suggested.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
-          </div>
-        ) : (
-          <p className="bos-empty">
-            {running.length > 0 || essential.length > 0
-              ? 'Nothing else to recommend right now.'
-              : 'Nothing to recommend yet — set what kind of business you run first.'}{' '}
-            <Link href={`${base}/settings/business`}>How your business works</Link>
-          </p>
-        )}
-      </section>
-
-      {useful.length > 0 ? (
+      {others.length > 0 ? (
         <details className="bos-section bos-more">
-          <summary className="bos-section__title">Optional <span>{useful.length}</span></summary>
+          <summary className="bos-section__title">Other tools for businesses like yours <span>{others.length}</span></summary>
           <div className="bos-grid">
-            {useful.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
+            {others.map((m) => <ToolCard key={m.module} m={m} businessId={params.businessId} sandbox={sandbox} />)}
           </div>
         </details>
       ) : null}

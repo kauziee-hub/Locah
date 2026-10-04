@@ -224,3 +224,19 @@ async def deactivate_module(
         "data": {"module_id": module_id, "activation_state": state.activation_state},
         "meta": {"correlation_id": ctx.correlation_id},
     }
+
+
+@router.get("/{business_id}/modules/{module_id}/setup")
+async def module_setup(
+    business_id: UUID,
+    module_id: str,
+    ctx: RequestContext = Depends(require_permission(MODULES_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """One tool's setup in words: its status, each step and where to do it,
+    what is holding it back, and what it adds for customers once it works."""
+    if ctx.business_id != business_id:
+        raise ResourceNotFound("Business")
+    from platform_core.services.module_setup import setup
+
+    return {"data": await setup(session, business_id, module_id), "meta": {"correlation_id": ctx.correlation_id}}

@@ -100,7 +100,7 @@ export default async function CustomersPage({
         }
       />
 
-      <Section title="Add a customer">
+      <Section title="Add a customer" id="add">
         <form action={createCustomer} style={{ display: 'grid', gap: '0.6rem', maxWidth: '32rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input name="display_name" placeholder="Name" required />

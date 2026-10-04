@@ -70,6 +70,28 @@ def test_a_new_owner_sees_three_bands_with_honest_empty_states(monkeypatch: Any)
     business = {i["label"]: i["detail"] for i in _band(home, "business")["items"]}
     assert business["Website"] == "Not published yet"
     assert "setup left in" in business["Tools"]  # Orders is on but has no priced product yet
+    header = home["header"]
+    assert header["greeting"] in ("Good morning", "Good afternoon", "Good evening")
+    assert header["open"] == {"state": "unknown", "text": "Opening hours not set"} and header["website"] is False
+    assert [a["label"] for a in home["quick_actions"]][:2] == ["New order", "Add an item"]
+
+
+def test_home_header_reads_the_primary_location_hours(monkeypatch: Any) -> None:
+    _, owner = new_identity(monkeypatch)
+    bid = create_business(client, owner, modules=("offerings-catalog",))
+    loc = primary_location(client, owner, bid)
+    every_day = {d: [["00:00", "23:59"]] for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
+    r = client.patch(f"/v1/platform/businesses/{bid}/locations/{loc}", json={
+        "hours": every_day, "timezone": "Asia/Kolkata", "address": {"locality": "Anna Nagar", "city": "Chennai"}},
+        headers=owner)
+    assert r.status_code == 200, r.text
+    header = _home(bid, owner)["header"]
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    # 23:59 is the one closed minute.
+    assert header["open"]["state"] == "open" or datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%H:%M") == "23:59"
+    assert header["place"] == "Anna Nagar" and header["name"]
 
 
 def test_owner_needs_you_now_counts_real_records(monkeypatch: Any) -> None:

@@ -88,7 +88,7 @@ export default async function LeadsPage({
         }
       />
 
-      <Section title="Add a lead">
+      <Section title="Add a lead" id="add">
         <form action={createLead} style={{ display: 'grid', gap: '0.6rem', maxWidth: '32rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input name="display_name" placeholder="Name" required />

@@ -21,7 +21,7 @@ import io
 import os
 import zipfile
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -134,7 +134,7 @@ def _read(owner: dict[str, str], bid: str, name: str, data: bytes) -> dict[str, 
 
 
 def _mapped(read: dict[str, Any]) -> list[dict[str, str]]:
-    return apply_mapping(read["rows"], read["suggested_mapping"])
+    return cast(list[dict[str, str]], apply_mapping(read["rows"], read["suggested_mapping"]))
 
 
 def _import(owner: dict[str, str], bid: str, read: dict[str, Any], rows: list[dict[str, str]],
@@ -280,7 +280,8 @@ class _Reader:
     model_name = "stub"
 
     def __init__(self, answer: dict[str, Any] | Exception) -> None:
-        self.answer, self.mime_types = answer, []  # type: list[str]
+        self.answer = answer
+        self.mime_types: list[str] = []
 
     async def generate_structured_from_file(self, prompt: str, data: bytes, mime_type: str, schema: dict[str, Any],
                                             model_config: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:

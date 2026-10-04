@@ -2,7 +2,7 @@
 
 Deterministic fixtures, zero model calls. What they prove:
 
-* the family registry is the MD §21 tables, verbatim (re-parsed from the doc);
+* the family registry is well formed (unique keys, every list parses);
 * every §4.2 subcategory is selectable and belongs to one §21 family;
 * at a subcategory's default traits, Core is the family's Core minus only
   the demotions its traits justify (listed below, so each is a conscious
@@ -20,11 +20,10 @@ from pathlib import Path
 
 import pytest
 
-from platform_core.catalog import families as fam_mod
 from platform_core.catalog.families import BY_KEY, FAMILIES
 from platform_core.catalog.modules import MODULES, STOREFRONT
 from platform_core.catalog.recommendation import family_key_for, recommend
-from platform_core.catalog.source_tables import parse_families, parse_module_list
+from platform_core.catalog.source_tables import parse_module_list
 from platform_core.catalog.taxonomy import CATEGORIES, ORG_SHAPES, SUBCATEGORIES, TRAIT_GROUPS, TRAITS, search
 from platform_testing.recommendation_snapshot import snapshot
 
@@ -57,14 +56,16 @@ def _future(m: str) -> bool:
     return bool(MODULES.get(m) and MODULES[m].future)
 
 
-def test_family_registry_is_the_md_tables_verbatim() -> None:
-    parsed = parse_families()
-    assert len(parsed) == len(FAMILIES) == 93
-    for src, reg in zip(parsed, FAMILIES):
-        assert (src.group, src.label, src.core, src.rec, src.people, src.ai) == (
-            reg.group, reg.label, reg.core, reg.rec, reg.people, reg.ai
-        ), f"families.py drifted from MD §21 at {reg.key}; re-run tools/codegen/families.py"
-    assert fam_mod.__doc__ and "GENERATED" in fam_mod.__doc__
+def test_family_registry_is_well_formed() -> None:
+    assert len(FAMILIES) == 93
+    assert len({f.key for f in FAMILIES}) == len(FAMILIES) == len(BY_KEY)
+    for f in FAMILIES:
+        assert f.label.strip() and f.group.strip(), f.key
+        assert parse_module_list(f.core), f"{f.key} has no Core modules"
+        # A module may appear twice with different configuration (bookings, and
+        # rentals → bookings (rental)); the same module and hint twice is a typo.
+        listed = parse_module_list(f.core) + parse_module_list(f.rec)
+        assert len(listed) == len(set(listed)), f"{f.key} lists the same module and hint twice"
 
 
 def test_every_module_named_in_a_playbook_exists_in_the_catalogue() -> None:

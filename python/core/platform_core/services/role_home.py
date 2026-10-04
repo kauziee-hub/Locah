@@ -38,6 +38,7 @@ from platform_core.models import (
     Website,
 )
 from platform_core.permissions import ROLE_PRIMARY_OWNER
+from platform_core.services import home_header
 
 IST = ZoneInfo("Asia/Kolkata")
 LIVE_ORDER = ("pending", "accepted", "preparing", "ready")
@@ -112,6 +113,8 @@ class RoleHomeService:
         return {
             "role": {"key": key, "label": tpl.label if tpl else "Team member", "question": question},
             "location_scoped": scoped,
+            "header": await ctx.header(business),
+            "quick_actions": home_header.quick_actions(can),
             "bands": [b for b in bands if b is not None],
         }
 
@@ -123,6 +126,27 @@ class _Ctx:
         local = now.astimezone(IST)
         self.day_start = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
         self.day_end = self.day_start + timedelta(days=1)
+
+    async def header(self, business: Business) -> dict[str, Any]:
+        """"Good morning, Nila Café" · Anna Nagar · Open now — from the primary location."""
+        from platform_core.models import BusinessLocation
+
+        loc = (await self.s.execute(select(BusinessLocation).where(
+            BusinessLocation.business_id == self.b, BusinessLocation.status == "active",
+            BusinessLocation.deleted_at.is_(None),
+        ).order_by(BusinessLocation.is_primary.desc(), BusinessLocation.created_at).limit(1))).scalars().first()
+        tz = IST.key  # a location still on the column default (UTC) is read as India time
+        if loc and loc.timezone and loc.timezone != "UTC":
+            tz = loc.timezone
+        return {
+            "greeting": home_header.greeting(self.now.astimezone(ZoneInfo(tz))),
+            "name": business.display_name,
+            "place": home_header.place(loc.name if loc else None, loc.address if loc else None),
+            "location_id": str(loc.id) if loc else None,
+            "open": home_header.open_state(loc.hours if loc else None, tz, self.now),
+            "website": (await self.s.execute(select(Website.status).where(Website.business_id == self.b))).scalar()
+            == "published",
+        }
 
     async def _count(self, model: Any, *where: Any) -> int:
         return int((await self.s.execute(select(func.count()).select_from(model).where(*where))).scalar_one())

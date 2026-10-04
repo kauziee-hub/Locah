@@ -158,9 +158,10 @@ label {
   color: var(--color-muted);
 }
 
-/* --- Buttons: default = primary; .btn-ghost / .btn-quiet as needed --- */
+/* --- Buttons: default = primary (.btn-primary is the same, for links); .btn-ghost / .btn-quiet as needed --- */
 button,
-.btn {
+.btn,
+.btn-primary {
   font: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -177,12 +178,14 @@ button,
   transition: filter 120ms ease, transform 80ms ease;
 }
 button:hover,
-.btn:hover {
+.btn:hover,
+.btn-primary:hover {
   filter: brightness(1.06);
   text-decoration: none;
 }
 button:active,
-.btn:active {
+.btn:active,
+.btn-primary:active {
   transform: scale(0.98);
 }
 button:disabled,

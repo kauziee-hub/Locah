@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiTry } from '@/lib/api'
+import { apiTry, businessHeaders } from '@/lib/api'
 import { Card, PageHeader } from '@/components/ui'
+import { RecommendedTools, type ForYou } from '@/components/RecommendedTools'
 import { pageWords } from '@/lib/ws-lang'
 
 export const dynamic = 'force-dynamic'
@@ -12,9 +13,19 @@ type Business = { display_name: string; state: string; status: string; visibilit
 type Item = { label: string; count: number; href: string; detail: string; tone: string }
 type Stat = { label: string; value: string; href: string; note: string }
 type Band = { key: string; title: string; items?: Item[]; stats?: Stat[]; empty: string }
+type Header = {
+  greeting: string
+  name: string
+  place: string
+  location_id: string | null
+  open: { state: 'open' | 'closed' | 'unknown'; text: string }
+  website: boolean
+}
 type Home = {
   role: { key: string; label: string; question: string }
   location_scoped: boolean
+  header: Header
+  quick_actions: { label: string; href: string }[]
   bands: Band[]
 }
 
@@ -29,10 +40,12 @@ export default async function WorkspaceHomePage({ params }: { params: { business
   if (!token) redirect('/login')
   const t = pageWords()
   const base = `/b/${params.businessId}`
-  const [homeRes, businessRes] = await Promise.all([
+  const [homeRes, businessRes, ctxRes] = await Promise.all([
     apiTry<{ data: Home }>(`/v1/platform/businesses/${params.businessId}/home`, token),
     apiTry<{ data: Business }>(`/v1/b/${params.businessId}`, token),
+    apiTry<{ data: { permissions: string[] } }>('/v1/me/context', token, businessHeaders(params.businessId)),
   ])
+  const canEnable = ctxRes.ok && ctxRes.data.data.permissions.includes('modules.enable')
   const business = businessRes.ok ? businessRes.data.data : null
 
   if (business && business.status && business.status !== 'in_good_standing') {
@@ -68,6 +81,14 @@ export default async function WorkspaceHomePage({ params }: { params: { business
 
   const home = homeRes.data.data
   const isOwner = home.role.key === 'owner'
+  // The two best next tools, for whoever can switch tools on.
+  const forYouRes = canEnable
+    ? await apiTry<{ data: ForYou }>(
+        `/v1/platform/businesses/${params.businessId}/module-recommendations/for-you?limit=2`, token)
+    : null
+  const forYou = forYouRes?.ok ? forYouRes.data.data : null
+  const h = home.header
+  const href = (path: string) => (path.startsWith('~') ? `${path.slice(1)}/${params.businessId}` : `${base}${path}`)
   const attention = home.bands.find((b) => b.key === 'now' || b.key === 'late')
   const waiting = attention?.items?.reduce((n, i) => n + (i.count || 0), 0) ?? 0
   const subtitle = isOwner
@@ -78,9 +99,37 @@ export default async function WorkspaceHomePage({ params }: { params: { business
 
   return (
     <div className="bos-home">
-      <PageHeader title={business?.display_name ?? t('Workspace')} subtitle={subtitle} />
+      <header className="bos-hello">
+        <h1 className="bos-hello__title">
+          {t(h.greeting)}, <span>{h.name}</span>
+        </h1>
+        <p className="bos-hello__meta">
+          {h.place ? <span>{h.place}</span> : null}
+          {h.open.state === 'unknown' ? (
+            canEnable ? (
+              <Link className="bos-hello__chip" href={h.location_id ? `${base}/locations/${h.location_id}#hours-h` : `${base}/locations`}>{t('Add your opening hours')}</Link>
+            ) : null
+          ) : (
+            <span className={`bos-hello__chip is-${h.open.state}`}>{t(h.open.text)}</span>
+          )}
+          <Link className={`bos-hello__chip${h.website ? ' is-open' : ''}`} href={`${base}/website`}>
+            {h.website ? t('Website live') : t('Website not published')}
+          </Link>
+        </p>
+        {/* The "Needs you now" band says so itself when nothing is waiting. */}
+        {!isOwner || waiting > 0 ? <p className="bos-hello__sub">{subtitle}</p> : null}
+      </header>
       {home.location_scoped ? (
         <p className="bos-hint">{t('Showing your locations only.')}</p>
+      ) : null}
+      {home.quick_actions.length > 0 ? (
+        <nav className="bos-quick" aria-label={t('Quick actions')}>
+          {home.quick_actions.map((a, i) => (
+            <Link key={a.href} href={href(a.href)} className={i === 0 ? 'btn' : 'btn btn-ghost'}>
+              {t(a.label)}
+            </Link>
+          ))}
+        </nav>
       ) : null}
       {home.bands.map((band) => (
         <section key={band.key} className={`bos-band bos-band--${band.key}`} aria-labelledby={`band-${band.key}`}>
@@ -88,7 +137,7 @@ export default async function WorkspaceHomePage({ params }: { params: { business
           {band.stats ? (
             <div className="ws-stats">
               {band.stats.map((s) => (
-                <Link key={s.label} href={s.href.startsWith('~') ? `${s.href.slice(1)}/${params.businessId}` : `${base}${s.href}`} className="ws-stat bos-stat-link">
+                <Link key={s.label} href={href(s.href)} className="ws-stat bos-stat-link">
                   <p className="ws-stat__label">{t(s.label)}</p>
                   <p className="ws-stat__value">{t(s.value)}</p>
                   {s.note ? <p className="ws-stat__note">{t(s.note)}</p> : null}
@@ -103,7 +152,7 @@ export default async function WorkspaceHomePage({ params }: { params: { business
             <ul className="bos-attention">
               {band.items.map((i) => (
                 <li key={`${i.label}-${i.href}`}>
-                  <Link href={i.href.startsWith('~') ? `${i.href.slice(1)}/${params.businessId}` : `${base}${i.href}`} className={`bos-attention__row is-${i.tone}`}>
+                  <Link href={href(i.href)} className={`bos-attention__row is-${i.tone}`}>
                     {band.key === 'business' || band.key === 'myday' || band.key === 'followups' ? (
                       <span className="bos-attention__dot" aria-hidden />
                     ) : (
@@ -123,6 +172,17 @@ export default async function WorkspaceHomePage({ params }: { params: { business
           )}
         </section>
       ))}
+      {forYou && forYou.recommended.length > 0 ? (
+        <section className="bos-band bos-band--recs" aria-labelledby="band-recs">
+          <h2 className="bos-section__title" id="band-recs">{t('Recommended for your Business')}</h2>
+          <RecommendedTools businessId={params.businessId} data={forYou} canEnable={canEnable} compact />
+          {forYou.total > forYou.recommended.length ? (
+            <p className="bos-band__more">
+              <Link href={`${base}/modules`}>{t('All suggestions')} ({forYou.total}) →</Link>
+            </p>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   )
 }

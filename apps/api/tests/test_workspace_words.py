@@ -93,6 +93,11 @@ def _home_labels() -> set[str]:
     for tpl in (OWNER, *ROLE_TEMPLATES.values()):
         out |= {tpl.label, tpl.home}
     out |= {"Team member", "Your work today"} | {label for _, label in BUCKETS}
+    # The top of Home: greetings, quick actions and the fixed open-state words.
+    from platform_core.services import home_header
+
+    out |= {"Good morning", "Good afternoon", "Good evening", "Opening hours not set", "Closed"}
+    out |= {label for _, _, _, label in home_header.QUICK_ACTIONS}
     return out
 
 
