@@ -1,44 +1,27 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
-const apiUrl = platformUrl('api')
-
-export async function advanceOrderStatus(formData: FormData) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const businessId = String(formData.get('businessId'))
-  const orderId = String(formData.get('orderId'))
-  const status = String(formData.get('status'))
-  const reason = formData.get('reason') ? String(formData.get('reason')) : undefined
-  await fetch(`${apiUrl}/v1/platform/businesses/${businessId}/orders/${orderId}/status`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ status, reason }),
-  })
+function refresh(businessId: string, orderId: string) {
   revalidatePath(`/b/${businessId}/orders/${orderId}`)
   revalidatePath(`/b/${businessId}/orders`)
 }
 
-export async function cancelOrder(formData: FormData) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const businessId = String(formData.get('businessId'))
-  const orderId = String(formData.get('orderId'))
-  const reason = String(formData.get('reason') || 'Cancelled by Business')
-  await fetch(`${apiUrl}/v1/platform/businesses/${businessId}/orders/${orderId}/cancel`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ reason }),
-  })
-  revalidatePath(`/b/${businessId}/orders/${orderId}`)
-  revalidatePath(`/b/${businessId}/orders`)
+/** Move an order to its next step (accept, preparing, ready, completed) or reject it. */
+export async function setOrderStatus(
+  businessId: string,
+  orderId: string,
+  status: string,
+  reason?: string,
+): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/orders/${orderId}/status`, 'POST', { status, reason })
+  if (r.ok) refresh(businessId, orderId)
+  return r
+}
+
+export async function cancelOrder(businessId: string, orderId: string, reason: string): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/orders/${orderId}/cancel`, 'POST', { reason })
+  if (r.ok) refresh(businessId, orderId)
+  return r
 }

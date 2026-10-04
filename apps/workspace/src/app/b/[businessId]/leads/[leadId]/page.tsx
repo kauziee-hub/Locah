@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DetailShell, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
-import { addLeadNote, moveLeadStage } from '../actions'
+import { addLeadNote, moveLeadStage, setLeadStage } from '../actions'
+import { ActionButton } from '@/components/ActionButton'
+import { ActionForm, SubmitButton } from '@/components/ActionForm'
+import { dayTimeLabel } from '@/lib/when'
+import { MOVE_WORDS, SOURCE_WORDS, STAGE_WORDS } from '../words'
 import { StageTrack, type StageWhere } from '@/components/StageTrack'
 
 export const dynamic = 'force-dynamic'
@@ -47,8 +51,8 @@ export default async function LeadDetailPage({
   if (!res.ok) {
     return (
       <div>
-        <PageHeader title="Lead" breadcrumb={<Link href={back}>← Leads</Link>} />
-        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Leads" />
+        <PageHeader title="Enquiry" breadcrumb={<Link href={back}>Enquiries</Link>} />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Enquiries" />
       </div>
     )
   }
@@ -59,12 +63,19 @@ export default async function LeadDetailPage({
 
   return (
     <DetailShell
-      breadcrumb={<Link href={back}>← Leads</Link>}
+      breadcrumb={<Link href={back}>Enquiries</Link>}
       title={lead.display_name}
-      status={<StatusPill value={lead.status} />}
+      status={<StatusPill value={lead.status} label={STAGE_WORDS[lead.status] ?? lead.status} />}
       meta={[
-        ['Contact', [lead.email, lead.phone].filter(Boolean).join(' · ') || '—'],
-        ['Source', lead.source],
+        ['Contact', (
+          <span key="contact">
+            {lead.phone ? <a href={`tel:${lead.phone.replace(/[^+\d]/g, '')}`}>{lead.phone}</a> : null}
+            {lead.phone && lead.email ? ' · ' : null}
+            {lead.email ? <a href={`mailto:${lead.email}`}>{lead.email}</a> : null}
+            {!lead.phone && !lead.email ? '—' : null}
+          </span>
+        )],
+        ['Came from', SOURCE_WORDS[lead.source] ?? lead.source],
         ...(lead.lost_reason ? ([['Lost because', lead.lost_reason]] as [string, string][]) : []),
       ]}
     >
@@ -82,9 +93,9 @@ export default async function LeadDetailPage({
       ) : null}
       {lead.customer_contact_id ? (
         <p>
-          Converted to{' '}
+          Now a customer —{' '}
           <Link href={`/b/${params.businessId}/customers/${lead.customer_contact_id}`}>
-            a customer record
+            open their record
           </Link>
           .
         </p>
@@ -96,26 +107,26 @@ export default async function LeadDetailPage({
         </Section>
       ) : null}
 
-      <Section title="Move stage">
+      <Section title="Where it stands">
         {next.length === 0 ? (
           <p style={{ color: 'var(--color-muted)' }}>
-            Won is the final stage — this lead stays on record as history.
+            Won — this enquiry became business. It stays here as history.
           </p>
         ) : (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {next.map((stage) => (
-              <form key={stage} action={moveLeadStage} style={{ display: 'flex', gap: '0.35rem' }}>
+          <div className="bos-lead__moves">
+            {next.filter((stage) => stage !== 'lost').map((stage) => (
+              <ActionButton key={stage} className="btn-ghost" label={MOVE_WORDS[stage] ?? stage} busyLabel="Saving…"
+                run={setLeadStage.bind(null, params.businessId, params.leadId, stage)} />
+            ))}
+            {next.includes('lost') ? (
+              <ActionForm action={moveLeadStage} className="bos-lead__lost" aria-label="Mark as lost">
                 <input type="hidden" name="businessId" value={params.businessId} />
                 <input type="hidden" name="leadId" value={params.leadId} />
-                <input type="hidden" name="status" value={stage} />
-                {stage === 'lost' ? (
-                  <input name="reason" placeholder="Reason (required)" required />
-                ) : null}
-                <button type="submit" className="btn-ghost" style={{ textTransform: 'capitalize' }}>
-                  {stage}
-                </button>
-              </form>
-            ))}
+                <input type="hidden" name="status" value="lost" />
+                <input name="reason" placeholder="Why was it lost?" required maxLength={500} aria-label="Why it was lost" />
+                <SubmitButton className="btn-ghost">Mark as lost</SubmitButton>
+              </ActionForm>
+            ) : null}
           </div>
         )}
       </Section>
@@ -124,11 +135,11 @@ export default async function LeadDetailPage({
         <ol style={{ margin: 0, paddingLeft: '1.1rem', color: 'var(--color-foreground)' }}>
           {lead.status_history.map((event, idx) => (
             <li key={idx} style={{ marginBottom: '0.3rem' }}>
-              {event.from_status ? `${event.from_status} → ` : 'created as '}
-              <strong>{event.to_status}</strong>
+              {event.from_status ? `${STAGE_WORDS[event.from_status] ?? event.from_status} → ` : 'Came in as '}
+              <strong>{STAGE_WORDS[event.to_status] ?? event.to_status}</strong>
               <span style={{ color: 'var(--color-muted)' }}>
                 {' '}
-                · {new Date(event.created_at).toLocaleString()}
+                · {dayTimeLabel(event.created_at)}
               </span>
             </li>
           ))}
@@ -145,20 +156,18 @@ export default async function LeadDetailPage({
                 {note.body}
                 <span style={{ color: 'var(--color-muted)' }}>
                   {' '}
-                  · {new Date(note.created_at).toLocaleString()}
+                  · {dayTimeLabel(note.created_at)}
                 </span>
               </li>
             ))}
           </ul>
         )}
-        <form action={addLeadNote} style={{ display: 'grid', gap: '0.5rem' }}>
+        <ActionForm action={addLeadNote} className="ws-form" resetOnSuccess aria-label="Add a note">
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="leadId" value={params.leadId} />
-          <textarea name="body" placeholder="Add a note" required />
-          <button type="submit" style={{ justifySelf: 'start' }}>
-            Add note
-          </button>
-        </form>
+          <textarea name="body" placeholder="Add a note — only your team sees it" required maxLength={5000} aria-label="Note" />
+          <div><SubmitButton busy="Adding…">Add note</SubmitButton></div>
+        </ActionForm>
       </Section>
     </DetailShell>
   )

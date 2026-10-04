@@ -1,63 +1,66 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getAccessToken } from '@/lib/supabase/access-token'
-import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
+import { asForm, type FormResult } from '@/lib/form-result'
 
-const apiUrl = platformUrl('api')
+const optional = (v: FormDataEntryValue | null) => (v && String(v).trim() ? String(v).trim() : undefined)
 
-async function send(path: string, method: string, body?: unknown) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`)
-  return res.json()
-}
-
-export async function createLead(formData: FormData) {
+export async function createLead(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const businessId = String(formData.get('businessId'))
-  await send(`/v1/platform/businesses/${businessId}/leads`, 'POST', {
-    display_name: String(formData.get('display_name')),
-    email: formData.get('email') ? String(formData.get('email')) : undefined,
-    phone: formData.get('phone') ? String(formData.get('phone')) : undefined,
-    message: formData.get('message') ? String(formData.get('message')) : undefined,
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/leads`, 'POST', {
+    display_name: String(formData.get('display_name') || '').trim(),
+    email: optional(formData.get('email')),
+    phone: optional(formData.get('phone')),
+    message: optional(formData.get('message')),
     source: 'manual',
   })
-  revalidatePath(`/b/${businessId}/leads`)
+  if (r.ok) revalidatePath(`/b/${businessId}/leads`)
+  return asForm(r)
 }
 
-export async function moveLeadStage(formData: FormData) {
+/** Move an enquiry to a stage; losing one needs a reason (from the form). */
+export async function moveLeadStage(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const businessId = String(formData.get('businessId'))
   const leadId = String(formData.get('leadId'))
-  const status = String(formData.get('status'))
-  const reason = formData.get('reason') ? String(formData.get('reason')) : undefined
-  await send(`/v1/platform/businesses/${businessId}/leads/${leadId}/move-stage`, 'POST', {
-    status,
-    reason,
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/leads/${leadId}/move-stage`, 'POST', {
+    status: String(formData.get('status')),
+    reason: optional(formData.get('reason')),
   })
-  revalidatePath(`/b/${businessId}/leads`)
-  revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  if (r.ok) {
+    revalidatePath(`/b/${businessId}/leads`)
+    revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  }
+  return asForm(r)
 }
 
-export async function addLeadNote(formData: FormData) {
+/** One-click stage move (contacted, interested, won, reopen). */
+export async function setLeadStage(businessId: string, leadId: string, status: string): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/leads/${leadId}/move-stage`, 'POST', { status })
+  if (r.ok) {
+    revalidatePath(`/b/${businessId}/leads`)
+    revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  }
+  return r
+}
+
+export async function addLeadNote(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const businessId = String(formData.get('businessId'))
   const leadId = String(formData.get('leadId'))
-  await send(`/v1/platform/businesses/${businessId}/leads/${leadId}/notes`, 'POST', {
-    body: String(formData.get('body')),
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/leads/${leadId}/notes`, 'POST', {
+    body: String(formData.get('body') || '').trim(),
   })
-  revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  if (r.ok) revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  return asForm(r)
 }
 
-export async function assignLead(formData: FormData) {
+export async function assignLead(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const businessId = String(formData.get('businessId'))
   const leadId = String(formData.get('leadId'))
   const assignee = String(formData.get('assignee_identity_id') || '')
-  await send(`/v1/platform/businesses/${businessId}/leads/${leadId}/assign`, 'POST', {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/leads/${leadId}/assign`, 'POST', {
     assignee_identity_id: assignee || null,
   })
-  revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  if (r.ok) revalidatePath(`/b/${businessId}/leads/${leadId}`)
+  return asForm(r)
 }

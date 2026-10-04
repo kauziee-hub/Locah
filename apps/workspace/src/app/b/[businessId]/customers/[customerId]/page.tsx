@@ -3,7 +3,10 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader, StatusPill } from '@/components/ModuleState'
-import { addCustomerNote, setCustomerState } from '../actions'
+import { addCustomerNote, changeCustomerState } from '../actions'
+import { ActionButton } from '@/components/ActionButton'
+import { dayTimeLabel } from '@/lib/when'
+import { ActionForm, SubmitButton } from '@/components/ActionForm'
 import { ConsentPanel, type ConsentRow } from './ConsentPanel'
 import { owes, rupees, type Account } from '../../khata/types'
 import { timelineText, type TimelineSummary } from './timeline-text'
@@ -73,35 +76,27 @@ export default async function CustomerDetailPage({
   const stateActions =
     customer.status === 'active'
       ? [
-          { action: 'block', label: 'Block' },
-          { action: 'archive', label: 'Archive' },
+          { action: 'block', label: 'Block', confirm: `Block ${customer.display_name}? They can no longer order or book online.` },
+          { action: 'archive', label: 'Archive', confirm: `Archive ${customer.display_name}? Their history is kept; they leave your list.` },
         ]
-      : [{ action: 'restore', label: 'Restore' }]
+      : [{ action: 'restore', label: 'Restore', confirm: undefined }]
+  const STATUS: Record<string, string> = { active: 'Active', blocked: 'Blocked', archived: 'Archived' }
 
   return (
-    <div>
-      <Link href={`/b/${params.businessId}/customers`}>← Customers</Link>
+    <div className="bos-page">
       <PageHeader
+        breadcrumb={<Link href={`/b/${params.businessId}/customers`}>Customers</Link>}
         title={customer.display_name}
-        subtitle={[customer.email, customer.phone].filter(Boolean).join(' · ') || undefined}
+        subtitle={[customer.phone, customer.email].filter(Boolean).join(' · ') || undefined}
       />
 
-      <p>
-        Status: <StatusPill value={customer.status} />
-      </p>
-
-      <section style={{ marginTop: '1.25rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {stateActions.map((item) => (
-          <form key={item.action} action={setCustomerState}>
-            <input type="hidden" name="businessId" value={params.businessId} />
-            <input type="hidden" name="customerId" value={params.customerId} />
-            <input type="hidden" name="action" value={item.action} />
-            <button type="submit" style={BUTTON}>
-              {item.label}
-            </button>
-          </form>
-        ))}
-      </section>
+      <div className="bos-pay__confirm" style={{ marginBottom: '1rem' }}>
+        <StatusPill value={customer.status} label={STATUS[customer.status] ?? customer.status} />
+        {canUpdate ? stateActions.map((item) => (
+          <ActionButton key={item.action} className="btn-ghost" label={item.label} busyLabel="Saving…" confirm={item.confirm}
+            run={changeCustomerState.bind(null, params.businessId, params.customerId, item.action)} />
+        )) : null}
+      </div>
 
       <TagsEditor businessId={params.businessId} customerId={params.customerId} tags={customer.tags ?? []}
         version={customer.version} known={tagsRes.ok ? tagsRes.data.data.map((t) => t.tag) : []} canChange={canUpdate} />
@@ -159,29 +154,17 @@ export default async function CustomerDetailPage({
           {notes.map((note) => (
             <li key={note.id} style={{ marginBottom: '0.4rem' }}>
               {note.body}
-              <span style={{ opacity: 0.6 }}> · {new Date(note.created_at).toLocaleString()}</span>
+              <span style={{ opacity: 0.6 }}> · {dayTimeLabel(note.created_at)}</span>
             </li>
           ))}
         </ul>
-        <form
-          action={addCustomerNote}
-          style={{ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }}
-        >
+        <ActionForm action={addCustomerNote} className="ws-form" resetOnSuccess aria-label="Add a note">
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="customerId" value={params.customerId} />
-          <textarea name="body" placeholder="Add a note" required style={INPUT} />
-          <button type="submit" style={BUTTON}>
-            Add note
-          </button>
-        </form>
+          <textarea name="body" placeholder="Add a note — only your team sees it" required maxLength={5000} aria-label="Note" />
+          <div><SubmitButton busy="Adding…">Add note</SubmitButton></div>
+        </ActionForm>
       </section>
     </div>
   )
-}
-
-const INPUT: React.CSSProperties = {
-  width: '100%',
-}
-const BUTTON: React.CSSProperties = {
-  justifySelf: 'start',
 }

@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DetailShell, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
-import { advanceOrderStatus, cancelOrder } from '../actions'
+import { cancelOrder, setOrderStatus } from '../actions'
+import { ActionButton } from '@/components/ActionButton'
 import { OrderBill } from './OrderBill'
 import { MoneySection } from '@/components/MoneySection'
 import { money, paymentLabel } from '../labels'
@@ -59,6 +60,8 @@ export default async function OrderDetailPage({
       currency: string
       version: number
       items?: Array<{ id: string; title: string; quantity: number; line_total: number; basis_words?: string | null }>
+      customer?: { id: string; name: string; phone: string | null } | null
+      fulfilment?: { mode: string; status: string; address: string | null; phone: string | null } | null
     }
   }>(`/v1/platform/businesses/${params.businessId}/orders/${params.orderId}`, token)
   const stage = await apiTry<{ data: StageWhere }>(`/v1/b/${params.businessId}/stages/orders/${params.orderId}`, token)
@@ -90,30 +93,21 @@ export default async function OrderDetailPage({
   const actions = (
     <>
       {next.map((status) => (
-        <form key={status} action={advanceOrderStatus}>
-          <input type="hidden" name="businessId" value={params.businessId} />
-          <input type="hidden" name="orderId" value={params.orderId} />
-          <input type="hidden" name="status" value={status} />
-          {status === 'rejected' ? (
-            <input type="hidden" name="reason" value="Rejected by Business" />
-          ) : null}
-          <button type="submit" className={status === 'rejected' ? 'btn-danger' : undefined}>
-            {ACTION_WORDS[status] || status}
-          </button>
-        </form>
+        <ActionButton key={status} label={ACTION_WORDS[status] || status} busyLabel={t('Saving…')}
+          className={status === 'rejected' ? 'btn-danger' : undefined}
+          confirm={status === 'rejected' ? t('Turn down order {number}? The customer is told.', { number: order.order_number }) : undefined}
+          run={setOrderStatus.bind(null, params.businessId, params.orderId, status,
+            status === 'rejected' ? 'Rejected by Business' : undefined)} />
       ))}
       {cancellable ? (
-        <form action={cancelOrder}>
-          <input type="hidden" name="businessId" value={params.businessId} />
-          <input type="hidden" name="orderId" value={params.orderId} />
-          <input type="hidden" name="reason" value="Cancelled from Workspace" />
-          <button type="submit" className="btn-ghost">
-            {t('Cancel order')}
-          </button>
-        </form>
+        <ActionButton className="btn-ghost" label={t('Cancel order')} busyLabel={t('Saving…')} confirmLabel={t('Yes, cancel it')}
+          confirm={t('Cancel order {number}? The customer is told, and any money paid will need a refund.', { number: order.order_number })}
+          run={cancelOrder.bind(null, params.businessId, params.orderId, 'Cancelled from Workspace')} />
       ) : null}
     </>
   )
+  const customer = order.customer
+  const reach = order.fulfilment
 
   return (
     <DetailShell
@@ -123,6 +117,15 @@ export default async function OrderDetailPage({
       meta={[
         [t('Payment'), paymentLabel(order, t)],
         [t('Total'), money(Number(order.total_amount) || 0, order.currency)],
+        ...(customer ? [[t('Customer'), (
+          <span key="customer">
+            <Link href={`${base}/customers/${customer.id}`}>{customer.name}</Link>
+            {customer.phone ? <> · <a href={`tel:${customer.phone.replace(/[^+\d]/g, '')}`}>{customer.phone}</a></> : null}
+          </span>
+        )] as [string, React.ReactNode]] : []),
+        ...(reach ? [[reach.mode === 'delivery' ? t('Delivery to') : t('Pickup'), (
+          <span key="reach">{reach.mode === 'delivery' ? (reach.address || t('Address not given')) : t('Customer collects it')}</span>
+        )] as [string, React.ReactNode]] : []),
         ...(order.due_at ? [[t('Wanted for'), <LocalTime key="due" value={order.due_at} />] as [string, React.ReactNode]] : []),
         ...(order.advance_amount ? [[t('Advance asked'), money(Number(order.advance_amount), order.currency)] as [string, React.ReactNode]] : []),
       ]}

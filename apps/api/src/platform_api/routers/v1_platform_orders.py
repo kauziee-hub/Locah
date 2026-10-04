@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
+from platform_core.exceptions import PlatformError
 from platform_core.permissions import (
     ORDERS_CANCEL,
     ORDERS_CREATE,
@@ -258,6 +259,19 @@ async def get_order(
 ) -> dict[str, Any]:
     order = await OrderResolver.resolve(session, business_id=business_id, order_id=order_id)
     data = await OrderService.serialize_order_with_items(session, order)
+    # Who it is for and how it reaches them — the order page shows both.
+    from platform_core.resolvers.customer_resolver import CustomerResolver
+    from platform_core.services.fulfilment import FulfilmentService
+
+    data["customer"] = None
+    if order.customer_contact_id:
+        try:
+            contact = await CustomerResolver.resolve(session, business_id=business_id,
+                                                     contact_id=order.customer_contact_id)
+            data["customer"] = {"id": str(contact.id), "name": contact.display_name, "phone": contact.phone}
+        except PlatformError:
+            data["customer"] = None
+    data["fulfilment"] = await FulfilmentService.for_order(session, business_id, order.id)
     return {
         "data": data,
         "meta": {"correlation_id": actor.request.correlation_id},

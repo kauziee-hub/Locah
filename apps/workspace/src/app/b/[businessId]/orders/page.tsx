@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DataTable, EmptyState, FilterTabs, GateNotice, PageHeader, StatusPill } from '@/components/ui'
-import { advanceOrderStatus } from './actions'
+import { setOrderStatus } from './actions'
+import { ActionButton } from '@/components/ActionButton'
 import { CHANNEL, money, paymentLabel } from './labels'
 import { pageWords } from '@/lib/ws-lang'
 import type { Words } from '@/lib/ws-words'
@@ -160,12 +161,8 @@ export default async function OrdersPage({
                       </span>
                     ) : null}
                     {NEXT[o.status] ? (
-                      <form action={advanceOrderStatus}>
-                        <input type="hidden" name="businessId" value={params.businessId} />
-                        <input type="hidden" name="orderId" value={o.id} />
-                        <input type="hidden" name="status" value={NEXT[o.status][0]} />
-                        <button type="submit" className="btn-ghost">{NEXT[o.status][1]}</button>
-                      </form>
+                      <ActionButton className="btn-ghost" label={NEXT[o.status][1]} busyLabel={t('Saving…')}
+                                    run={setOrderStatus.bind(null, params.businessId, o.id, NEXT[o.status][0], undefined)} />
                     ) : null}
                   </footer>
                 </article>

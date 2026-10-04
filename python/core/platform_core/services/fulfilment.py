@@ -694,6 +694,24 @@ class FulfilmentService:
         }
 
     @staticmethod
+    async def for_order(session: AsyncSession, business_id: uuid.UUID, order_id: uuid.UUID) -> dict[str, Any] | None:
+        """How an order reaches its customer, for the Workspace order page: pickup or
+        delivery, where it stands, and the delivery address in one line."""
+        job = (await session.execute(select(FulfilmentJob).where(
+            FulfilmentJob.business_id == business_id, FulfilmentJob.order_id == order_id))).scalars().first()
+        if job is None:
+            return None
+        a = job.delivery_address if isinstance(job.delivery_address, dict) else {}
+        keys = ("name", "line1", "line2", "line", "address_line", "street", "area", "locality", "landmark", "city",
+                "postal_code", "pincode")
+        parts = [str(a[k]).strip() for k in keys if isinstance(a.get(k), str) and str(a[k]).strip()]
+        phone = a.get("phone") if isinstance(a.get("phone"), str) else None
+        return {"id": str(job.id), "mode": job.mode, "status": job.status,
+                "customer_status": CUSTOMER_FACING_STATUS.get(job.status, job.status),
+                "address": ", ".join(dict.fromkeys(parts)) or None, "phone": phone,
+                "delivery_charge": float(job.delivery_charge)}
+
+    @staticmethod
     async def _public_items(session: AsyncSession, order_id: uuid.UUID) -> list[dict[str, Any]]:
         """What the customer ordered, as their tracking page lists it."""
         from platform_core.models import OrderLineItem

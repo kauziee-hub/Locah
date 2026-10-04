@@ -137,6 +137,22 @@ class ResourceNotFound(PlatformError):
         )
 
 
+# How a refused state reads to a person (the code and details stay exact).
+_STATE_WORDS = {
+    "pending": "waiting", "pending_offline": "waiting to be collected", "preparing": "being prepared",
+    "in_progress": "in progress", "out_for_delivery": "out for delivery", "no_show": "marked as a no-show",
+    "checked_in": "checked in", "partially_refunded": "part refunded", "partially_paid": "part paid",
+}
+
+
+def _state_sentence(resource: str, state: str, action: str | None) -> str:
+    thing = str(resource).replace("_", " ")
+    word = _STATE_WORDS.get(str(state), str(state).replace("_", " "))
+    if action:
+        return f"Can't {action}: this {thing} is {word}."
+    return f"This {thing} is already {word} — refresh to see where it stands."
+
+
 class ResourceStateDenied(PlatformError):
     """Canonical resource/workflow-state gate (Doc 12 §8.9 gate [9] → CONFLICT)."""
 
@@ -160,7 +176,7 @@ class ResourceStateDenied(PlatformError):
         super().__init__(
             status.HTTP_409_CONFLICT,
             "CONFLICT",
-            f"Resource state does not permit this action: {resource} is {state}",
+            _state_sentence(resource, state, action),
             details,
         )
 

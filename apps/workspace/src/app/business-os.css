@@ -1194,3 +1194,16 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
 .bos-pay__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 .bos-pay__confirm p { flex-basis: 100%; margin: 0 0 .2rem; }
 .bos-pay__needs { border-color: var(--status-warn-bd); }
+
+/* ---------------------------------------------------------------- action button (components/ActionButton) */
+.ws-action { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.ws-action__confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.ws-action__confirm > span { font-size: .88rem; max-width: 32ch; }
+.ws-action__error { flex-basis: 100%; color: var(--status-bad-fg); font-size: .85rem; }
+/* A plain Workspace form (components/ActionForm): labelled fields stacked, with room for its answer. */
+.ws-form { display: grid; gap: .45rem; max-width: 32rem; }
+.ws-form input:not([type="checkbox"]):not([type="radio"]), .ws-form textarea, .ws-form select { width: 100%; }
+.ws-form__msg { margin: .2rem 0 0; }
+.bos-lead__moves { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; }
+.bos-lead__lost { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.bos-lead__lost .ws-form__msg { flex-basis: 100%; }

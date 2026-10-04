@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { DataTable, FilterTabs, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { createCustomer } from './actions'
+import { ActionForm, SubmitButton } from '@/components/ActionForm'
 import { BusinessEmpty } from '@/components/BusinessEmpty'
 
 export const dynamic = 'force-dynamic'
@@ -101,15 +102,16 @@ export default async function CustomersPage({
       />
 
       <Section title="Add a customer" id="add">
-        <form action={createCustomer} style={{ display: 'grid', gap: '0.6rem', maxWidth: '32rem' }}>
+        <ActionForm action={createCustomer} className="ws-form" success="Customer added." resetOnSuccess>
           <input type="hidden" name="businessId" value={params.businessId} />
-          <input name="display_name" placeholder="Name" required />
-          <input name="email" type="email" placeholder="Email" />
-          <input name="phone" placeholder="Phone" />
-          <button type="submit" style={{ justifySelf: 'start' }}>
-            Add customer
-          </button>
-        </form>
+          <label className="bos-label" htmlFor="c-name">Name</label>
+          <input id="c-name" name="display_name" required maxLength={200} autoComplete="off" />
+          <label className="bos-label" htmlFor="c-phone">Phone (for WhatsApp updates)</label>
+          <input id="c-phone" name="phone" type="tel" inputMode="tel" placeholder="98400 12345" autoComplete="off" />
+          <label className="bos-label" htmlFor="c-email">Email (optional)</label>
+          <input id="c-email" name="email" type="email" autoComplete="off" />
+          <div><SubmitButton busy="Adding…">Add customer</SubmitButton></div>
+        </ActionForm>
       </Section>
     </div>
   )
