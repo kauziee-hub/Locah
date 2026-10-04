@@ -238,6 +238,7 @@ class PaymentAttemptService:
         status: str | None = None,
         source_type: str | None = None,
         source_id: uuid.UUID | None = None,
+        limit: int | None = None,
     ) -> list[PaymentAttempt]:
         query = select(PaymentAttempt).where(
             PaymentAttempt.business_id == business_id,
@@ -250,6 +251,8 @@ class PaymentAttemptService:
         if source_id:
             query = query.where(PaymentAttempt.source_id == source_id)
         query = query.order_by(PaymentAttempt.created_at.desc())
+        if limit:
+            query = query.limit(limit)
         return list((await session.execute(query)).scalars().all())
 
     @staticmethod

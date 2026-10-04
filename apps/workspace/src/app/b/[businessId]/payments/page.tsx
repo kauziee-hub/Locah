@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader, ROW, StatusPill, TABLE, TD, TH } from '@/components/ModuleState'
+import { dayTimeLabel, rupees } from '@/lib/when'
+import { sourceHref } from './links'
 import { RazorpayConnect } from './RazorpayConnect'
 import { ConfirmRow } from './ConfirmRow'
 
@@ -20,6 +22,9 @@ type Payment = {
   refunded_amount: number
   failure_reason: string | null
   created_at: string
+  for: string
+  method_label: string
+  status_label: string
 }
 
 type Row = {
@@ -59,15 +64,6 @@ type MerchantConnection = {
 } | null
 
 const REFUND_WORDS: Record<string, string> = { succeeded: 'Refunded', pending: 'Being refunded', processing: 'Being refunded', failed: 'Refund failed' }
-const rupees = (v: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v)
-
-function sourceHref(businessId: string, type: string, id: string) {
-  const b = `/b/${businessId}`
-  return { order: `${b}/orders/${id}`, booking: `${b}/bookings/${id}`, invoice: `${b}/invoices/${id}`,
-    khata: `${b}/khata/${id}`, membership: `${b}/memberships` }[type] ?? `${b}/payments`
-}
-
 /**
  * Money in (Founder refinement — Payments §14): what arrived today, what is
  * waiting for you to confirm, what failed and needs you, who still owes what,
@@ -229,7 +225,7 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
 
       {payments.length ? (
         <details className="bos-section">
-          <summary>Every payment record ({payments.length})</summary>
+          <summary>All payments ({payments.length}{payments.length >= 200 ? ', latest 200' : ''})</summary>
           <div className="ws-tablewrap" style={{ marginTop: '.8rem' }}>
             <table style={TABLE}>
               <thead>
@@ -245,14 +241,14 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
                 {payments.map((p) => (
                   <tr key={p.id} style={ROW}>
                     <td style={TD}>
-                      <Link href={`/b/${params.businessId}/payments/${p.id}`}>{p.source_type}</Link>
+                      <Link href={`/b/${params.businessId}/payments/${p.id}`}>{p.for}</Link>
                     </td>
                     <td style={{ ...TD, fontVariantNumeric: 'tabular-nums' }}>{rupees(p.amount)}</td>
-                    <td style={TD}>{p.payment_method}</td>
+                    <td style={TD}>{p.method_label}</td>
                     <td style={TD}>
-                      <StatusPill value={p.status} />
+                      <StatusPill value={p.status} label={p.status_label} />
                     </td>
-                    <td style={TD}>{new Date(p.created_at).toLocaleDateString('en-IN')}</td>
+                    <td style={TD}>{dayTimeLabel(p.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

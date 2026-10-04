@@ -1176,3 +1176,20 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
   margin: .6rem 0 0; padding: .6rem .9rem; border-radius: var(--radius); font-size: .9rem;
   border: 1px solid var(--status-warn-bd); background: var(--status-warn-bg); color: var(--status-warn-fg);
 }
+
+/* ---------------------------------------------------------------- one payment */
+.bos-pay { display: grid; gap: 1rem; max-width: 760px; }
+.bos-pay .bos-card, .bos-pay .bos-section { margin: 0; }
+.bos-pay__status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+.bos-pay__facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .8rem 1.2rem; margin: 1rem 0 0; }
+.bos-pay__facts dt { font-size: .76rem; color: var(--color-muted); }
+.bos-pay__facts dd { margin: .1rem 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bos-pay__failed {
+  margin-top: 1rem; padding: .7rem .9rem; border-radius: var(--radius); font-size: .9rem;
+  border: 1px solid var(--status-bad-bd); background: var(--status-bad-bg); color: var(--status-bad-fg);
+}
+.bos-pay__failed details { margin-top: .4rem; color: var(--color-muted); font-size: .8rem; }
+.bos-pay__form { display: grid; gap: .5rem; max-width: 22rem; }
+.bos-pay__form input, .bos-pay__form select { width: 100%; }
+.bos-pay__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.bos-pay__confirm p { flex-basis: 100%; margin: 0 0 .2rem; }

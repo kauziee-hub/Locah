@@ -3,43 +3,35 @@
 import { revalidatePath } from 'next/cache'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { platformUrl } from '@platform/config'
+import { sendJson, type ActionResult } from '@/lib/server-send'
 
 const apiUrl = platformUrl('api')
 
-async function send(path: string, method: string, body?: unknown) {
-  const token = await getAccessToken()
-  if (!token) throw new Error('Unauthorized')
-  const res = await fetch(`${apiUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`)
-  return res.json()
+/** Money for a pay-later / pay-at-the-business payment was received in person. */
+export async function markPaymentReceived(businessId: string, paymentId: string): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/payments/${paymentId}/record-settlement`, 'POST', {})
+  if (r.ok) {
+    revalidatePath(`/b/${businessId}/payments`)
+    revalidatePath(`/b/${businessId}/payments/${paymentId}`)
+  }
+  return r
 }
 
-export async function recordSettlement(formData: FormData) {
-  const businessId = String(formData.get('businessId'))
-  const paymentId = String(formData.get('paymentId'))
-  await send(
-    `/v1/platform/businesses/${businessId}/payments/${paymentId}/record-settlement`,
-    'POST',
-    {}
-  )
-  revalidatePath(`/b/${businessId}/payments`)
-  revalidatePath(`/b/${businessId}/payments/${paymentId}`)
-}
-
-export async function refundPayment(formData: FormData) {
-  const businessId = String(formData.get('businessId'))
-  const paymentId = String(formData.get('paymentId'))
-  await send(`/v1/platform/businesses/${businessId}/payments/${paymentId}/refunds`, 'POST', {
-    amount: Number(formData.get('amount')),
-    reason: String(formData.get('reason')),
-    idempotency_key: String(formData.get('idempotency_key') || '') || undefined,
-  })
-  revalidatePath(`/b/${businessId}/payments`)
-  revalidatePath(`/b/${businessId}/payments/${paymentId}`)
+/**
+ * Record a refund. The idempotency key is made once per form: a double-click or
+ * a retried request records the refund once.
+ */
+export async function recordRefund(
+  businessId: string,
+  paymentId: string,
+  body: { amount: number; reason: string; idempotency_key: string },
+): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/payments/${paymentId}/refunds`, 'POST', body)
+  if (r.ok) {
+    revalidatePath(`/b/${businessId}/payments`)
+    revalidatePath(`/b/${businessId}/payments/${paymentId}`)
+  }
+  return r
 }
 
 export type RazorpayState = { ok: boolean; error: string | null; status?: string }

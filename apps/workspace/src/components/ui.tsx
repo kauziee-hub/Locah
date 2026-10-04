@@ -22,6 +22,7 @@ const STATUS_TONE: Record<string, Tone> = {
   pending: 'warn', preparing: 'warn', processing: 'warn', partial: 'warn', low_stock: 'warn',
   awaiting: 'warn', unconfirmed: 'warn', draft: 'warn', changes_pending: 'warn',
   under_review: 'warn', past_due: 'warn', reserved: 'warn',
+  pending_offline: 'warn', partially_refunded: 'warn', partially_paid: 'warn',
   // bad
   failed: 'bad', cancelled: 'bad', canceled: 'bad', rejected: 'bad', lost: 'bad',
   suspended: 'bad', expired: 'bad', out_of_stock: 'bad', blocked: 'bad', overdue: 'bad',
@@ -58,7 +59,8 @@ export function StatusPill({ value, tone, label: shown }: { value: string; tone?
         fontWeight: 500,
         lineHeight: 1.6,
         whiteSpace: 'nowrap',
-        textTransform: 'capitalize',
+        // Given words are shown as written; a raw stored value is tidied.
+        textTransform: shown ? 'none' : 'capitalize',
         ...TONE_VARS[resolved],
       }}
     >

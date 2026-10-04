@@ -25,6 +25,7 @@ from platform_core.permissions import (
 from platform_core.resolvers.payment_resolver import PaymentResolver
 from platform_core.services.merchant import MerchantService
 from platform_core.services.payment_attempt import PaymentAttemptService
+from platform_core.services.payment_collect import PaymentCollectService
 from platform_core.services.refund import RefundService
 from platform_core.validation.payment import SOURCE_TYPES
 
@@ -108,6 +109,7 @@ async def list_payments(
     status: str | None = Query(default=None),
     source_type: str | None = Query(default=None),
     source_id: UUID | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
     actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
@@ -117,9 +119,10 @@ async def list_payments(
         status=status,
         source_type=source_type,
         source_id=source_id,
+        limit=limit,
     )
     return {
-        "data": [PaymentAttemptService.serialize(p) for p in payments],
+        "data": await PaymentCollectService.describe(session, business_id, payments),
         "meta": {"correlation_id": actor.request.correlation_id, "count": len(payments)},
     }
 
@@ -294,7 +297,7 @@ async def get_payment(
         session, business_id=business_id, payment_id=payment_id
     )
     return {
-        "data": PaymentAttemptService.serialize(payment),
+        "data": (await PaymentCollectService.describe(session, business_id, [payment]))[0],
         "meta": {"correlation_id": actor.request.correlation_id},
     }
 

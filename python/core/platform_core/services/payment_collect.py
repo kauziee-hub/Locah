@@ -77,6 +77,12 @@ STATE_WORDS = {
 # How a payment came or is meant to come, as the Workspace shows it.
 ATTEMPT_METHOD_WORDS = {"upi_direct": "UPI to your UPI ID", "online": "Online", "cod": "Cash on delivery",
                         "pay_at_business": "Pay at the business", "pay_later": "Pay later", **RECORDED_METHODS}
+# What the OWNER reads about one payment (the Workspace) — never a status code.
+OWNER_STATUS_WORDS = {
+    "pending": "Waiting for payment", "processing": "Being processed", "pending_offline": "To collect",
+    "succeeded": "Received", "failed": "Failed", "partially_refunded": "Part refunded", "refunded": "Refunded",
+    "cancelled": "Cancelled", "expired": "Expired",
+}
 # A payment link's state as its page says it (the tenant page translates these — P1-10E6).
 LINK_STATE_WORDS: dict[str, str | None] = {
     "open": None, "being_confirmed": STATE_WORDS["pending"], "failed": STATE_WORDS["failed"],
@@ -289,6 +295,38 @@ class PaymentCollectService:
         if a.status == "pending_offline" and balance is not None:
             row["amount"] = float(min(_d(a.amount), balance))
         return row
+
+    @staticmethod
+    def status_label(a: PaymentAttempt) -> str:
+        if a.status == "pending_offline" and a.payment_method == "upi_direct":
+            return "Customer says paid — check it arrived"
+        return str(OWNER_STATUS_WORDS.get(a.status) or str(a.status).replace("_", " ").capitalize())
+
+    @staticmethod
+    async def describe(session: AsyncSession, business_id: uuid.UUID,
+                       payments: list[PaymentAttempt]) -> list[dict[str, Any]]:
+        """Payments as the Workspace shows them: what each was for ("Order
+        NILA-0042"), how it was paid and where it stands, in plain words."""
+        from platform_core.resolvers.payment_resolver import PaymentResolver
+
+        labels: dict[tuple[str, str], str] = {}
+        out = []
+        for a in payments:
+            key = (a.source_type, str(a.source_id))
+            if key not in labels:
+                try:
+                    labels[key] = (await PaymentCollectService.source(session, business_id, a.source_type,
+                                                                      a.source_id)).label
+                except (ResourceNotFound, ValidationError):
+                    labels[key] = a.source_type.replace("_", " ").capitalize()
+            out.append(PaymentResolver.serialize_attempt(a) | {
+                "for": labels[key],
+                "method_label": ATTEMPT_METHOD_WORDS.get(a.payment_method, a.payment_method),
+                "status_label": PaymentCollectService.status_label(a),
+                "purpose_label": PURPOSES.get(str(a.purpose or ""), None),
+                "verified_at": a.verified_at.isoformat() if a.verified_at else None,
+            })
+        return out
 
     @staticmethod
     def _attempt_row(a: PaymentAttempt) -> dict[str, Any]:

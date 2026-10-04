@@ -493,3 +493,21 @@ async def test_payment_links_are_tenant_isolated() -> None:
             {"b": business_id, "h": uuid.uuid4().hex})
 
     await assert_tenant_isolated("payments_requests", insert)
+
+
+@DB
+def test_the_workspace_reads_each_payment_in_plain_words(monkeypatch: Any) -> None:
+    """The payment list and a payment's page say what it was for, how it was paid
+    and where it stands — never a source type, method code or status code."""
+    owner, shop = _shop(monkeypatch)
+    order = _order(owner, shop)
+    paid = client.post(f"{shop['base']}/collect/record", json={
+        "source_type": "order", "source_id": order["id"], "amount": 400, "method": "cash"}, headers=owner)
+    assert paid.status_code == 200, paid.text
+    rows = client.get(f"{shop['base']}/payments?source_id={order['id']}", headers=owner).json()["data"]
+    cash = next(r for r in rows if r["payment_method"] == "cash")
+    assert cash["for"].startswith("Order ") and order["order_number"] in cash["for"]
+    assert (cash["method_label"], cash["status_label"]) == ("Cash", "Received")
+    one = client.get(f"{shop['base']}/payments/{cash['id']}", headers=owner).json()["data"]
+    assert one["for"] == cash["for"] and one["refundable_amount"] == 400
+    assert client.get(f"{shop['base']}/payments?limit=0", headers=owner).status_code == 422
