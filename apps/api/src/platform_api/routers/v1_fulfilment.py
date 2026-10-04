@@ -114,6 +114,28 @@ async def create_zone(
     }
 
 
+class ZoneUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: bool | None = None
+    charge_amount: float | None = None
+
+
+@router.patch("/{business_id}/fulfilment/zones/{zone_id}")
+async def update_zone(
+    business_id: UUID,
+    zone_id: UUID,
+    body: ZoneUpdateRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_MANAGE_CONFIG, "fulfilment")),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    zone = await FulfilmentService.update_zone(
+        session, business_id=business_id, zone_id=zone_id, actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id, is_active=body.is_active, charge_amount=body.charge_amount)
+    await session.commit()
+    return {"data": FulfilmentService.serialize_zone(zone), "meta": {"correlation_id": actor.request.correlation_id}}
+
+
 @router.get("/{business_id}/fulfilment/zones")
 async def list_zones(
     business_id: UUID,
@@ -139,7 +161,7 @@ async def list_jobs(
         session, business_id, status=status, mode=mode
     )
     return {
-        "data": [FulfilmentService.serialize_job(j) for j in jobs],
+        "data": await FulfilmentService.describe_jobs(session, business_id, jobs),
         "meta": {"correlation_id": actor.request.correlation_id, "count": len(jobs)},
     }
 
@@ -153,7 +175,7 @@ async def get_job(
 ) -> dict[str, Any]:
     job = await FulfilmentService.get_job(session, business_id=business_id, job_id=job_id)
     return {
-        "data": FulfilmentService.serialize_job(job),
+        "data": (await FulfilmentService.describe_jobs(session, business_id, [job]))[0],
         "meta": {"correlation_id": actor.request.correlation_id},
     }
 

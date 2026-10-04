@@ -285,6 +285,41 @@ class FulfilmentService:
         return zone
 
     @staticmethod
+    async def update_zone(
+        session: AsyncSession, *, business_id: uuid.UUID, zone_id: uuid.UUID, actor_id: uuid.UUID,
+        correlation_id: str, is_active: bool | None = None, charge_amount: float | None = None,
+    ) -> FulfilmentZone:
+        """Switch a delivery zone off or on, or change its charge."""
+        await FulfilmentService.assert_module_active(session, business_id)
+        business = await BusinessService.get_by_id(session, business_id)
+        assert_business_mutable(business.state, action="configure_fulfilment_zone")
+        zone = (await session.execute(select(FulfilmentZone).where(
+            FulfilmentZone.business_id == business_id, FulfilmentZone.id == zone_id,
+            FulfilmentZone.deleted_at.is_(None)))).scalars().first()
+        if zone is None:
+            raise ResourceNotFound("Delivery zone")
+        before = FulfilmentService.serialize_zone(zone)
+        if is_active is not None:
+            zone.is_active = bool(is_active)
+        if charge_amount is not None:
+            if charge_amount < 0 or charge_amount > 100000:
+                raise ValidationError("A delivery charge is between ₹0 and ₹1,00,000",
+                                      details={"field": "charge_amount"})
+            zone.charge_amount = float(charge_amount)
+        zone.version += 1
+        zone.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+        after = FulfilmentService.serialize_zone(zone)
+        await AuditService.record(
+            session, event_type="fulfilment.zone_configured", actor_identity_id=actor_id, actor_context="business",
+            business_id=business_id, resource_type="fulfilment_zone", resource_id=zone.id, action="updated",
+            before_state=before, after_state=after)
+        await OutboxService.publish(
+            session, event_type="fulfilment.zone_configured", payload={"business_id": str(business_id), "zone": after},
+            business_id=business_id, correlation_id=correlation_id)
+        return zone
+
+    @staticmethod
     async def list_zones(
         session: AsyncSession, business_id: uuid.UUID, *, active_only: bool = False
     ) -> list[FulfilmentZone]:
@@ -456,8 +491,42 @@ class FulfilmentService:
             query = query.where(FulfilmentJob.status == status)
         if mode:
             query = query.where(FulfilmentJob.mode == mode)
-        query = query.order_by(FulfilmentJob.created_at.desc())
+        query = query.order_by(FulfilmentJob.created_at.desc()).limit(300)
         return list((await session.execute(query)).scalars().all())
+
+    @staticmethod
+    async def describe_jobs(session: AsyncSession, business_id: uuid.UUID,
+                            jobs: list[FulfilmentJob]) -> list[dict[str, Any]]:
+        """Jobs as the Workspace shows them: whose order, its number, and the
+        delivery address in one line — never an id or a stored status."""
+        from platform_core.models import CustomerContact
+
+        order_ids = [j.order_id for j in jobs]
+        orders = {o.id: o for o in (await session.execute(select(SalesOrder).where(
+            SalesOrder.business_id == business_id, SalesOrder.id.in_(order_ids)))).scalars().all()} if order_ids else {}
+        contact_ids = [o.customer_contact_id for o in orders.values() if o.customer_contact_id]
+        people = {c.id: c for c in (await session.execute(select(CustomerContact).where(
+            CustomerContact.business_id == business_id, CustomerContact.id.in_(contact_ids)))).scalars().all()
+        } if contact_ids else {}
+        out = []
+        for j in jobs:
+            order = orders.get(j.order_id)
+            person = people.get(order.customer_contact_id) if order and order.customer_contact_id else None
+            a = j.delivery_address if isinstance(j.delivery_address, dict) else {}
+            keys = ("line1", "line2", "line", "address_line", "street", "area", "locality", "landmark", "city",
+                    "postal_code", "pincode")
+            parts = [str(a[k]).strip() for k in keys if isinstance(a.get(k), str) and str(a[k]).strip()]
+            out.append(FulfilmentService.serialize_job(j) | {
+                "order_number": order.order_number if order else None,
+                "order_total": float(order.total_amount) if order else None,
+                "customer_name": (person.display_name if person else None) or (
+                    str(a.get("name")).strip() if isinstance(a.get("name"), str) else None),
+                "customer_phone": (person.phone if person else None) or (
+                    str(a.get("phone")).strip() if isinstance(a.get("phone"), str) else None),
+                "address_line": ", ".join(dict.fromkeys(parts)) or None,
+                "note": str(a.get("note")).strip() if isinstance(a.get("note"), str) and a.get("note") else None,
+            })
+        return out
 
     @staticmethod
     async def get_job(
@@ -606,6 +675,43 @@ class FulfilmentService:
             business_id=business_id,
             correlation_id=correlation_id,
         )
+
+    # Where an order's step puts its pickup / delivery job. Only ever forward: a
+    # job already further along (or finished) is left alone.
+    _FOLLOW: dict[str, dict[str, str]] = {
+        "order.preparing": {"pending": "preparing"},
+        "order.ready": {"pending": "ready", "preparing": "ready"},
+        # A completed order was handed over: a pickup was collected; a delivery
+        # that is on its way arrived. A delivery not yet sent out is left for the
+        # owner — it must pass through "out for delivery" (the customer's link).
+        "order.completed": {"pending": "delivered", "preparing": "delivered", "ready": "delivered",
+                            "out_for_delivery": "delivered"},
+    }
+
+    @staticmethod
+    async def follow_order(session: AsyncSession, *, business_id: uuid.UUID, order_id: uuid.UUID,
+                           event_type: str, correlation_id: str) -> str | None:
+        """Move the order's job with the order, so nobody updates the same order twice.
+        Returns the job's new status, or None when it was left as it was."""
+        job = await FulfilmentService.get_job_by_order(session, business_id=business_id, order_id=order_id)
+        if job is None:
+            return None
+        to = FulfilmentService._FOLLOW.get(event_type, {}).get(job.status)
+        if to is None or (to == "delivered" and job.mode != "pickup" and job.status != "out_for_delivery"):
+            return None
+        before = job.status
+        job.status = to
+        job.updated_at = datetime.now(timezone.utc)
+        job.version += 1
+        await session.flush()
+        payload = {"business_id": str(business_id), "job_id": str(job.id), "order_id": str(order_id),
+                   "from": before, "to": to, "reason": None}
+        await OutboxService.publish(session, event_type="fulfilment.status_changed", payload=payload,
+                                    business_id=business_id, correlation_id=correlation_id)
+        if to == "delivered":
+            await OutboxService.publish(session, event_type="fulfilment.delivered", payload=payload,
+                                        business_id=business_id, correlation_id=correlation_id)
+        return to
 
     @staticmethod
     async def _due_words(session: AsyncSession, order: SalesOrder) -> str | None:

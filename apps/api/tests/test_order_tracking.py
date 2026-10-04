@@ -168,3 +168,28 @@ def test_expired_tracking_token(owner: tuple[dict[str, str], uuid.UUID]) -> None
     resp = client.get(f"/v1/public/orders/{order_id}/tracking?token={token}")
     assert resp.status_code == 200
     assert resp.json()["data"]["state"] == "expired"
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_the_pickup_job_follows_the_order(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    """Marking the order Preparing, Ready and Completed moves its pickup job the same
+    way — the owner never updates one order in two places — and never backwards."""
+    from platform_testing.phase_b import drain_events, sql
+
+    headers, _ = owner
+    client = TestClient(app)
+    data = _place_pickup(client, headers)
+    order_id = data["order"]["id"]
+    bid = sql("select cast(business_id as text) from orders_orders where id = cast(:o as uuid)", o=order_id)[0][0]
+    base = f"/v1/platform/businesses/{bid}/orders/{order_id}/status"
+
+    def job() -> str:
+        drain_events(bid)
+        return str(sql("select status from fulfilment_jobs where order_id = cast(:o as uuid)", o=order_id)[0][0])
+
+    assert job() == "pending"
+    for status, expected in (("accepted", "pending"), ("preparing", "preparing"), ("ready", "ready"),
+                             ("completed", "delivered")):
+        r = client.post(base, json={"status": status}, headers=headers)
+        assert r.status_code == 200, r.text
+        assert job() == expected, status

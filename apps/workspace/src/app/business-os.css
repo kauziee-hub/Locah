@@ -1207,3 +1207,6 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
 .bos-lead__moves { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; }
 .bos-lead__lost { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .bos-lead__lost .ws-form__msg { flex-basis: 100%; }
+.bos-zones { display: grid; gap: 1rem; max-width: 760px; }
+.bos-zones .bos-card { margin: 0; }
+.bos-zones__add { font-size: .95rem; margin: 1.2rem 0 .4rem; }
