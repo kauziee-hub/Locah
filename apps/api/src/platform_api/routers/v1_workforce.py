@@ -273,6 +273,28 @@ async def unassign_location(
     }
 
 
+@router.delete("/{business_id}/workforce/members/{member_id}/services/{offering_id}")
+async def dissociate_service(
+    business_id: UUID,
+    member_id: UUID,
+    offering_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    await WorkforceService.dissociate_service(
+        session,
+        business_id=business_id,
+        member_id=member_id,
+        offering_id=offering_id,
+        actor_id=actor.request.identity_id,
+    )
+    await session.commit()
+    return {
+        "data": {"ok": True},
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
 @router.post("/{business_id}/workforce/members/{member_id}/services")
 async def associate_service(
     business_id: UUID,

@@ -44,3 +44,19 @@ export function rupees(value: number | string | null | undefined): string {
     style: 'currency', currency: 'INR', maximumFractionDigits: Number.isInteger(n) ? 0 : 2,
   }).format(n)
 }
+
+/** "09:00" or "17:30:00" (a time of day, no date) -> "9 am", "5:30 pm", "noon", "midnight". */
+export function clockLabel(hhmm: string | null | undefined): string {
+  if (!hhmm) return '—'
+  const [h, m] = hhmm.split(':').map((x) => Number(x))
+  if (Number.isNaN(h)) return hhmm
+  if ((h === 0 && !m) || (h === 23 && m === 59)) return 'midnight'
+  if (h === 12 && !m) return 'noon'
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`
+}
+
+/** Today's date in India as YYYY-MM-DD (for date inputs), whatever the server's clock zone. */
+export function todayInIndia(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date())
+}

@@ -233,3 +233,33 @@ def test_workforce_audit_and_outbox(owner: tuple[dict[str, str], uuid.UUID]) -> 
         await engine.dispose()
 
     asyncio.run(_assert())
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_a_service_can_be_taken_off_someone_and_they_can_come_back(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_workforce(client, headers, business_id)
+    location_id = _primary_location(client, headers, business_id)
+    base = f"/v1/platform/businesses/{business_id}/workforce/members"
+    offering_id = client.post(f"/v1/platform/businesses/{business_id}/products", json={
+        "title": "Facial", "offering_type": "service", "status": "active", "price_amount": 900}, headers=headers,
+    ).json()["data"]["id"]
+    member_id = client.post(base, json={"display_name": "Priya", "location_ids": [location_id],
+                                        "primary_location_id": location_id, "offering_ids": [offering_id]},
+                            headers=headers).json()["data"]["id"]
+
+    gone = client.delete(f"{base}/{member_id}/services/{offering_id}", headers=headers)
+    assert gone.status_code == 200, gone.text
+    assert client.get(f"{base}/{member_id}", headers=headers).json()["data"]["services"] == []
+    assert client.delete(f"{base}/{member_id}/services/{offering_id}", headers=headers).status_code == 404
+
+    # Deactivated, then back: only the two real statuses are accepted.
+    assert client.post(f"{base}/{member_id}/deactivate", headers=headers).status_code == 200
+    back = client.patch(f"{base}/{member_id}", json={"status": "active"}, headers=headers)
+    assert back.status_code == 200 and back.json()["data"]["status"] == "active"
+    assert client.patch(f"{base}/{member_id}", json={"status": "on_holiday"}, headers=headers).status_code == 422
+    assert client.patch(f"{base}/{member_id}", json={"display_name": "  "}, headers=headers).status_code == 422

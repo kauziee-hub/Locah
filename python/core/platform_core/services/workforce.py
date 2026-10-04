@@ -172,6 +172,10 @@ class WorkforceService:
             session, business_id=business_id, member_id=member_id
         )
         before = WorkforceService.serialize_member(member)
+        if payload.get("status") is not None and payload["status"] not in ("active", "inactive"):
+            raise ValidationError("Status must be active or inactive", details={"field": "status"})
+        if "display_name" in payload and payload["display_name"] is not None and not str(payload["display_name"]).strip():
+            raise ValidationError("Name is required", details={"field": "display_name"})
         for key in ("display_name", "email", "phone", "designation", "notes", "status"):
             if key in payload and payload[key] is not None:
                 setattr(member, key, payload[key])
@@ -305,6 +309,42 @@ class WorkforceService:
         )
 
     @staticmethod
+    async def dissociate_service(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        member_id: uuid.UUID,
+        offering_id: uuid.UUID,
+        actor_id: uuid.UUID,
+    ) -> None:
+        """This person no longer does this service: customers can't pick them
+        for it any more. Bookings already made stay as they are."""
+        row = (
+            await session.execute(
+                select(WorkforceServiceAssociation).where(
+                    WorkforceServiceAssociation.business_id == business_id,
+                    WorkforceServiceAssociation.member_id == member_id,
+                    WorkforceServiceAssociation.offering_id == offering_id,
+                )
+            )
+        ).scalars().first()
+        if row is None:
+            raise ResourceNotFound("WorkforceServiceAssociation")
+        await session.delete(row)
+        await session.flush()
+        await AuditService.record(
+            session,
+            event_type="workforce.service_dissociated",
+            actor_identity_id=actor_id,
+            actor_context="business",
+            business_id=business_id,
+            resource_type="workforce_member",
+            resource_id=member_id,
+            action="service_dissociated",
+            after_state={"offering_id": str(offering_id)},
+        )
+
+    @staticmethod
     async def associate_service(
         session: AsyncSession,
         *,
@@ -394,7 +434,7 @@ class WorkforceService:
         except (ValueError, IndexError) as exc:
             raise ValidationError("Times look like 09:00", details={"field": "start_time"}) from exc
         if not isinstance(start, time) or not isinstance(end, time) or end <= start:
-            raise ValidationError("A span must start before it ends", details={"field": "end_time"})
+            raise ValidationError("The end time must be after the start time", details={"field": "end_time"})
         weekday = payload.get("weekday")
         on = payload.get("exception_date")
         if isinstance(on, str):
