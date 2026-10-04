@@ -2,7 +2,7 @@
 
 Nothing here reaches Meta: the Cloud API adapter runs against an httpx mock
 transport holding it to the request shapes in Meta's current documentation
-(checked 2026-09-30, docs/current-build/WHATSAPP-CALLING-SETUP.md), and the
+(checked 2026-09-30; settings in docs/DEPLOYMENT.md), and the
 sandbox number stands in for a real one. The Meta app values are fake test
 values; the Graph version is deliberately not a real one, to prove it comes
 from configuration and nowhere else.

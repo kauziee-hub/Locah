@@ -1,7 +1,7 @@
 """The interview evaluation as a gate: seventeen owners, two modes, zero AI calls.
 
 See platform_testing/interview_eval.py for how a persona is scripted and
-scored, and docs/phase-a/interview-transcripts/ for the transcripts.
+scored; `main()` there writes the transcripts to acceptance-out/interview-transcripts/.
 """
 
 from __future__ import annotations

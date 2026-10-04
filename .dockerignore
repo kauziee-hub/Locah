@@ -13,5 +13,4 @@
 **/.mypy_cache
 test-results
 full-suite-run.txt
-TECHNOVA2026
 acceptance-out

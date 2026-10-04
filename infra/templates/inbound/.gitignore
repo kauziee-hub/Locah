@@ -1,7 +1,0 @@
-# Prebuilt template intake — raw exports are extraction inputs, not repo artifacts.
-# Keep the contract and each drop's intent notes; ignore the payloads.
-*
-!.gitignore
-!README.md
-!*/
-!**/NOTES.md

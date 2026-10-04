@@ -524,8 +524,7 @@ def mobile_strategy(archetype: str, hero: str) -> dict[str, Any]:
 
 
 # What the earlier LOCAH sites owners wanted to publish did, per design family —
-# the reasoning behind them, not their words, names or pictures (see
-# docs/audits/golden-reference-analysis-v1.md). Given to the model with each
+# the reasoning behind them, not their words, names or pictures. Given to the model with each
 # family it may choose, so it chooses a language, not a colour.
 FAMILY_PRINCIPLES: dict[str, str] = {
     "editorial_warm": "Image-led editorial warmth: a full-bleed table-top photograph with the headline over "

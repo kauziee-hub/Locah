@@ -342,7 +342,7 @@ async def run_all(personas: list[Persona], out: Path | None = None) -> list[Run]
     return runs
 
 
-def main(out: str = "docs/phase-a/interview-transcripts") -> None:  # pragma: no cover
+def main(out: str = "acceptance-out/interview-transcripts") -> None:  # pragma: no cover
     from platform_testing.interview_personas import ALL_PERSONAS
 
     runs = asyncio.run(run_all(ALL_PERSONAS, Path(out)))
