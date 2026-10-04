@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { actionPageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
@@ -10,6 +12,10 @@ import { EnquiryForm } from '@/components/website/EnquiryForm'
 import { Specs, priceLabel, type PublicOffering } from '@/components/website/offering-view'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return actionPageMetadata(params.slug, 'Send an enquiry')
+}
 
 /** A business's enquiry page — its own colours, the item asked about, the form. */
 export default async function EnquirePage({

@@ -286,6 +286,43 @@ async def create_payment(
     }
 
 
+class UpiBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    upi_vpa: str | None = Field(default=None, max_length=320)
+    upi_payee_name: str | None = Field(default=None, max_length=100)
+
+
+@router.get("/{business_id}/payments/upi")
+async def get_upi(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """The UPI ID customers pay on payment links (the same one the counter uses)."""
+    from platform_core.models import PosSettings
+
+    row = await session.get(PosSettings, business_id)
+    return {"data": {"upi_vpa": row.upi_vpa if row else None, "upi_payee_name": row.upi_payee_name if row else None},
+            "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+@router.put("/{business_id}/payments/upi")
+async def put_upi(
+    business_id: UUID,
+    body: UpiBody,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_MANAGE_CONNECTION, "payments")),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    from platform_core.services.pos import PosService
+
+    row = await PosService.set_upi(session, business_id, actor.request.identity_id, upi_vpa=body.upi_vpa,
+                                   upi_payee_name=body.upi_payee_name)
+    await session.commit()
+    return {"data": {"upi_vpa": row.upi_vpa, "upi_payee_name": row.upi_payee_name},
+            "meta": {"correlation_id": actor.request.correlation_id}}
+
+
 @router.get("/{business_id}/payments/{payment_id}")
 async def get_payment(
     business_id: UUID,

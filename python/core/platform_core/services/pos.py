@@ -201,6 +201,28 @@ class PosService:
                                   after_state=PosService.serialize_settings(row))
         return row
 
+    @staticmethod
+    async def set_upi(session: AsyncSession, business_id: uuid.UUID, actor_id: uuid.UUID, *,
+                      upi_vpa: str | None, upi_payee_name: str | None) -> PosSettings:
+        """The business's one UPI ID — used at the counter and on payment links.
+        Set from Payments without touching the counter's other settings."""
+        vpa = (upi_vpa or "").strip() or None
+        if vpa and not _VPA.match(vpa):
+            raise _err("upi_vpa", "A UPI ID looks like name@bank")
+        row = await session.get(PosSettings, business_id)
+        before = PosService.serialize_settings(row)
+        if row is None:
+            row = PosSettings(business_id=business_id)
+            session.add(row)
+        row.upi_vpa, row.upi_payee_name = vpa, ((upi_payee_name or "").strip()[:100] or None)
+        row.updated_by, row.updated_at = actor_id, datetime.now(timezone.utc)
+        await session.flush()
+        await AuditService.record(session, event_type="payments.upi.updated", actor_identity_id=actor_id,
+                                  actor_context="business", action="update", business_id=business_id,
+                                  resource_type="pos_settings", before_state=before,
+                                  after_state=PosService.serialize_settings(row))
+        return row
+
     # ------------------------------------------------------------------ PINs and approvals
     @staticmethod
     async def set_pin(session: AsyncSession, business_id: uuid.UUID, identity_id: uuid.UUID, pin: str) -> None:

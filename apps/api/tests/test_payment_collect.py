@@ -511,3 +511,19 @@ def test_the_workspace_reads_each_payment_in_plain_words(monkeypatch: Any) -> No
     one = client.get(f"{shop['base']}/payments/{cash['id']}", headers=owner).json()["data"]
     assert one["for"] == cash["for"] and one["refundable_amount"] == 400
     assert client.get(f"{shop['base']}/payments?limit=0", headers=owner).status_code == 422
+
+
+@DB
+def test_a_business_without_the_counter_sets_its_upi_id_from_payments(monkeypatch: Any) -> None:
+    """Payment links pay to the business's UPI ID. A café that never switches on
+    counter billing must still be able to give one — from Payments."""
+    _, owner = new_identity(monkeypatch)
+    bid = create_business(client, owner, business_type="cafe", modules=("offerings-catalog", "orders", "payments"))
+    base = f"/v1/platform/businesses/{bid}/payments/upi"
+    assert client.get(base, headers=owner).json()["data"] == {"upi_vpa": None, "upi_payee_name": None}
+    bad = client.put(base, json={"upi_vpa": "not a upi id"}, headers=owner)
+    assert bad.status_code == 422 and "name@bank" in bad.text
+    ok = client.put(base, json={"upi_vpa": "nilacafe@okicici", "upi_payee_name": "Nila Cafe"}, headers=owner)
+    assert ok.status_code == 200, ok.text
+    assert client.get(base, headers=owner).json()["data"]["upi_vpa"] == "nilacafe@okicici"
+    assert sql("select upi_vpa from pos_settings where business_id = cast(:b as uuid)", b=bid) == [("nilacafe@okicici",)]

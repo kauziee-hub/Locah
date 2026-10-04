@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiTry } from '@/lib/api'
+import { apiTry, businessHeaders } from '@/lib/api'
 import { GateNotice, PageHeader, ROW, StatusPill, TABLE, TD, TH } from '@/components/ModuleState'
 import { dayTimeLabel, rupees } from '@/lib/when'
 import { sourceHref } from './links'
 import { RazorpayConnect } from './RazorpayConnect'
 import { ConfirmRow } from './ConfirmRow'
+import { UpiSetting } from './UpiSetting'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,10 +75,12 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
   if (!token) redirect('/login')
 
   const base = `/v1/platform/businesses/${params.businessId}`
-  const [overviewRes, res, merchantRes] = await Promise.all([
+  const [overviewRes, res, merchantRes, upiRes, ctxRes] = await Promise.all([
     apiTry<{ data: Overview }>(`${base}/collect/overview`, token),
     apiTry<{ data: Payment[] }>(`${base}/payments`, token),
     apiTry<{ data: MerchantConnection }>(`${base}/payments/merchant-connection?provider=razorpay`, token),
+    apiTry<{ data: { upi_vpa: string | null; upi_payee_name: string | null } }>(`${base}/payments/upi`, token),
+    apiTry<{ data: { permissions: string[] } }>('/v1/me/context', token, businessHeaders(params.businessId)),
   ])
   if (!overviewRes.ok) {
     return (
@@ -121,6 +124,11 @@ export default async function PaymentsPage({ params }: { params: { businessId: s
           <dd>{rupees(o.owed.total)}</dd>
         </div>
       </dl>
+
+      {upiRes.ok ? (
+        <UpiSetting businessId={params.businessId} vpa={upiRes.data.data.upi_vpa} payee={upiRes.data.data.upi_payee_name}
+                    canEdit={ctxRes.ok && ctxRes.data.data.permissions.includes('payments.manage_connection')} />
+      ) : null}
 
       <section className="bos-section" aria-labelledby="pay-confirm">
         <h2 id="pay-confirm" className="ws-section-title">Waiting for you to confirm</h2>

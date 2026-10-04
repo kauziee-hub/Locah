@@ -1193,3 +1193,4 @@ a.bos-hello__chip:hover { text-decoration: none; filter: brightness(.97); }
 .bos-pay__form input, .bos-pay__form select { width: 100%; }
 .bos-pay__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 .bos-pay__confirm p { flex-basis: 100%; margin: 0 0 .2rem; }
+.bos-pay__needs { border-color: var(--status-warn-bd); }

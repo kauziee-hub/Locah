@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
@@ -27,6 +29,10 @@ async function fetchStatement(slug: string, token: string): Promise<Statement | 
 
 const rupees = (v: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v)
 const day = (v: string, locale = 'en-IN') => new Date(`${v.slice(0, 10)}T00:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return privatePageMetadata(params.slug, 'Your account statement')
+}
 
 /**
  * "Your khata with <business>" (Capability Universe §14.5): what the customer

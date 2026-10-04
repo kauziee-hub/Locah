@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
@@ -49,6 +51,10 @@ const trackSteps = (t: Words): { key: string; label: string }[] => [
   { key: 'on_the_way', label: t('On the way') },
   { key: 'delivered', label: t('Delivered') },
 ]
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return privatePageMetadata(params.slug, 'Your order')
+}
 
 /**
  * WEB-008 Order Tracking — Doc 12 §11.2 / Doc 09 WEB-008. Reached from the

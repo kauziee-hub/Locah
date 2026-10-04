@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
@@ -42,6 +44,10 @@ async function fetchBill(slug: string, token: string): Promise<PublicBill | null
 
 const rupees = (v: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v)
 const day = (v: string | null, locale = 'en-IN') => (v ? new Date(`${v.slice(0, 10)}T00:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : '')
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return privatePageMetadata(params.slug, 'Your bill')
+}
 
 /**
  * "Your bill from <business>" (Capability Universe §14.4 outputs): the copy a

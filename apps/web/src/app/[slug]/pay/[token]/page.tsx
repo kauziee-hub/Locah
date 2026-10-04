@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
@@ -16,6 +18,14 @@ async function fetchPay(slug: string, token: string): Promise<PayView | null> {
   )
   if (!res.ok) return null
   return ((await res.json()) as { data: PayView }).data
+}
+
+export async function generateMetadata({ params }: { params: { slug: string; token: string } }): Promise<Metadata> {
+  const view = await fetchPay(params.slug, params.token)
+  const amount = view && view.state !== 'paid' && view.paying_now
+    ? `Pay ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: Number.isInteger(view.paying_now) ? 0 : 2 }).format(view.paying_now)}`
+    : 'Payment'
+  return privatePageMetadata(params.slug, amount, view?.business.name)
 }
 
 /**

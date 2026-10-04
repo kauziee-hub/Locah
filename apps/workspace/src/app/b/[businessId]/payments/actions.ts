@@ -138,3 +138,13 @@ export async function verifyRazorpay(
         error: String(r.data?.verification_error ?? '') || 'Razorpay did not verify.',
       }
 }
+
+/** The UPI ID customers pay on payment links (the counter uses the same one). */
+export async function saveUpi(
+  businessId: string,
+  body: { upi_vpa: string | null; upi_payee_name: string | null },
+): Promise<ActionResult> {
+  const r = await sendJson(`/v1/platform/businesses/${businessId}/payments/upi`, 'PUT', body)
+  if (r.ok) revalidatePath(`/b/${businessId}/payments`)
+  return r
+}

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
@@ -11,6 +13,10 @@ import CheckoutClient from './CheckoutClient'
 export const dynamic = 'force-dynamic'
 
 type ReorderLine = { offering_id: string; variant_id: string | null; title: string; quantity: number; options: Record<string, unknown> | null; available: boolean; unit_price?: number; reason?: string }
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return privatePageMetadata(params.slug, 'Checkout')
+}
 
 /**
  * WEB-007 Cart / Checkout — Doc 12 §11.2 `/{slug}/checkout`, in the business's

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { actionPageMetadata } from '@/lib/page-meta'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
@@ -9,6 +11,10 @@ import { siteLang } from '@/lib/site-lang'
 import BookClient from './BookClient'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return actionPageMetadata(params.slug, 'Book')
+}
 
 /** WEB-009 Booking Flow — Doc 11 §4.1 / Doc 09 WEB-009. */
 export default async function BookPage({ params, searchParams }: { params: { slug: string }; searchParams?: { lang?: string; offering_id?: string } }) {

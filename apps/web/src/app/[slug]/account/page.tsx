@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { privatePageMetadata } from '@/lib/page-meta'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { platformUrl } from '@platform/config'
@@ -41,6 +43,10 @@ const stateWords = (t: Words): Record<string, string> => ({
   no_show: t('Missed'), active: t('Active'), expired: t('Ended'), paused: t('Paused'), sent: t('Sent to you'),
   accepted: t('Accepted'), declined: t('Declined'), draft: t('Being prepared'),
 })
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  return privatePageMetadata(params.slug, 'Your account')
+}
 
 export default async function AccountPage({ params, searchParams }: { params: { slug: string }; searchParams?: { privacy?: string; lang?: string; membership?: string } }) {
   if (RESERVED_SLUGS.has(params.slug)) notFound()

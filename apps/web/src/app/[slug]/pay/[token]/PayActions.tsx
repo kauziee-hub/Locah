@@ -85,7 +85,8 @@ export function PayActions({
         <dl className="ls-bill__totals ls-pay__totals">
           {view.amount_due !== null ? (
             <>
-              <dt>{t('Amount due')}</dt>
+              {/* Once settled it is the total, not something still due. */}
+              <dt>{t(closed ? 'Total' : 'Amount due')}</dt>
               <dd>{rupees(view.amount_due)}</dd>
             </>
           ) : null}
