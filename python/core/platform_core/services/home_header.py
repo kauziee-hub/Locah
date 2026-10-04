@@ -87,6 +87,8 @@ def open_state(hours: dict[str, Any] | None, tz: str | None, now: datetime) -> d
         day = today + timedelta(days=offset)
         for a, b in _spans(hours, DAYS[day.weekday()]):
             start = datetime.combine(day, a, tzinfo=zone)
+            if b == time(23, 59):
+                b = time(0, 0)  # saved hours close at 23:59 for "midnight"
             end = datetime.combine(day + timedelta(days=1) if b <= a else day, b, tzinfo=zone)
             windows.append((start, end))
     windows.sort()

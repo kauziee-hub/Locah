@@ -208,6 +208,16 @@ def merge_fact(
     """
     previous = bp.unconfirmed_facts.get(field) or bp.known_facts.get(field)
     value = quote
+    if field == "opening_hours":
+        # Hours are kept as a week, so "on weekends we're open till 11"
+        # changes Saturday and Sunday and keeps the rest. The owner's words
+        # stay as the evidence; words that are not a schedule we can read are
+        # kept as they were said.
+        from platform_core.interview import hours
+
+        week = hours.parse(quote, hours.parse(previous.value, asked=True) if previous else None, asked=True)
+        if week is not None:
+            value = hours.describe(week)
     if mode == "add" and field in ADDITIVE and previous:
         if quote.casefold() in previous.value.casefold():
             return False

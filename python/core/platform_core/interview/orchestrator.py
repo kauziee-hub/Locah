@@ -22,9 +22,10 @@ import time
 from typing import Any, Literal, Protocol
 
 from platform_core.business_type_profiles.registry import BusinessTypeProfileRegistry
-from platform_core.interview import planner
+from platform_core.interview import hours, planner
 from platform_core.interview import reader as rd
 from platform_core.interview.conversation import (
+    ACKS,
     LOGO_QUEUED,
     LOGO_UNAVAILABLE,
     DOCUMENT_UPLOAD,
@@ -119,6 +120,18 @@ NAME_THANKS = {"en": "{name} — lovely.", "ta_en": "{name} — nalla per.", "ta
 # The opening answers these at once; what it leaves open is asked after.
 OPENING_TARGETS = ("business.identity", "offerings.main", "commerce.action")
 NO_PROBLEM = {"en": "No problem.", "ta_en": "Paravaalla.", "ta": "பரவாயில்லை."}
+# A correction to something already known is said back as it now stands.
+FACT_UPDATED = {
+    "en": "Updated — {what}: {value}.",
+    "ta_en": "Maathitten — {what}: {value}.",
+    "ta": "மாத்திட்டேன் — {what}: {value}.",
+}
+UPDATED_FACT: dict[str, dict[str, str]] = {
+    "opening_hours": {"en": "hours", "ta_en": "timing", "ta": "நேரம்"},
+    "phone": {"en": "number", "ta_en": "number", "ta": "எண்"},
+    "locations": {"en": "location", "ta_en": "location", "ta": "இடம்"},
+    "email": {"en": "email", "ta_en": "email", "ta": "மின்னஞ்சல்"},
+}
 
 # Readable names for a typed correction that was the wrong kind of thing.
 _SLOT_HINT = {
@@ -414,7 +427,12 @@ class BusinessInterviewOrchestrator:
             bp.language_style = ti.language
         elif not field:
             # No model to tell the language: the owner's own script and words do.
-            bp.language_style = rd.language_of(text)
+            # A short reply with one Tamil word ("weekend la 11 varaikum open")
+            # keeps the Tanglish the owner has been using.
+            seen = rd.language_of(text)
+            if seen == "en" and bp.language_style in ("ta_en", "ta") and rd.has_tamil_words(text):
+                seen = bp.language_style
+            bp.language_style = seen
         if bp.language_preference != "auto":
             # What the owner asked for wins over how this one message was written.
             bp.language_style = bp.language_preference
@@ -448,6 +466,8 @@ class BusinessInterviewOrchestrator:
         media_note = ""
         # With no model, every fact is the owner's own words read by rule.
         source = "USER_STATEMENT" if field or fallback else "AI_EXTRACTION"
+        # What a correction changes is said back ("Updated — hours: …").
+        said_before = {k: f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items() if k in UPDATED_FACT}
         if not off_topic:
             understood += _merge_facts(bp, ti, text, source)
             if field:
@@ -499,6 +519,11 @@ class BusinessInterviewOrchestrator:
                else acknowledgement(bp, ti.acknowledgement, text, bp.language_style))
         from platform_core.interview.understanding import place_noun, read_back
 
+        said_now = {k: f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items() if k in UPDATED_FACT}
+        changed = [k for k in UPDATED_FACT if said_before.get(k) and said_now.get(k) and said_now[k] != said_before[k]]
+        if changed and not off_topic and signal != "redundant":
+            words = UPDATED_FACT[changed[0]]
+            ack = FACT_UPDATED[lang].format(what=words.get(lang, words["en"]), value=said_now[changed[0]][:160])
         opening_answer = bool(bp.asks) and bp.asks[-1].ask == "opening"
         if opening_answer and lang == "en" and not off_topic and understood:
             # Understand first: say back what the business is before asking
@@ -513,8 +538,11 @@ class BusinessInterviewOrchestrator:
             ack = NAME_THANKS[lang].format(name=bp.identity["display_name"].value)
         # The name is asked once, right after the first answer and before the
         # checkpoint — the website cannot be built without one.
-        ask_name = (bp.name_pending and not answering_name and not off_topic
-                    and not any(a.ask == "name" for a in bp.asks))
+        # Asked once; asked once more if the reply said something else instead
+        # ("weekend la 11 varaikum open") — kept, and the name is still needed.
+        name_asks = sum(1 for a in bp.asks if a.ask == "name")
+        ask_name = bp.name_pending and not off_topic and (
+            (name_asks == 0 and not answering_name) or (answering_name and name_asks < 2))
         name_question = planner.NAME_QUESTION[lang].format(noun=place_noun(bp)) if ask_name else ""
         next_item: planner.Ranked | None = None
         question = ""
@@ -577,6 +605,9 @@ class BusinessInterviewOrchestrator:
                 declined_only = reading.decline and all(a.status == "declined" for a in ti.answered)
                 opener = NO_PROBLEM[lang] if declined_only else ack if understood else (
                     UNCLEAR[lang].strip() if not fallback else "")
+                if so_far and opener and any(opener == a for options in ACKS.values() for a in options):
+                    # The summary opens with its own "Okay —"; a stock "Understood." before it is one too many.
+                    opener = ""
                 reply = " ".join(p for p in (opener, media_note, so_far, question) if p)
         if asked_name:
             bp.asks = (bp.asks + [AskRecord(ask="name", targets=[], turn=bp.turn_count + 1)])[-60:]
@@ -739,8 +770,12 @@ def _capture_name(bp: BusinessBlueprint, ti: TurnIntelligence, text: str, answer
         # Answering "What's it called?": the reply is the name.
         short = re.sub(r"^\s*(?:it'?s|it is|we'?re|we are|the name is|name is|called|its)\s+", "",
                        text.strip(), flags=re.I).strip(" .!\"'“”")
+        # Not a name: hours ("weekend la 11 varaikum open"), how people pay,
+        # or how orders reach them — those answer something else.
         if (1 <= len(short.split()) <= 6 and len(short) <= 60 and not rd.read(short).decline
-                and not rd.canonical_actions(short) and not rd.phone_number(short)):
+                and not rd.canonical_actions(short) and not rd.phone_number(short)
+                and not rd.looks_like_hours(short) and not rd.hours_clause(short)
+                and not rd.payment_methods(short) and not rd.fulfilment_modes(short)):
             candidate = short
     if not candidate:
         return False
@@ -905,9 +940,10 @@ def _read_for_question(
     # Opening hours are opening hours whatever was asked ("Open 5:30 am to
     # 10 pm every day" once became the gym's membership plans).
     if not _answered(ti, "operations.hours") and not any(f.field == "opening_hours" for f in ti.facts):
-        said = next((s.strip(" .") for s in re.split(r"(?<=[.!?])\s+", text)
-                     if rd.looks_like_hours(s) and rd.valid_for("operations.hours", s)), "")
-        if said:
+        # Only the part that gives the hours ("open 9 to 10"), not the whole
+        # opening message; a correction ("on weekends we're open till 11") too.
+        said = rd.hours_clause(text)
+        if said and rd.valid_for("operations.hours", said):
             fact("opening_hours", said)
             answer("operations.hours", said[:120], evidence=said)
     if reading.finish or (reading.decline and not reading.phone):
@@ -953,9 +989,12 @@ def _read_for_question(
         elif target == "fulfilment.mode" and reading.fulfilment:
             answer(target, ", ".join(reading.fulfilment),
                    evidence=sentence_with(rd.fulfilment_modes) or text)
-        elif target == "fulfilment.area" and rd.service_area(text) and (reading.fulfilment or lead == "fulfilment.area"
-                                                                         or "fulfilment.mode" in targets):
-            answer(target, rd.service_area(text))
+        elif target == "fulfilment.area" and (
+                area := rd.service_area(text) if lead == "fulfilment.area" else rd.service_area_said(text)) and (
+                reading.fulfilment or lead == "fulfilment.area" or "fulfilment.mode" in targets):
+            # Asked "where do you deliver?", the whole reply is the area;
+            # otherwise only a place named after a delivery verb is.
+            answer(target, area)
         elif target == "contact.location" and rd.location_text(text):
             place = rd.location_text(text)
             if place in text:
@@ -966,9 +1005,11 @@ def _read_for_question(
         elif target == "offerings.units" and reading.units:
             answer(target, "By the kg" if reading.units == "weight" else "In fixed packs",
                    evidence=sentence_with(rd.units) or text)
-        elif target == "operations.hours" and rd.looks_like_hours(text):
-            fact("opening_hours", text)
-            answer(target, text[:120])
+        elif target == "operations.hours" and (rd.looks_like_hours(text) or hours.parse(text, asked=True)):
+            # The answer to "when are you open?" — a bare "10 to 6" included.
+            said = rd.hours_clause(text) or text
+            fact("opening_hours", said)
+            answer(target, said[:120], evidence=said)
         elif target in {"offerings.main", "offerings.structure"} and lead in {"offerings.main", "offerings.structure"} \
                 and not model_ok:
             if not offer(rd.offer_statement(text) or rd.offering_names(text), rd.group_items(text)):
@@ -987,10 +1028,14 @@ def _read_for_question(
     # What the owner volunteered beyond the question — only the unambiguous
     # kinds, so an answer is never stretched to fit a question it didn't answer.
     if reading.fulfilment and not _answered(ti, "fulfilment.mode") and re.search(
-            r"\b(we|i|people|customers|they|you can)\b|\bonly\b", text, re.I):
+            r"\b(we|i|people|customers|they|you can|naan|naanga|pannuvom|pannurom|panrom|pannuvaanga|"
+            r"irukk?u|kudupp?om)\b|\bonly\b", text, re.I):
         said = sentence_with(rd.fulfilment_modes) or text
         answer("fulfilment.mode", ", ".join(reading.fulfilment), evidence=said)
-        area = rd.service_area(said)
+        # Volunteered, so only an area named after a delivery verb counts: the
+        # opening "I run Nila Cafe in Anna Nagar, … pickup and delivery" names
+        # where the café is, not where it delivers.
+        area = rd.service_area_said(said)
         if area and "delivery" in reading.fulfilment and not _answered(ti, "fulfilment.area"):
             answer("fulfilment.area", area, evidence=said)
         understood_any = True
@@ -1028,11 +1073,12 @@ def _read_for_question(
         answer("business.identity", sentence[:240], evidence=sentence)
         # "…a South Indian restaurant in Anna Nagar." — a capitalised place after "in".
         placed = re.search(r"\b(?:in|at|near)\s+([A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3})", " ".join(sentences[:2]))
-        place = rd.location_text(placed.group(1)) if placed else ""
+        # …or in Tanglish, "Anna Nagar la".
+        place = rd.location_text(placed.group(1)) if placed else rd.place_ta(" ".join(sentences[:2]))
         if place and place in text and not _answered(ti, "contact.location"):
             fact("locations", place)
             answer("contact.location", place, evidence=place)
-        offer(rd.offer_statement(text), rd.group_items(text))
+        offer(rd.offer_statement(text) or rd.ta_offer_list(text), rd.group_items(text))
         if reading.actions and not _answered(ti, "commerce.action"):
             evidence = rd.action_sentences(text)
             fact("customer_actions", evidence, mode="add")

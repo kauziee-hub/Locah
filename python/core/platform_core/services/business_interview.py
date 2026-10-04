@@ -182,6 +182,33 @@ def public_contact(bp: BusinessBlueprint) -> dict[str, Any]:
     return contact
 
 
+async def _hours_to_location(
+    session: AsyncSession, business_id: UUID, bp: BusinessBlueprint, *, actor_id: UUID, correlation_id: str,
+) -> None:
+    """The week the owner described ("open 9 to 10, weekends till 11") becomes
+    the primary location's opening hours — the ones Home, bookings and the AI
+    receptionist read. Only when none are saved: hours set in the Workspace
+    are the owner's and are never overwritten by the conversation."""
+    from platform_core.interview import hours
+    from platform_core.services.location import LocationService
+
+    said = ({**bp.known_facts, **bp.unconfirmed_facts}).get("opening_hours")
+    week = hours.parse(said.value, asked=True) if said else None
+    if not week:
+        return
+    locations = await LocationService.list_for_business(session, business_id, status="active")
+    primary = locations[0] if locations else None
+    if primary is None or primary.hours:
+        return
+    try:
+        await LocationService.update_location(
+            session, business_id=business_id, location_id=primary.id, actor_id=actor_id,
+            correlation_id=correlation_id, payload={"hours": hours.for_location(week)},
+        )
+    except ValidationError:
+        return  # never hold the website back over hours; the owner can set them in Locations
+
+
 def _carry_media(fresh: BusinessBlueprint, proposed: BusinessBlueprint) -> None:
     """Keep media the worker finished while a turn was being understood."""
     known = {m.asset_id for m in proposed.media_assets}
@@ -1000,6 +1027,7 @@ class BusinessInterviewService:
                 actor_id=actor_id,
                 correlation_id=correlation_id,
             )
+        await _hours_to_location(session, business.id, bp, actor_id=actor_id, correlation_id=correlation_id)
         seed = classification_seed(bp)
         if seed != business.business_type:
             await BusinessConfigurationService.patch_business_type(

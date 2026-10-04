@@ -76,6 +76,14 @@ _TANGLISH = re.compile(
     r"kadai|nalla|ungaluku|enakku|neraya)\b", re.I)
 
 
+_TA_POSTPOSITION = re.compile(r"\b\w+\s*-?\s*(?:la|le|ku|kku)\b|\b(?:varai\w*|rendum|nadath\w*|kaalai|raathiri)\b", re.I)
+
+
+def has_tamil_words(text: str) -> bool:
+    """Any Tamil at all — a word, a postposition ("Anna Nagar la"), or the script."""
+    return bool(_TANGLISH.search(text or "") or _TA_POSTPOSITION.search(text or "") or _TAMIL_SCRIPT.search(text or ""))
+
+
 def language_of(text: str) -> str:
     """How the owner writes: Tamil script, Tamil in English letters mixed with English, or English."""
     text = text or ""
@@ -189,7 +197,8 @@ _BROWSE = re.compile(
     r"\b(view|see|browse|look (?:at|through)|check out|explore)\b.{0,24}\b(products?|menu|catalogue|catalog|"
     r"collections?|range|items|dishes|work|portfolio|gallery|projects?|services|designs?|photos)\b", re.I)
 # Tamil / Tanglish verbs for the same things.
-_TA_ORDER = re.compile(r"ஆர்டர்|order\s*pann|vaangu|வாங்கு", re.I)
+# "vaanguvom" / "வாங்குவோம்" is the business taking (payment), not customers buying.
+_TA_ORDER = re.compile(r"ஆர்டர்|order\s*pann|vaangu(?!vom|rom|ren|girom|kirom)|வாங்கு(?!வோம்|றோம்|கிறோம்)", re.I)
 _TA_BOOK = re.compile(r"புக்|முன்பதிவு|அப்பாயிண்ட்மென்ட்|book\s*pann", re.I)
 _TA_CALL = re.compile(r"கால்|call\s*pann|phone\s*pann", re.I)
 
@@ -218,7 +227,8 @@ def _clause_actions(text: str) -> list[str]:
     whatsapp = _find(_WHATSAPP, text)
     call = _find(_CALL, text) or bool(_TA_CALL.search(text))
     online = _find(_ONLINE, text)
-    ordering = _find(_ORDER, text) or bool(_TA_ORDER.search(text))
+    # In "UPI, cash rendum vaangu…" the verb is about money, not ordering.
+    ordering = _find(_ORDER, text) or (bool(_TA_ORDER.search(text)) and not payment_methods(text))
     booking = _find(_BOOK, text) or bool(_TA_BOOK.search(text))
     site_visit = _find(_SITE_VISIT, text)
     if site_visit:
@@ -359,14 +369,29 @@ _OFFER_LIST = re.compile(
     r"(?:\bis an? [^—–.;!?\n]{2,60}?\s+[—–-]\s+|(?:^|[.!?]\s+)(?:mostly|mainly|primarily)\s+)([^.;!?\n]+)", re.I)
 
 
+_HOW_ONLY = re.compile(
+    r"(?:dine[- ]?in|eat in|take ?away|takeaway|self[- ]?pick ?up|pick ?ups?|home delivery|door ?step delivery|"
+    r"deliver(?:y|ies)?|parcel|courier|shipping|cash|upi|g ?pay|cards?|online payments?|cod|cash on delivery)"
+    r"(?:\s+(?:only|too|also|available))?", re.I)
+_LIST_ENDS = re.compile(
+    r"\b(?:dine[- ]?in|eat in|take ?away|takeaway|pick ?up|home delivery|deliver\w*|door ?step|parcel|"
+    r"open\w*|closed|timings?|from \d|\d{1,2}\s*(?:am|pm)\b|we (?:are|'re) (?:in|at|on))", re.I)
+
+
 def offer_statement(text: str) -> list[str]:
     """What an owner says they sell, from "We sell chicken, mutton and fish."."""
     names: list[str] = []
     flat = " ".join((text or "").split())
     matches = list(_OFFER_STATEMENT.finditer(flat)) or list(_OFFER_LIST.finditer(flat))
     for match in matches:
+        # "we sell coffee, pasta and cakes, dine-in, pickup and delivery, open
+        # 9 to 10" — the list ends where how it reaches people or the hours
+        # start ("dine-in" must not split at "in" into an item called "Dine").
+        listed = match.group(1)
+        stop = _LIST_ENDS.search(listed)
+        listed = listed[:stop.start()] if stop else listed
         clause = re.split(r"\b(?:to|for|in|at|from|since|with|which|who|and (?:we|people|customers))\b",
-                          match.group(1), maxsplit=1, flags=re.I)[0]
+                          listed, maxsplit=1, flags=re.I)[0]
         for name in offering_names(clause):
             if name.casefold() not in {n.casefold() for n in names} and len(name.split()) <= 5:
                 names.append(name)
@@ -400,6 +425,10 @@ def offering_names(text: str) -> list[str]:
         if _VERB_START.match(part):
             continue
         if canonical_actions(part) and not re.search(r"\b(trainers?|coaching|classes|sessions)\b", part, re.I):
+            continue
+        # "dine-in", "pickup", "UPI", "open 9 to 10" are how and when, not what
+        # is sold ("Silk saree collection" still is).
+        if _HOW_ONLY.fullmatch(part.strip()) or (looks_like_hours(part) and len(part.split()) <= 6):
             continue
         if _VAGUE.fullmatch(part.strip()) or len(part) > 60 or not re.search(r"[A-Za-z஀-௿]", part):
             continue
@@ -449,7 +478,32 @@ def service_area(text: str) -> str:
     raw = raw.strip(" .,")
     if not raw or len(raw) > 80 or _HOURS.search(raw) or re.fullmatch(r"(?:yes|no|both|only)", raw, re.I):
         return ""
+    # "You can pay by UPI or cash" in reply to "which areas?" is about paying.
+    if payment_methods(raw) or phone_number(raw) or re.search(r"\b(pay|payment|price|cost)\b", raw, re.I):
+        return ""
     return raw[:1].upper() + raw[1:]
+
+
+# "…we deliver around Anna Nagar and Mogappair" — a place named right after a
+# delivery verb. Used for what the owner volunteers; an answer to "where do
+# you deliver?" is read whole by service_area.
+_AREA_SAID = re.compile(
+    r"\b(?:deliver\w*|ship\w*|courier\w*|serve|cover)\s+(?:only\s+)?(?:to|around|in|within|across|all over|"
+    r"throughout|anywhere in)\s+(?P<area>[^.;!?]+)", re.I)
+
+
+def service_area_said(text: str) -> str:
+    """The delivery area when the owner names one after a delivery verb, else ""."""
+    found = _AREA_SAID.search(" ".join((text or "").split()))
+    if not found:
+        return ""
+    area = re.split(r",\s*(?=(?:people|customers|we|they|but|though|also|open|and (?:people|we|they)|pick|dine))"
+                    r"|\s+(?:and|but)\s+(?:we|people|customers|they)\b", found.group("area"), maxsplit=1,
+                    flags=re.I)[0].strip(" .,")
+    if not area or len(area) > 80 or _HOURS.search(area) or re.search(r"\b\d+\s*(?:km|kms|minutes|mins)\b", area, re.I) \
+            and len(area.split()) > 6:
+        return ""
+    return area[:1].upper() + area[1:]
 
 
 _PAYMENT = (
@@ -505,7 +559,51 @@ def phone_number(text: str) -> str:
 
 
 def looks_like_hours(text: str) -> bool:
-    return bool(_HOURS.search(text or "")) and not phone_number(text or "")
+    from platform_core.interview.hours import parse
+
+    if phone_number(text or ""):
+        return False
+    # "open 9 to 10" has no am/pm but is plainly a schedule.
+    return bool(_HOURS.search(text or "")) or parse(text or "") is not None
+
+
+_ANY_WEEK = {d: [["09:00", "21:00"]] for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
+
+
+def hours_clause(text: str) -> str:
+    """The part of a longer message that gives the hours: "open 9 to 10" from
+    "I run Nila Cafe…, dine-in, pickup and delivery, open 9 to 10." Exactly as
+    the owner wrote it; empty when no part of it is a schedule."""
+    from platform_core.interview.hours import parse
+
+    from platform_core.interview.hours import days_named
+
+    def says_hours(p: str) -> bool:
+        if phone_number(p):
+            return False
+        # "We deliver till 11 pm" is about deliveries, not when the place is open.
+        if re.search(r"\bdeliver\w*|\bdelivery\b|\bship\w*", p, re.I) and not re.search(
+                r"\b(open\w*|clos\w*|timings?)\b", p, re.I):
+            return False
+        # A whole schedule, or a change to one ("weekend la 11 varaikum open"
+        # reads against any week as a later closing time on two days).
+        if parse(p) is not None or parse(p, _ANY_WEEK) is not None:
+            return True
+        # A correction or a closed day: "on weekends we're open till 11", "closed on Sundays".
+        cue = re.search(r"\b(open\w*|clos\w*|timings?|hours?)\b", p, re.I)
+        return bool(cue and (re.search(r"\b(?:till|until|to|from|at)\s+\d", p, re.I) or _HOURS.search(p)
+                             or (re.search(r"\b(closed|holiday|shut)\b", p, re.I) and days_named(p))))
+
+    parts = [p.strip(" .") for p in re.split(r"[,;.!?]\s*|\s+but\s+", " ".join((text or "").split())) if p.strip(" .")]
+    found = [p for p in parts if says_hours(p)]
+    if not found:
+        return ""
+    # Neighbouring parts stay together ("10 am to 9 pm, closed on Sundays").
+    first, last = parts.index(found[0]), parts.index(found[-1])
+    flat = " ".join((text or "").split())
+    start = flat.find(parts[first])
+    end = flat.find(parts[last], start) + len(parts[last])
+    return flat[start:end] if start >= 0 and end > start else found[0]
 
 
 _PLACE_WORDS = re.compile(
@@ -526,6 +624,49 @@ def looks_like_place(text: str) -> bool:
     if re.search(r"\b(we|our|people|customers|sell|make|deliver|equipment|products?|services?)\b", raw, re.I):
         return False
     return bool(_PLACE_WORDS.search(raw)) or len(raw.split()) <= 4
+
+
+# "Anna Nagar la" / "Anna Nagar-la" — a capitalised place before the Tamil
+# "in". Never a language ("Tamil la pesalama?") or an app ("WhatsApp la").
+_PLACE_TA = re.compile(r"\b(?P<place>[A-Z][\w'.]*(?:\s+[A-Z][\w'.]*){0,3})\s*-?\s*(?:la|le|il|pakkathula|pakkam)\b")
+_NOT_PLACE = re.compile(r"^(?:tamil|english|hindi|tanglish|whatsapp|instagram|facebook|google|website|online|"
+                        r"naan|naanga|enga|unga|ippo|adhu|idhu)$", re.I)
+
+
+def place_ta(text: str) -> str:
+    for found in _PLACE_TA.finditer(" ".join((text or "").split())):
+        place = found.group("place")
+        if _NOT_PLACE.match(place.split()[0]) or business_name(text).casefold() == place.casefold():
+            continue
+        if looks_like_place(place):
+            return place
+    return ""
+
+
+# "coffee, pasta, cakes iruku" — a Tanglish list that ends in "we have it".
+_TA_LIST_END = re.compile(
+    r"\s+(?:iruk+[iu]\w*|irukk?a\w*|kidaik+u\w*|sell\s+pann\w*|vikkir\w*|virkir\w*|kudukk?ir\w*)\s*$", re.I)
+_TA_CLAUSE_VERB = re.compile(
+    r"\b(?:naan|naanga|nanga|enga|nadath\w*|vech\w*|vach\w*|pann\w*|open|timing|la|le)\b", re.I)
+
+
+def ta_offer_list(text: str) -> list[str]:
+    """What a Tanglish answer lists as sold: the comma parts that run up to "…iruku"."""
+    parts = [p.strip(" .!") for p in re.split(r"\s*,\s*", " ".join((text or "").split()))]
+    for i, part in enumerate(parts):
+        if not _TA_LIST_END.search(part):
+            continue
+        listed = [_TA_LIST_END.sub("", part)]
+        for before in reversed(parts[:i]):
+            item = _TA_HAVE_HEAD.sub("", before)  # "Enga kitta dosa" starts the list with dosa
+            if len(item.split()) > 3 or _TA_CLAUSE_VERB.search(item) or fulfilment_modes(item) \
+                    or re.search(r"[A-Z]", item[1:]):
+                break
+            listed.insert(0, item)
+            if item != before:
+                break
+        return offering_names(", ".join(listed))
+    return []
 
 
 def location_text(text: str) -> str:
@@ -553,6 +694,20 @@ _NAME_LEADS = re.compile(
     r"(?P<name>(?:[A-Z0-9][\w&'’.-]*)(?:\s+(?:&\s+|of\s+|and\s+)?[A-Z0-9][\w&'’.-]*){0,5})"
     r"(?=\s*(?:,|\s+is\s+an?\b|\s+is\s+the\b|\s+are\s+an?\b|\s+—|\s+-\s|"
     r"\s+(?:builds|makes|sells|runs|serves|offers|supplies|designs|bakes|cooks)\b))")
+# "I run Nila Cafe in Anna Nagar, we sell…" — the name after "I run", up to
+# where the place or the next clause starts.
+_NAME_RUNS = re.compile(
+    r"^\s*(?i:i|we)\s+(?i:run|own|started|opened|have)\s+(?:(?i:a|an|the)\s+[\w ]{2,30}?\s+(?i:called|named)\s+)?"
+    r"(?P<name>[A-Z0-9][\w&'’.-]*(?:\s+(?:&\s+|of\s+|and\s+)?[A-Z0-9&][\w&'’.-]*){0,5})"
+    r"(?=\s+(?i:in|at|near|on|from|since|for)\b|\s*[,.;!—–-]|\s*$)")
+# Tanglish: "Naan Nila Cafe nadathuren" (I run Nila Cafe), "Enga kadai per Nila Cafe".
+_NAME_TA = re.compile(
+    r"^\s*(?i:naan|naanga|nanga|naangal|enga|engaloda)\s+"
+    r"(?P<name>[A-Z0-9][\w&'’.-]*(?:\s+(?:&\s+)?[A-Z0-9&][\w&'’.-]*){0,5})"
+    r"\s+(?i:nadath\w*|nadatt\w*|vech\w*|vach\w*|run\s+pann\w*|open\s+pann\w*)")
+_NAME_TA_SAID = re.compile(
+    r"\b(?i:kadai|shop|hotel|cafe|business|company|salon)\s+(?i:per|peru|name)\s+"
+    r"(?P<name>[A-Z0-9][^,.;!?]{1,58}?)(?=\s*(?:[,.;!?]|$)|\s+(?i:dhaan|thaan))")
 _NAME_END = re.compile(r"\s+(?:and|in|at|near|on|from|which|that|where|—|-|,)\b.*$", re.I)
 _NOT_A_NAME = re.compile(
     r"^(?:we|i|our|my|this|it|the|a|an|they|people|customers|yes|no|ok|hi|hello|mostly|mainly|"
@@ -566,8 +721,12 @@ def business_name(text: str) -> str:
     name = _NAME_END.sub("", found.group("name")) if found else ""
     # "This is Kavya, I make cakes" introduces a person, not the business.
     if not name and not re.match(r"^\s*(?:this is|i'?m|i am)\s+\S+\s*,\s*i\b", raw, re.I):
-        lead = _NAME_LEADS.match(raw)
+        lead = _NAME_LEADS.match(raw) or _NAME_RUNS.match(raw) or _NAME_TA.match(raw) or _NAME_TA_SAID.search(raw)
         name = lead.group("name") if lead else ""
+        # "Haircut, facial and bridal makeup iruku" starts a list, not a name.
+        if lead is not None and lead.re is _NAME_LEADS and re.match(
+                r"\s*,\s*[a-z][\w' -]{0,30}?(?:,|\s+and\s+)", raw[lead.end():]):
+            name = ""
     name = name.strip(" .,'\"“”")
     words = name.split()
     if not words or len(words) > 6 or len(name) > 60 or _NOT_A_NAME.match(words[0]):
@@ -660,7 +819,8 @@ def valid_for(target: str, text: str) -> bool:
     if not text:
         return False
     if target in {"operations.hours", "opening_hours"}:
-        return looks_like_hours(text) or bool(re.search(r"\b(open|closed)\b.{0,30}\b(all days|daily|every day|weekdays|weekends|sundays?)\b", text, re.I))
+        return looks_like_hours(text) or bool(hours_clause(text)) or bool(re.search(
+            r"\b(open|closed)\b.{0,30}\b(all days|daily|every day|weekdays|weekends|sundays?)\b", text, re.I))
     if target in {"contact.phone", "phone"}:
         return bool(phone_number(text))
     if target in {"commerce.action", "customer_actions"}:

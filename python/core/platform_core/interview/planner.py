@@ -290,6 +290,13 @@ LEAD_ONLY: dict[str, dict[str, str]] = {
 }
 
 
+CONVERSION_CHANNEL = {
+    "en": "When people order for {modes}, how do they reach you — WhatsApp, a call, or ordering on your website?",
+    "ta_en": "{modes}-ku customers eppadi order pannuvaanga — WhatsApp, call, illa website-la order-aa?",
+    "ta": "{modes}-க்கு வாடிக்கையாளர்கள் எப்படி ஆர்டர் பண்ணுவாங்க — வாட்ஸ்அப், கால், இல்ல வெப்சைட்ல ஆர்டர்-ஆ?",
+}
+
+
 def phrase(ask: Ask, bp: BusinessBlueprint, lang: str, *, prof: Profile | None = None) -> str:
     """The question in the owner's language, in the trade's words when it has them.
 
@@ -305,9 +312,19 @@ def phrase(ask: Ask, bp: BusinessBlueprint, lang: str, *, prof: Profile | None =
                   if not resolved(bp, t, importance(t, prof, bp)) and relevant(TARGETS_BY_ID[t], prof, bp)]
     complete = len(open_parts) == len(ask.targets)
     template = ""
+    from platform_core.interview.understanding import fulfilment
+
+    modes = [m for m in fulfilment(bp) if m in ("pickup", "delivery")]
     if ask.id == "structure" and open_structure(bp):
         # The owner's own groups, named: "For chicken and mutton, do people choose cuts too?"
         template = "{structure}"
+    elif ask.id == "conversion" and modes:
+        # They already said people collect or get it delivered; what is still
+        # open is how those orders reach them — never "do they order ahead?".
+        how = {"en": " or ".join(modes), "ta_en": " / ".join(modes),
+               "ta": " / ".join({"pickup": "பிக்கப்", "delivery": "டெலிவரி"}[m] for m in modes)}
+        template = CONVERSION_CHANNEL.get(lang, CONVERSION_CHANNEL["en"]).replace("{modes}", how.get(lang, how["en"]))
+        template = template[:1].upper() + template[1:]
     elif complete:
         template = phrase_override(prof.playbook, ask.id, lang)
     elif open_parts and open_parts[0] == ask.targets[0]:
