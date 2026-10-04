@@ -1,20 +1,33 @@
 /* ------------------------------------------------------------------------
-   Startup Platform — Workspace design system (Frontend Design Work Order,
-   Prompt B). Data-Dense Dashboard. Light ground, operators work in daylight.
-   Tokens are locked — do not substitute.
+   LOCAH Workspace design system. Orange-led, warm and calm: a daylight
+   working surface where the LOCAH orange marks what to do next.
+
+   The values follow the brand layer (packages/ui/src/tokens.css) but are
+   defined here, because the Workspace is its own visual context:
+     primary  — the brand orange darkened to #b9461a so white text on it and
+                it as text on the light ground both pass WCAG AA (5.3:1);
+     accent   — the brand orange itself (#e8622c), for marks and highlights,
+                never for text;
+     ink      — the brand navy, for text and headings;
+     neutrals — the brand's warm greys, not cool slate.
+   Status colours stay semantic (good / warn / bad / info) and always come
+   with words. Every component reads these tokens; nothing hard-codes a hex.
    ------------------------------------------------------------------------ */
 
 :root {
-  --color-background: #f8fafc; /* Slate Enterprise */
+  --color-background: #fbfaf8; /* warm paper (brand n-25) */
   --color-surface: #ffffff;
-  --color-surface-2: #f1f5f9; /* subtle raised / hover fill */
-  --color-foreground: #1e293b;
-  --color-primary: #2563eb;
+  --color-surface-2: #f4f2ee; /* subtle raised / hover fill (brand n-50) */
+  --color-foreground: #1b1f3b; /* brand ink */
+  --color-primary: #b9461a; /* brand orange, AA-safe for text and on white */
+  --color-primary-hover: #a33d16;
   --color-primary-fg: #ffffff;
-  --color-accent: #ea580c;
-  --color-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
+  --color-primary-soft: #fdf0e9; /* brand accent-soft: selected rows, gentle highlights */
+  --color-primary-border: #f5c9b3;
+  --color-accent: #e8622c; /* the brand orange — marks, rules and highlights, not text */
+  --color-muted: #6b6862; /* brand n-500, 5.5:1 on white */
+  --color-border: #e9e6e0; /* brand n-100 */
+  --color-border-strong: #d8d4cc; /* brand n-200 */
 
   /* Semantic status — distinct from the accent, always paired with text */
   --status-good-fg: #15803d;
@@ -33,13 +46,13 @@
   --status-info-bg: #eff6ff;
   --status-info-bd: #bfdbfe;
 
-  --radius: 8px;
-  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-sm: 8px;
   --row-h: 44px;
   --sidebar-w: 248px;
   --sidebar-w-collapsed: 60px;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-pop: 0 8px 28px rgba(15, 23, 42, 0.12);
+  --shadow-card: 0 1px 2px rgba(27, 31, 59, 0.06), 0 1px 1px rgba(27, 31, 59, 0.03);
+  --shadow-pop: 0 10px 30px rgba(27, 31, 59, 0.14);
 
   /* Tamil and Devanagari behind General Sans (P1-10E6): Latin is unchanged. */
   --font-sans: var(--font-general-sans, 'General Sans'), var(--font-ws-tamil, 'Noto Sans Tamil'),
@@ -180,8 +193,18 @@ button,
 button:hover,
 .btn:hover,
 .btn-primary:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.04);
   text-decoration: none;
+}
+/* The primary action deepens on hover; buttons with their own look keep it. */
+button:not([class]):hover,
+button.btn:not(.btn-ghost):not(.btn-quiet):not(.btn-danger):hover,
+button.btn-primary:hover,
+a.btn:not(.btn-ghost):not(.btn-quiet):not(.btn-danger):hover,
+a.btn-primary:hover {
+  filter: none;
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 button:active,
 .btn:active,
@@ -203,6 +226,11 @@ button.btn-ghost:hover,
 .btn-ghost:hover {
   background: var(--color-surface-2);
   filter: none;
+}
+a.btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
 }
 button.btn-quiet,
 .btn-quiet {
