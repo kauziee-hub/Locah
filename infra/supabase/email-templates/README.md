@@ -81,6 +81,26 @@ set the subject:
 | Reauthentication | `reauthentication.html` | Your LOCAH verification code |
 | Reset Password | `reset-password.html` | Reset your LOCAH password |
 
+### Security notifications
+
+Authentication → Emails → Security. All seven are switched on in the **Locah**
+project; each has its own template. They carry **no link** (a "click here" in a
+security email looks like phishing) and no origin, so they are rendered like the
+code-only emails and can be pasted from `dist/` as they are.
+
+| Notification | File | Subject | Variables it uses |
+| --- | --- | --- | --- |
+| Password changed | `password-changed.html` | Your LOCAH password was changed | `.Email` |
+| Email address changed | `email-changed.html` | Your LOCAH email address was changed | `.OldEmail`, `.Email` |
+| Phone number changed | `phone-changed.html` | Your LOCAH phone number was changed | `.OldPhone`, `.Phone`, `.Email` |
+| Sign-in method linked | `identity-linked.html` | A sign-in method was added to your LOCAH account | `.Provider`, `.Email` |
+| Sign-in method removed | `identity-unlinked.html` | A sign-in method was removed from your LOCAH account | `.Provider`, `.Email` |
+| MFA method added | `mfa-enrolled.html` | A verification method was added to your LOCAH account | `.FactorType`, `.Email` |
+| MFA method removed | `mfa-unenrolled.html` | A verification method was removed from your LOCAH account | `.FactorType`, `.Email` |
+
+The variable names are Supabase's own (see "Template variables" in
+https://supabase.com/docs/guides/local-development/customizing-email-templates).
+
 ## 3. Why these use `{{ .TokenHash }}`
 
 Supabase's default templates use `{{ .ConfirmationURL }}`, which points at
@@ -151,7 +171,8 @@ secret, so it is entered there by hand — never in Git, chat or a public variab
 2. SMTP Settings → enable custom SMTP:
    host `smtp.resend.com`, port `465`, username `resend`, password = that key,
    sender email `no-reply@auth.locah.store`, sender name `LOCAH`.
-3. Templates: paste the five rendered files from `dist/` (see §2) with their
+3. Templates: paste the thirteen rendered files from `dist/` (six sign-in and
+   account emails plus seven security notifications, see §2) with their
    subjects. Render with
    `node tools/render-email-templates.mjs --origin https://locah-web-production.up.railway.app`
    (use the custom origin instead once `locah.store` serves the web app).
@@ -167,3 +188,32 @@ SVG, and remote images are blocked by default in several clients. The logo files
 Official setup: https://resend.com/docs/send-with-supabase-smtp and
 https://supabase.com/docs/guides/auth/auth-smtp. Do not enable an incomplete SMTP
 configuration: it will prevent auth emails from being sent.
+
+## 7. Main domain: `locah.store`
+
+The web service (`locah-web`) in Railway has `locah.store` attached as its custom
+domain; ownership is verified. The Railway plan allows **one custom domain per
+service**, so `www.locah.store` is not served by Railway.
+
+DNS in the Hostinger zone:
+
+| Type | Name | Value | State |
+| --- | --- | --- | --- |
+| TXT | `_railway-verify` | `railway-verify=…` (Railway ownership check) | added, verified |
+| ALIAS | `@` | `satsmdln.up.railway.app` | **pending** — Hostinger refuses an ALIAS beside the parked `A` record (`2.57.91.91`), and the DNS connector cannot delete records, so that `A` is removed once in hPanel → DNS / Nameservers |
+
+Hostinger accepts `ALIAS` at the apex (CNAME flattening); a plain CNAME cannot
+share a name with other records. After the ALIAS exists Railway issues the TLS
+certificate by itself.
+
+When `https://locah.store` loads, flip the rest in this order:
+
+1. Supabase → Authentication → URL Configuration: Site URL `https://locah.store`;
+   Redirect URLs add `https://locah.store/**` (keep the Railway ones until the
+   switch is proven).
+2. Render the templates for the new origin
+   (`node tools/render-email-templates.mjs --origin https://locah.store`) and paste
+   the three link-based ones again: Invite, Change Email, Reset Password.
+3. Railway → `locah-api` `CORS_ALLOWED_ORIGINS`: add `https://locah.store` so the
+   browser may call the API from the new origin; `locah-web`
+   `NEXT_PUBLIC_WEB_URL` is a build-time value and needs a rebuild after it changes.

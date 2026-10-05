@@ -25,6 +25,18 @@ const SRC = join(here, '..', 'infra', 'supabase', 'email-templates', 'src')
 const OUT = join(here, '..', 'infra', 'supabase', 'email-templates', 'dist')
 const PLACEHOLDER = '__LOCAH_WEB_ORIGIN__'
 const CODE_ONLY = new Set(['confirm-signup.html', 'magic-link.html', 'reauthentication.html'])
+// Security notifications tell the person something happened. They carry no link
+// on purpose (a "click here" in a security email is what phishing looks like),
+// so there is no origin to bake in.
+const NOTIFICATIONS = new Set([
+  'password-changed.html',
+  'email-changed.html',
+  'phone-changed.html',
+  'identity-linked.html',
+  'identity-unlinked.html',
+  'mfa-enrolled.html',
+  'mfa-unenrolled.html',
+])
 
 function resolveOrigin() {
   const flagIndex = process.argv.indexOf('--origin')
@@ -74,10 +86,12 @@ const files = (await readdir(SRC)).filter((f) => f.endsWith('.html'))
 
 for (const file of files) {
   const source = await readFile(join(SRC, file), 'utf8')
-  // These two emails deliberately have no link: preserve the provider's code
-  // placeholder. All link-based emails still require a deployment origin.
-  const codeOnly = CODE_ONLY.has(file) && source.includes('{{ .Token }}') &&
-    !/\bhref\s*=|\.ConfirmationURL\b|\.TokenHash\b/i.test(source)
+  // Code-only and notification emails deliberately have no link, so there is no
+  // origin to render. All link-based emails still require a deployment origin.
+  const hasLink = /\bhref\s*=|\.ConfirmationURL\b|\.TokenHash\b/i.test(source)
+  const codeOnly =
+    !hasLink &&
+    ((CODE_ONLY.has(file) && source.includes('{{ .Token }}')) || NOTIFICATIONS.has(file))
   if (!source.includes(PLACEHOLDER) && !codeOnly) {
     console.error(`${file} has no ${PLACEHOLDER} — it would ship with a stale origin.`)
     process.exit(1)
