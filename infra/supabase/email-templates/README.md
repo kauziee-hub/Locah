@@ -192,28 +192,41 @@ configuration: it will prevent auth emails from being sent.
 ## 7. Main domain: `locah.store`
 
 The web service (`locah-web`) in Railway has `locah.store` attached as its custom
-domain; ownership is verified. The Railway plan allows **one custom domain per
-service**, so `www.locah.store` is not served by Railway.
+domain. It serves over HTTPS with its own certificate (verified 2026-10-05). The
+Railway plan allows **one custom domain per service**, so `www.locah.store` is not
+served by Railway, and the single slot on `locah-web` is the apex, so a wildcard
+for `{slug}.locah.store` Business websites is not possible on this plan.
 
 DNS in the Hostinger zone:
 
-| Type | Name | Value | State |
-| --- | --- | --- | --- |
-| TXT | `_railway-verify` | `railway-verify=…` (Railway ownership check) | added, verified |
-| ALIAS | `@` | `satsmdln.up.railway.app` | **pending** — Hostinger refuses an ALIAS beside the parked `A` record (`2.57.91.91`), and the DNS connector cannot delete records, so that `A` is removed once in hPanel → DNS / Nameservers |
+| Type | Name | Value |
+| --- | --- | --- |
+| TXT | `_railway-verify` | `railway-verify=...` (Railway ownership check) |
+| ALIAS | `@` | `satsmdln.up.railway.app` (CNAME flattening; the parked `A` record was deleted by hand because the DNS connector cannot delete records) |
 
-Hostinger accepts `ALIAS` at the apex (CNAME flattening); a plain CNAME cannot
-share a name with other records. After the ALIAS exists Railway issues the TLS
-certificate by itself.
+Railway keeps listing the apex as "requires update" because it looks for a literal
+CNAME; the certificate is valid and the site loads, so that line can be ignored.
 
-When `https://locah.store` loads, flip the rest in this order:
+Supabase Site URL is `https://locah.store` with both origins in Redirect URLs.
 
-1. Supabase → Authentication → URL Configuration: Site URL `https://locah.store`;
-   Redirect URLs add `https://locah.store/**` (keep the Railway ones until the
-   switch is proven).
-2. Render the templates for the new origin
-   (`node tools/render-email-templates.mjs --origin https://locah.store`) and paste
-   the three link-based ones again: Invite, Change Email, Reset Password.
-3. Railway → `locah-api` `CORS_ALLOWED_ORIGINS`: add `https://locah.store` so the
-   browser may call the API from the new origin; `locah-web`
-   `NEXT_PUBLIC_WEB_URL` is a build-time value and needs a rebuild after it changes.
+### Not switched yet, and why
+
+The link emails (Invite, Change Email, Reset Password) still carry the Railway
+origin **on purpose**. `apps/web/src/app/auth/confirm/route.ts` ends with
+`NextResponse.redirect(siteUrl(destination))`, and `siteUrl` reads
+`NEXT_PUBLIC_WEB_URL`, which is baked in at build time and is still the Railway
+address. A link on `locah.store` would verify the token, set the session cookie on
+`locah.store`, then redirect to the Railway host, which has no such cookie, and the
+person lands signed out. Re-render the three with
+`--origin https://locah.store` only after `locah-web` has been rebuilt with
+`NEXT_PUBLIC_WEB_URL=https://locah.store`.
+
+The API also refuses the new origin: a preflight with `Origin: https://locah.store`
+returns 400. `CORS_ALLOWED_ORIGINS` on `locah-api` needs it before any page on
+`locah.store` can call the API.
+
+`NEXT_PUBLIC_PLATFORM_DOMAIN` must stay unset on this plan: it makes
+`businessSiteUrl()` return `https://{slug}.locah.store`, which does not resolve.
+Use the per-surface settings instead (`NEXT_PUBLIC_WEB_URL`,
+`NEXT_PUBLIC_WORKSPACE_URL`, `NEXT_PUBLIC_API_URL`, and
+`NEXT_PUBLIC_SESSION_COOKIE_DOMAIN` if Workspace moves to `app.locah.store`).
