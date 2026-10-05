@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LOCAH">
+  <title>LOCAH</title>
+  <rect width="64" height="64" rx="15" fill="#e8622c"/>
+  <!-- An L with a full stop: the place (the dot) at the foot of the letter. -->
+  <rect x="19" y="14" width="8.5" height="35" rx="2.4" fill="#fff"/>
+  <rect x="19" y="40.5" width="23" height="8.5" rx="2.4" fill="#fff"/>
+  <circle cx="48" cy="44.75" r="4.6" fill="#fff"/>
+</svg>

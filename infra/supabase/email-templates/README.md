@@ -115,32 +115,53 @@ requested. If it comes back as something else, the allowlist still does not matc
 
 ## 5. Sender identity
 
-The default sender is `noreply@mail.app.supabase.io`, which does not say LOCAH and
-carries Supabase's sending reputation. Configuring SMTP under Authentication →
-Emails with a LOCAH sending domain (and its SPF/DKIM records) is what makes these
-emails actually come *from* LOCAH. Until then the default sender is not LOCAH.
-On the hosted Free plan, the dashboard also requires custom SMTP before these
-custom templates can be edited; checking them into Git or deploying Railway does
-not publish them to Supabase.
+LOCAH's auth emails are sent from **`LOCAH <no-reply@auth.locah.store>`**.
 
-## 6. Connecting an email service
+* Sending domain `auth.locah.store` is verified in Resend (region ap-northeast-1,
+  open and click tracking **off** — rewritten links damage code emails).
+  A subdomain keeps sign-in mail's reputation apart from the root domain, which
+  stays free for a future mailbox.
+* Nothing reads replies: Resend receiving is off and there is no mailbox, and the
+  emails say so. Add a monitored address before promising one in these emails.
+* The app itself sends no email (there is no SMTP or Resend code in it); Supabase
+  Auth sends all of it. **Railway needs no mail variables.**
 
-Production setup requires a domain you own, access to its DNS, and an email
-provider account. Railway's generated domain cannot be verified as your email
-sending domain. For Resend:
+DNS in the Hostinger zone for `locah.store` (the apex `@` and `www` records are
+untouched):
 
-1. Verify your sending domain in Resend using the DNS records it provides.
-2. In Supabase Authentication → Emails → SMTP Settings, use host
-   `smtp.resend.com`, port `465`, username `resend`, sender name `LOCAH`, and a
-   sender email on that verified domain. Enter the Resend API key as the password
-   directly in the dashboard; never put it in Git, a public variable, or chat.
-3. Enable and save custom SMTP, then publish the five templates and subjects
-   above. Render the link-based copies with
-   `pnpm email:templates --origin https://locah-web-production.up.railway.app`.
-   The generated `dist/` also includes the two unchanged code-only templates.
-4. Recheck URL configuration and Email OTP length/expiry, then perform an inbox
-   delivery and sign-in check with a designated test account. An accepted OTP
-   request alone is not proof of delivery.
+| Type | Name | Value |
+| --- | --- | --- |
+| TXT | `resend._domainkey.auth` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDx6LfdVru40bk/eQuN9Fgetyh63ht0QerJnlDsm9FjU0qauyZ63Hvys5+nC9IfNM6kBvxEZxx/zzU7p6doHAsKGShjKZnhtFOJsPlQ+8zv4C5oKsoeB5i5hXaB9lHwLQFRmcLV0VJMK9aY+m4vOuNdpBatWDDZ9D13Jxs0OoMwlQIDAQAB` (DKIM) |
+| MX | `send.auth` | `10 feedback-smtp.ap-northeast-1.amazonses.com` (bounces) |
+| TXT | `send.auth` | `v=spf1 include:amazonses.com ~all` (SPF) |
+| CNAME | `rsend.auth` | `send.forge.rmta.net` |
+| TXT | `_dmarc` | `v=DMARC1; p=none; adkim=r; aspf=r` (monitor only) |
+
+DMARC starts at `p=none`. After a few weeks of clean sending, tighten it to
+`p=quarantine`.
+
+## 6. Connecting it to Supabase
+
+Done in Authentication → Emails of the **Locah** project (the SMTP password is a
+secret, so it is entered there by hand — never in Git, chat or a public variable):
+
+1. In Resend → API Keys, create a key named `supabase-auth-smtp` with **Sending
+   access** limited to the domain `auth.locah.store`.
+2. SMTP Settings → enable custom SMTP:
+   host `smtp.resend.com`, port `465`, username `resend`, password = that key,
+   sender email `no-reply@auth.locah.store`, sender name `LOCAH`.
+3. Templates: paste the five rendered files from `dist/` (see §2) with their
+   subjects. Render with
+   `node tools/render-email-templates.mjs --origin https://locah-web-production.up.railway.app`
+   (use the custom origin instead once `locah.store` serves the web app).
+4. Authentication → Providers → Email: OTP length **8**, expiry **600** seconds.
+5. Check delivery for real: sign up and sign in with a test address, and look at
+   the inbox (and spam). An accepted OTP request alone is not proof of delivery.
+
+The templates' header is built from table cells and text — an orange tile with a
+white "L." and the LOCAH wordmark — so it renders in every mail app. Gmail strips
+SVG, and remote images are blocked by default in several clients. The logo files
+(SVG and PNG) are in `apps/web/public/brand/`.
 
 Official setup: https://resend.com/docs/send-with-supabase-smtp and
 https://supabase.com/docs/guides/auth/auth-smtp. Do not enable an incomplete SMTP

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 262 64" role="img" aria-label="LOCAH">
+  <title>LOCAH</title>
+  <!-- Mark -->
+  <rect width="64" height="64" rx="15" fill="#e8622c"/>
+  <rect x="19" y="14" width="8.5" height="35" rx="2.4" fill="#fff"/>
+  <rect x="19" y="40.5" width="23" height="8.5" rx="2.4" fill="#fff"/>
+  <circle cx="48" cy="44.75" r="4.6" fill="#fff"/>
+  <!-- Wordmark, drawn as strokes so it needs no font -->
+  <g fill="none" stroke="#1b1f3b" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M89 18v28h17"/>
+    <circle cx="131" cy="32" r="14"/>
+    <path d="M178 22.2A14 14 0 1 0 178 41.8"/>
+    <path d="M191 46l14-28 14 28M196.2 37h17.6"/>
+    <path d="M234 18v28M254 18v28M234 32h20"/>
+  </g>
+</svg>

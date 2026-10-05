@@ -74,9 +74,14 @@ write a new forward migration instead.
   *Magic Link* templates must contain `{{ .Token }}` — paste
   `infra/supabase/email-templates/src/confirm-signup.html` and `magic-link.html`
   (details in that folder's README). Email OTP length 8, expiry 600 s.
-- Configure a verified sending domain and custom SMTP for production delivery.
-  On the hosted Free plan, SMTP is also required to edit the email templates.
-  Repository templates and Railway deploys do not update hosted Auth settings.
+- Auth email is sent by Supabase through custom SMTP (Resend) from
+  `LOCAH <no-reply@auth.locah.store>`; the sending domain `auth.locah.store` is
+  verified and its DNS is in the Hostinger zone for `locah.store`. The app sends no
+  email itself, so Railway needs no mail variables. On the hosted Free plan, SMTP is
+  also required to edit the email templates. Repository templates and Railway
+  deploys do not update hosted Auth settings: the SMTP password and the five
+  templates are entered in the Supabase dashboard (see
+  `infra/supabase/email-templates/README.md` §5–6).
 - Password reset is still a link and lands on `/auth/update-password`.
 
 ## External activations (not live yet)
