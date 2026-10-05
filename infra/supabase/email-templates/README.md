@@ -180,6 +180,12 @@ secret, so it is entered there by hand — never in Git, chat or a public variab
 5. Check delivery for real: sign up and sign in with a test address, and look at
    the inbox (and spam). An accepted OTP request alone is not proof of delivery.
 
+If sign-in answers "We could not do that just now", read Supabase's auth log for
+the request (`/otp`, status 500). `gomail: could not send email 1: 550 "This API key
+is not authorized to send emails from locah.store"` means the **sender email** in
+Authentication -> Emails -> SMTP Settings is on `locah.store` while the Resend key is
+limited to `auth.locah.store`. It must be `no-reply@auth.locah.store`.
+
 The templates' header is built from table cells and text — an orange tile with a
 white "L." and the LOCAH wordmark — so it renders in every mail app. Gmail strips
 SVG, and remote images are blocked by default in several clients. The logo files
