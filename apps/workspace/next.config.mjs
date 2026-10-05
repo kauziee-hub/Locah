@@ -6,6 +6,18 @@ const nextConfig = {
   // Catalogue import sends the file through a server action: a 2 MB sheet or an
   // 8 MB PDF / photo, base64-encoded (Products & services → Import).
   experimental: { serverActions: { bodySizeLimit: '12mb' } },
+  // Once a browser has seen this site over https it refuses plain http for a year,
+  // so a mistyped or old http link can never be served insecurely. No
+  // includeSubDomains: each subdomain proves its own certificate first.
+  async headers() {
+    if (process.env.NODE_ENV !== 'production') return []
+    return [
+      {
+        source: '/:path*',
+        headers: [{ key: 'Strict-Transport-Security', value: 'max-age=31536000' }],
+      },
+    ]
+  },
   transpilePackages: [
     '@platform/ui',
     '@platform/contracts',
