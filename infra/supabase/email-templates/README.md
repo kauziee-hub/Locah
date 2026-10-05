@@ -215,6 +215,21 @@ CNAME; the certificate is valid and the site loads, so that line can be ignored.
 
 Supabase Site URL is `https://locah.store` with both origins in Redirect URLs.
 
+### `www.locah.store`
+
+Railway allows one custom domain per service and `locah-web` uses it for the apex,
+so `www` is served by a separate tiny service, **`locah-www-redirect`** (the official
+`caddy:2-alpine` image). Its `CADDYFILE` variable is written to `/tmp/Caddyfile` by
+the start command and answers every request on port 8080 with
+`redir https://locah.store{uri} permanent` (301, path and query kept). Hostinger has
+`www` as a CNAME to that service and `_railway-verify.www` as its ownership TXT.
+Railway terminates TLS for `www` with its own Let's Encrypt certificate and sends
+`http://` to `https://` before Caddy sees it. Remove the service and the two `www`
+records together if `locah-web` ever gets a second domain slot.
+
+A change to a service's start command does not take effect on `redeploy` (it reuses
+the existing build); set or change a variable to force a fresh deployment.
+
 ### The switch (2026-10-05)
 
 `locah.store` is the web app's main address:
