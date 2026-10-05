@@ -252,10 +252,30 @@ such cookie, and the person would land signed out. Render with
 three. Emails sent before the switch with the Railway origin will verify but
 land signed out; request a fresh one.
 
+### One sign-in across subdomains (2026-10-05)
+
+The web app hands a signed-in visitor to Workspace (`/workspace/...` redirects to
+`NEXT_PUBLIC_WORKSPACE_URL`), and Workspace sends a signed-out visitor back to the
+web login. That only works if both read the same session cookie, which needs a
+shared registrable domain. So:
+
+* `locah-workspace` has the custom domain **`app.locah.store`**, and
+  `NEXT_PUBLIC_WORKSPACE_URL=https://app.locah.store` on web and Workspace.
+* `NEXT_PUBLIC_SESSION_COOKIE_DOMAIN=locah.store` on web and Workspace makes the
+  Supabase session cookie `Domain=.locah.store`. It is read in the browser bundle,
+  so both Dockerfiles declare it as a build argument (commit `8b5ae60`).
+* `CORS_ALLOWED_ORIGINS` on the API also lists `https://app.locah.store`.
+* Supabase Redirect URLs include `https://app.locah.store/**`.
+* Both apps send `Strict-Transport-Security: max-age=31536000` (exact host only).
+* `locah-api` has `api.locah.store` attached with DNS in place, but Railway had not
+  issued its certificate after 45 minutes (status ISSUING), so the apps still call
+  the API on `locah-api-production.up.railway.app`. When
+  `domain-status` says VALID, set `NEXT_PUBLIC_API_URL=https://api.locah.store` on web
+  and Workspace and rebuild.
+
+Railway does not build from pushes to GitHub in this project. A deployment of the
+latest commit is started by changing a service variable (an unchanged value does
+nothing, hence `LOCAH_DEPLOY_REV`, set to the short commit id on web and Workspace).
+
 `NEXT_PUBLIC_PLATFORM_DOMAIN` must stay unset on this plan: it makes
 `businessSiteUrl()` return `https://{slug}.locah.store`, which does not resolve.
-Workspace and the API remain on their Railway addresses; moving them to
-`app.locah.store` and `api.locah.store` needs `NEXT_PUBLIC_WORKSPACE_URL`,
-`NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SESSION_COOKIE_DOMAIN=locah.store`, a
-custom domain on each service (one allowed per service on this plan) and a CORS
-update.
