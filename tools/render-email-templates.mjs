@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const SRC = join(here, '..', 'infra', 'supabase', 'email-templates', 'src')
 const OUT = join(here, '..', 'infra', 'supabase', 'email-templates', 'dist')
 const PLACEHOLDER = '__LOCAH_WEB_ORIGIN__'
-const CODE_ONLY = new Set(['confirm-signup.html', 'magic-link.html'])
+const CODE_ONLY = new Set(['confirm-signup.html', 'magic-link.html', 'reauthentication.html'])
 
 function resolveOrigin() {
   const flagIndex = process.argv.indexOf('--origin')

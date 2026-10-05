@@ -1,7 +1,7 @@
 # LOCAH auth emails and redirect configuration
 
 These are the transactional emails Supabase sends on signup, invite, magic link,
-password reset and email change. They are checked in here because Supabase stores
+password reset, email change and reauthentication. They are checked in here because Supabase stores
 templates and URL settings in project configuration, not in the repository — there
 is no migration that can apply them, and no service-role API that can set them.
 They have to be pasted into the dashboard once per project.
@@ -78,6 +78,7 @@ set the subject:
 | Invite user | `invite.html` | You have been invited to LOCAH |
 | Magic Link | `magic-link.html` | Your LOCAH sign-in code |
 | Change Email Address | `change-email.html` | Confirm your new email |
+| Reauthentication | `reauthentication.html` | Your LOCAH verification code |
 | Reset Password | `reset-password.html` | Reset your LOCAH password |
 
 ## 3. Why these use `{{ .TokenHash }}`
