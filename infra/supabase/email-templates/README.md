@@ -209,24 +209,32 @@ CNAME; the certificate is valid and the site loads, so that line can be ignored.
 
 Supabase Site URL is `https://locah.store` with both origins in Redirect URLs.
 
-### Not switched yet, and why
+### The switch (2026-10-05)
 
-The link emails (Invite, Change Email, Reset Password) still carry the Railway
-origin **on purpose**. `apps/web/src/app/auth/confirm/route.ts` ends with
+`locah.store` is the web app's main address:
+
+* `locah-api` `CORS_ALLOWED_ORIGINS` is
+  `https://locah-web-production.up.railway.app,https://locah-workspace-production.up.railway.app,https://locah.store`
+  (the first two were the live value, inferred from preflight probes because
+  Railway hides variable values from the connector; the third is new).
+* `locah-web` and `locah-workspace` have `NEXT_PUBLIC_WEB_URL=https://locah.store`
+  and were rebuilt (the Dockerfile declares it as a build argument).
+  Workspace now sends signed-out visitors to `https://locah.store/login`.
+
+The link emails (Invite, Change Email, Reset Password) **must** carry the same
+origin as `NEXT_PUBLIC_WEB_URL`. `apps/web/src/app/auth/confirm/route.ts` ends with
 `NextResponse.redirect(siteUrl(destination))`, and `siteUrl` reads
-`NEXT_PUBLIC_WEB_URL`, which is baked in at build time and is still the Railway
-address. A link on `locah.store` would verify the token, set the session cookie on
-`locah.store`, then redirect to the Railway host, which has no such cookie, and the
-person lands signed out. Re-render the three with
-`--origin https://locah.store` only after `locah-web` has been rebuilt with
-`NEXT_PUBLIC_WEB_URL=https://locah.store`.
-
-The API also refuses the new origin: a preflight with `Origin: https://locah.store`
-returns 400. `CORS_ALLOWED_ORIGINS` on `locah-api` needs it before any page on
-`locah.store` can call the API.
+`NEXT_PUBLIC_WEB_URL`. If a template used a different host, the token would verify
+and set the session cookie there, then redirect to the other host, which has no
+such cookie, and the person would land signed out. Render with
+`node tools/render-email-templates.mjs --origin https://locah.store` and paste all
+three. Emails sent before the switch with the Railway origin will verify but
+land signed out; request a fresh one.
 
 `NEXT_PUBLIC_PLATFORM_DOMAIN` must stay unset on this plan: it makes
 `businessSiteUrl()` return `https://{slug}.locah.store`, which does not resolve.
-Use the per-surface settings instead (`NEXT_PUBLIC_WEB_URL`,
-`NEXT_PUBLIC_WORKSPACE_URL`, `NEXT_PUBLIC_API_URL`, and
-`NEXT_PUBLIC_SESSION_COOKIE_DOMAIN` if Workspace moves to `app.locah.store`).
+Workspace and the API remain on their Railway addresses; moving them to
+`app.locah.store` and `api.locah.store` needs `NEXT_PUBLIC_WORKSPACE_URL`,
+`NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SESSION_COOKIE_DOMAIN=locah.store`, a
+custom domain on each service (one allowed per service on this plan) and a CORS
+update.
