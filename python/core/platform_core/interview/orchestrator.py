@@ -516,6 +516,13 @@ class BusinessInterviewOrchestrator:
                 ]
             if govern_catalogue(bp, proposals, text):
                 understood += 1
+            # A typed menu or price list ("Idli 40, Dosa 70"), and what the
+            # owner says about it ("all veg", "biryani sells the most"), read
+            # by rule — the whole list is kept, with or without the model.
+            from platform_core.interview.catalogue_capture import capture
+
+            if capture(bp, text, answering_targets):
+                understood += 1
         BusinessInterviewOrchestrator.project(bp, business_type)
 
         lang = _lang(bp.language_style)

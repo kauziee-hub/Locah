@@ -165,14 +165,17 @@ def test_the_meat_shop_is_a_shop():
     payload = compose(meat())
     found = sections(payload)
     hero = found["hero"]
-    # No photos yet: Modern Commerce's type-led storefront, not an empty photo frame.
+    # No photos yet: Modern Commerce's type-led storefront, not an empty photo
+    # frame — poster type, or a moving gradient in the shop's colours.
     assert payload["theme_hints"]["design_family"] == "modern_commerce"
-    assert hero["layout_variant"] in {"left_aligned", "centered", "commerce_split"}
+    assert hero["layout_variant"] in {"kinetic", "aurora"}
+    assert payload["theme_hints"]["experience"]["motion"] == "snap"
     assert hero["content"]["eyebrow"] == "Nookampalayam Road"
     assert hero["content"]["badges"] == ["Sold by the kg", "Home delivery", "Store pickup"]
     assert hero["content"]["cta_url"] == "#shop"
     shop = found["product_showcase"]
-    assert shop["layout_variant"] == "category_boards"
+    # Cuts by the kg read like a price list: chapters, or a board per meat.
+    assert shop["layout_variant"] in {"menu_book", "category_boards"}
     assert shop["content"]["title"] == "Shop by category"
     names = [i["name"] for i in shop["content"]["items"]]
     assert "Fish different varieties" not in names and "Seer fish" in names

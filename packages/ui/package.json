@@ -12,7 +12,8 @@
     "./public.css": "./src/public.css",
     "./website.css": "./src/website.css",
     "./site-studio.css": "./src/site-studio.css",
-    "./site-families.css": "./src/site-families.css"
+    "./site-families.css": "./src/site-families.css",
+    "./site-experience.css": "./src/site-experience.css"
   },
   "files": [
     "dist",

@@ -279,6 +279,17 @@ class PaletteDirection(BaseModel):
     muted: str
 
 
+class ExperienceChoices(BaseModel):
+    """How the site moves and which scenes it uses — ids from `experiences`
+    (interview/experience.py decides whether this business can carry them)."""
+
+    model_config = ConfigDict(extra="forbid")
+    motion: str = Field(default="", max_length=24)
+    hero: str = Field(default="", max_length=24)
+    catalogue: str = Field(default="", max_length=24)
+    story: str = Field(default="", max_length=24)
+
+
 class CreativeChoices(BaseModel):
     """What the model may decide about the look, inside the allowed set."""
 
@@ -290,6 +301,8 @@ class CreativeChoices(BaseModel):
     # roles the archetype allows (site_composer.ARCHITECTURE). Hero, catalogue,
     # closing band and contact are fixed; anything else may be reordered or left out.
     page_order: list[str] = Field(default_factory=list, max_length=8)
+    # v5: the experience — motion language and scenes, from `experiences`.
+    experience: ExperienceChoices = Field(default_factory=ExperienceChoices)
 
 
 class CreativeDirection(BaseModel):
@@ -558,6 +571,23 @@ FAMILY_PRINCIPLES: dict[str, str] = {
 }
 
 
+def _experience_context(
+    bp: BusinessBlueprint, business_type: str | None, archetype: str, media_expected: bool | None,
+) -> dict[str, Any]:
+    from platform_core.interview.design_system import choose, read_dimensions
+    from platform_core.interview.experience import options_for_model
+    from platform_core.interview.site_composer import owner_story
+
+    dims = read_dimensions(bp, business_type, media_expected=media_expected)
+    family = choose(bp, dims).family.key
+    pictures = len([m for m in bp.media_assets if m.role != "logo"])
+    if media_expected or (media_expected is None and dims.has_media):
+        pictures = max(pictures, len(bp.media_plan) or 4)
+    items = sum(len(g.items) for g in bp.taxonomy.groups)
+    return dict(options_for_model(archetype, family, dims.as_dict(), pictures=pictures, items=items,
+                                  story_chars=len(owner_story(bp))))
+
+
 def profile_context(
     bp: BusinessBlueprint, business_type: str | None = None, *, media_expected: bool | None = None,
 ) -> list[dict[str, Any]]:
@@ -699,6 +729,9 @@ async def generate_creative_plan(
         "reference_profiles": profile_context(bp, business_type, media_expected=media_expected),
         # The optional parts this kind of page may have, for creative.page_order.
         "page_roles": _page_roles(archetype),
+        # How the site may move and which scenes it may use: only those this
+        # business's pictures, range and story can carry.
+        "experiences": _experience_context(bp, business_type, archetype, media_expected),
         "facts": {k: v.value[:400] for k, v in facts.items()},
         "owner_said": [m.text[:600] for m in bp.messages if m.role == "user"][-10:],
         "brief": build_brief(bp, business_type).model_dump(exclude_defaults=True),
@@ -719,7 +752,10 @@ async def generate_creative_plan(
             "the profile's ground (light/dark) in mind so buttons stay readable; leave them empty "
             "to keep the profile's colours. page_order: order the page's optional parts from "
             "`page_roles` for THIS business (what a visitor should see first after the catalogue); "
-            "leave out a part that would be weak for it; leave empty to keep the default.\n\n"
+            "leave out a part that would be weak for it; leave empty to keep the default. "
+            "experience: choose motion, hero, catalogue and story ids from `experiences` — how THIS "
+            "business's site should feel to move through (a calm clinic does not spin; a bakery may "
+            "float; a gym may snap); leave any empty to let LOCAH decide.\n\n"
             + COPY_PROMPT
             + "\nOutput only schema-valid JSON."
         ),

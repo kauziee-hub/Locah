@@ -75,6 +75,28 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   to a module (`module_binding`) where the design has none. Bound sections read
   live records through the owning module's public contract; when a module is not
   ready a bound section shows a placeholder in preview and is omitted live.
+- **Experience layer.** Each site also gets a composition and motion of its own
+  (`interview/experience.py`, `theme.experience`): a motion language (silk, snap,
+  float, calm), a hero *scene* (a picture that opens to full-bleed, the business's
+  pictures on a turning 3D ring, a tilted wall of pictures, poster type, floating
+  layers, a moving gradient for sites without photos), a catalogue layout (a real
+  menu book, a pinned rail, bento, spotlight, stacked cards), a story layout and a
+  moving band of the business's own words. Choices are limited to what the
+  business's content can carry (a ring needs pictures, a menu needs dishes); the
+  model may pick among them, `choose_experience` decides. The renderer side is
+  `apps/web/.../website/experience` plus `packages/ui/src/site-experience.css`: a
+  small in-house runtime (no animation library — GSAP's licence excludes website
+  builders) feeds CSS a scroll-progress variable; every scene has a complete still
+  state for reduced motion or no JavaScript. `tools/site-lab/serve.sh` renders
+  fixtures through the real renderer with no API or database.
+- **The catalogue is captured, not summarised.** For trades whose website is their
+  catalogue, the interview asks for the real list early (`offerings.catalogue`:
+  a photo/PDF of the menu or price list, or typed out) and then what a visitor
+  looks for (`offerings.traits`: bestsellers, veg / non-veg).
+  `interview/catalogue_capture.py` reads a typed list by rule ("Idli 40, Dosa 70",
+  headings, `/kg`, durations, sizes) so it works with the model down; items carry
+  diet, spice and the owner's tag to the site and, on setup, to the Offerings
+  catalogue with their categories.
 - The public page (`services/website_publish.py::load_public_page`) is projected
   per request from the published version plus current capabilities, so switching a
   tool on or off changes the site without republishing content. `apps/web` caches

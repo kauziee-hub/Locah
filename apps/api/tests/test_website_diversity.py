@@ -38,10 +38,35 @@ def _hero(f: SiteFixture) -> dict[str, Any]:
 
 
 def test_the_golden_business_types_get_their_own_hero(sites: dict[str, SiteFixture]) -> None:
-    expected = {"home-food": "editorial_overlay", "gym": "cinematic", "real-estate": "airy_split",
-                "meat-shop": "commerce_split", "industrial": "commerce_split"}
-    for key, hero in expected.items():
-        assert _hero(sites[key])["layout_variant"] == hero, key
+    # Each hero is a scene suited to how the business presents itself: a home
+    # kitchen's dishes turn or open up, a gym is loud type, a developer's
+    # homes float in layers, a precise B2B plant stays quiet.
+    expected = {"home-food": {"orbit", "plane", "cinematic_zoom", "depth"},
+                "gym": {"kinetic", "cinematic_zoom", "depth"},
+                "real-estate": {"depth", "cinematic_zoom", "plane"},
+                "meat-shop": {"kinetic", "plane", "cinematic_zoom"},
+                "industrial": {"depth", "cinematic_zoom"}}
+    for key, heroes in expected.items():
+        assert _hero(sites[key])["layout_variant"] in heroes, key
+    assert len({_hero(sites[k])["layout_variant"] for k in expected}) >= 3
+
+
+def test_motion_follows_how_the_business_presents_itself(sites: dict[str, SiteFixture]) -> None:
+    motion = {k: f.payload["theme_hints"]["experience"]["motion"] for k, f in sites.items()}
+    assert motion["gym"] == "snap"
+    for calm in ("dental", "hospital", "law-firm"):
+        assert motion[calm] == "calm", calm
+    assert motion["play-school"] in {"float", "snap"}
+    # Calm sites never spin or tilt their pictures.
+    for key, f in sites.items():
+        if motion[key] == "calm":
+            assert _hero(f)["layout_variant"] not in {"orbit", "plane", "kinetic"}, key
+
+
+def test_no_hero_scene_takes_over(sites: dict[str, SiteFixture]) -> None:
+    heroes = Counter(_hero(f)["layout_variant"] for f in sites.values())
+    assert len(heroes) >= 4, heroes
+    assert heroes.most_common(1)[0][1] <= len(sites) // 2, heroes
 
 
 def test_the_five_look_like_five_businesses(sites: dict[str, SiteFixture]) -> None:
@@ -70,8 +95,11 @@ def test_factual_slots_are_never_drawn(sites: dict[str, SiteFixture]) -> None:
 
 
 def test_catalogue_is_presented_as_the_trade_browses(sites: dict[str, SiteFixture]) -> None:
-    assert (_of(sites["real-estate"], "product_showcase") or {}).get("layout_variant") == "project_cards"
-    assert (_of(sites["meat-shop"], "product_showcase") or {}).get("layout_variant") == "category_boards"
+    # Projects one at a time, large; cuts as a price list; plans as cards that stack.
+    assert (_of(sites["real-estate"], "product_showcase") or {}).get("layout_variant") in {"spotlight", "stack"}
+    assert (_of(sites["meat-shop"], "product_showcase") or {}).get("layout_variant") in {
+        "menu_book", "category_boards"}
+    assert (_of(sites["gym"], "product_showcase") or {}).get("layout_variant") == "stack"
 
 
 def test_calls_to_action_say_what_this_visitor_does(sites: dict[str, SiteFixture]) -> None:

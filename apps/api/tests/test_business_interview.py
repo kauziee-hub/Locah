@@ -268,13 +268,16 @@ def plan(bp, template=None):
         "hero": [
             "centered", "left_aligned", "image_left", "image_right", "full_width",
             "commerce_split", "editorial_overlay", "cinematic", "airy_split", "editorial_split",
+            # Mirrors 20261009120000_website_experience_layer.sql.
+            "cinematic_zoom", "orbit", "plane", "kinetic", "depth", "aurora",
         ],
-        "about": ["text_only", "image_left", "image_right", "story_split"],
+        "about": ["text_only", "image_left", "image_right", "story_split", "word_reveal", "sticky_split",
+                  "collage"],
         "contact": ["full", "compact"],
         "text_block": ["default", "highlighted"],
         "location_list": ["cards", "list"],
         "offerings_list": ["cards", "list", "grid"],
-        "cta_band": ["centered", "left_aligned", "image_banner"],
+        "cta_band": ["centered", "left_aligned", "image_banner", "giant"],
         "gallery": ["grid", "masonry", "carousel"],
         "enquiry_form": ["default", "compact"],
         "menu_section": ["categorized", "simple"],
@@ -282,15 +285,18 @@ def plan(bp, template=None):
         "plans_section": ["cards", "comparison"],
         "classes_section": ["schedule", "cards"],
         "reviews_section": ["cards", "list"],
-        "highlights": ["strip", "cards"],
+        "highlights": ["strip", "cards", "counters"],
         "feature_grid": ["cards", "steps", "list"],
-        # Mirrors 20260924010000_website_creative_sections.sql.
-        "category_showcase": ["image_cards", "tiles", "chips"],
+        # Mirrors 20260924010000_website_creative_sections.sql and
+        # 20261009120000_website_experience_layer.sql.
+        "category_showcase": ["image_cards", "tiles", "chips", "rail", "bento"],
         "product_showcase": [
             "category_boards", "commerce_grid", "menu_grid", "compact_list",
             "project_cards", "plan_cards", "service_cards",
+            "menu_book", "rail", "bento", "spotlight", "stack",
         ],
         "fulfilment_strip": ["icons", "steps"],
+        "marquee": ["band", "outline"],
     }
     rows = [
         {"id": sid, "available": True, "allowed_variants": variants[sid],

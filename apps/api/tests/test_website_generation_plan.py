@@ -52,6 +52,8 @@ _SECTION_MODULES: dict[str, str | None] = {
     "category_showcase": None,
     "product_showcase": None,
     "fulfilment_strip": None,
+    # The business's own short words, moving (experience layer); no module.
+    "marquee": None,
 }
 
 

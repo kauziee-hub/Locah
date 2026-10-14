@@ -464,6 +464,8 @@ SYSTEM_PROMPT = (
     "facts), and quote (exact words "
     "from the message). Target ids: business.identity, offerings.main, offerings.structure "
     "(varieties/cuts/sizes inside a group), offerings.units, "
+    "offerings.catalogue (the full list of items WITH prices — a typed menu or price list), "
+    "offerings.traits (which items sell most; for food, which are veg or non-veg), "
     "offerings.pricing, offerings.customisation, services.providers, commerce.action, "
     "commerce.payment, fulfilment.mode, fulfilment.area, fulfilment.operator, operations.stock, "
     "operations.hours, operations.team, b2b.customers, b2b.process, bookings.format, "

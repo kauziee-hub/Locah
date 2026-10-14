@@ -85,10 +85,25 @@ CORE_SECTION_SCHEMAS: dict[str, dict[str, Any]] = {
                         "description": {"type": "string", "maxLength": 200},
                         "price": {"type": "string", "maxLength": 40},
                         "unit": {"type": "string", "maxLength": 40},
+                        # What a visitor of this trade looks for, as the owner
+                        # said it: veg / non-veg, how hot, their own tag
+                        # ("Bestseller"), how long a service takes.
+                        "diet": {"type": "string", "maxLength": 12},
+                        "spice": {"type": "string", "maxLength": 12},
+                        "tag": {"type": "string", "maxLength": 24},
                         "image_asset_id": {"type": "string", "format": "uuid"},
                     },
                 },
             },
+        },
+    },
+    # A moving line of the business's own short words: its categories and the
+    # true facts under its headline. Never a claim the owner did not make.
+    "marquee": {
+        "type": "object",
+        "properties": {
+            "label": {"type": "string", "maxLength": 80},
+            "items": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 40}},
         },
     },
     # How buying works — delivery, pickup, weight, payment — from the owner's answers.
@@ -505,6 +520,8 @@ section types or content fields.
     layout_variant: cards | list
 - reviews_section: title, subtitle
     layout_variant: cards | list
+- marquee: items (array of short strings — the business's own categories or facts)
+    layout_variant: band | outline
 
 The list sections (offerings_list, menu_section, plans_section, rooms_section,
 classes_section, location_list) render the business's own live records — write

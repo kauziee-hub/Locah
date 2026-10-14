@@ -114,30 +114,54 @@ async def _sync_catalogue_into_draft(session: AsyncSession, business_id: UUID, b
     draft.updated_at = now()
 
 
-def _setup_rows(bp: BusinessBlueprint) -> list[tuple[str, str, str]]:
-    """(title, price, unit) per draft catalogue item, from the owner's structure.
+# The whole catalogue becomes drafts — every dish, service and product the
+# owner listed — not a sample of it.
+SETUP_LIMIT = 300
+
+
+def _setup_details(bp: BusinessBlueprint) -> list[dict[str, str]]:
+    """One draft catalogue item per row of the owner's structure: title, price,
+    unit, its category and what a visitor looks for (veg, spice).
 
     An item named in more than one group ("Curry cut" of chicken and of
     mutton) carries its group, so the two do not collapse into one.
     """
+    from platform_core.interview.catalogue_capture import item_traits
+
     groups = bp.taxonomy.groups
     if not groups:
-        return [(d.name.strip(), "", "") for d in bp.website_draft.offerings]
+        return [{"title": d.name.strip()} for d in bp.website_draft.offerings]
     counts: dict[str, int] = {}
     for group in groups:
         for item in group.items:
             counts[item.name.casefold()] = counts.get(item.name.casefold(), 0) + 1
-    rows: list[tuple[str, str, str]] = []
+    rows: list[dict[str, str]] = []
     for group in groups:
         if not group.items:
-            rows.append((group.name, group.price, group.unit))
+            rows.append({"title": group.name, "price": group.price, "unit": group.unit})
             continue
         for item in group.items:
             title = item.name
             if counts[item.name.casefold()] > 1 and group.name.casefold() not in item.name.casefold():
                 title = f"{group.name} {item.name[0].lower() + item.name[1:]}"
-            rows.append((title[:120], item.price or group.price, item.unit or group.unit))
-    return rows[:12]
+            rows.append({"title": title[:120], "price": item.price or group.price, "unit": item.unit or group.unit,
+                         "category": group.name, "description": item.description, **item_traits(item)})
+    return rows[:SETUP_LIMIT]
+
+
+def _setup_rows(bp: BusinessBlueprint) -> list[tuple[str, str, str]]:
+    """(title, price, unit) per draft catalogue item."""
+    return [(r["title"], r.get("price", ""), r.get("unit", "")) for r in _setup_details(bp)]
+
+
+_DIET_WORD = {"veg": "Veg", "non_veg": "Non-veg", "egg": "Egg", "vegan": "Vegan"}
+_SPICE_WORD = {"mild": "Mild", "medium": "Medium", "hot": "Hot"}
+
+
+def _first_amount(price: str) -> str:
+    """The price to store: the first amount the owner gave ("220 / 400" -> 220)."""
+    found = re.search(r"\d[\d,]*(?:\.\d{1,2})?", price or "")
+    return found.group(0).replace(",", "") if found else ""
 
 
 def _trade(bp: BusinessBlueprint, archetype: str) -> str:
@@ -908,19 +932,49 @@ class BusinessInterviewService:
         # the kind; a trade whose kind is not a catalogue kind keeps the default.
         offer_kind = playbook_for(bp).offer_kind
         typed = {"offering_type": offer_kind} if offer_kind in FIRST_LAUNCH_KINDS else {}
-        for name, price, unit in _setup_rows(bp):
+        from platform_core.services.category import CategoryService
+
+        # Read only when a row has a chapter to file under.
+        categories: dict[str, Any] | None = None
+        for row in _setup_details(bp):
+            name = row.get("title", "")
             if not name or name.casefold() in applied:
                 continue
             if name.casefold() not in known:
                 payload: dict[str, Any] = {
                     "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry", **typed,
                 }
-                amount = re.sub(r"[^\d.]", "", price)
+                amount = _first_amount(row.get("price", ""))
                 if amount:
                     # A price the owner gave (in the chat or typed in the panel).
                     payload.update({"price_type": "fixed", "price_amount": amount})
-                    if unit:
-                        payload["unit_of_measure"] = unit[:40]
+                    if row.get("unit"):
+                        payload["unit_of_measure"] = row["unit"][:40]
+                if row.get("description"):
+                    payload["description"] = row["description"][:240]
+                # The menu's own chapters become the catalogue's categories.
+                group = row.get("category", "")
+                if group and group.casefold() not in {"menu", "products", "services", "plans"}:
+                    if categories is None:
+                        categories = {c.name.strip().casefold(): c.id
+                                      for c in await CategoryService.list_for_business(session, business.id)}
+                    if group.casefold() not in categories:
+                        made = await CategoryService.create_category(
+                            session, business_id=business.id, actor_id=actor_id,
+                            correlation_id=correlation_id, payload={"name": group[:80]})
+                        categories[group.casefold()] = made.id
+                    payload["category_id"] = categories[group.casefold()]
+                # What a diner looks for, in the kind's own fields.
+                attributes: dict[str, Any] = {}
+                if offer_kind == "menu_item" and row.get("diet") in _DIET_WORD:
+                    attributes["diet"] = _DIET_WORD[row["diet"]]
+                if offer_kind == "menu_item" and row.get("spice") in _SPICE_WORD:
+                    attributes["spice"] = _SPICE_WORD[row["spice"]]
+                minutes = re.search(r"(\d{1,3})\s*min", row.get("unit", ""))
+                if offer_kind in {"service", "class"} and minutes:
+                    attributes["duration_minutes"] = int(minutes.group(1))
+                if attributes:
+                    payload["attributes"] = attributes
                 await OfferingService.create_offering(
                     session,
                     business_id=business.id,
@@ -929,7 +983,7 @@ class BusinessInterviewService:
                     payload=payload,
                 )
                 known.add(name.casefold())
-            if len(bp.applied_setup_offerings) < 12:
+            if len(bp.applied_setup_offerings) < SETUP_LIMIT:
                 bp.applied_setup_offerings.append(name)
 
     @staticmethod

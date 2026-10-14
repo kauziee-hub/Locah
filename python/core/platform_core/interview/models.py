@@ -46,7 +46,7 @@ OperatingPattern = Literal[
 # business, and never again once it is known. See `discovery.TARGETS`.
 DiscoveryTargetId = Literal[
     "business.identity", "offerings.main", "offerings.structure", "offerings.units", "offerings.pricing",
-    "offerings.customisation", "services.providers", "commerce.action", "commerce.payment",
+    "offerings.catalogue", "offerings.traits", "offerings.customisation", "services.providers", "commerce.action", "commerce.payment",
     "fulfilment.mode", "fulfilment.area", "fulfilment.operator", "operations.stock",
     "operations.hours", "operations.team", "b2b.customers", "b2b.process",
     "bookings.format", "memberships.plans", "contact.location", "contact.phone",
@@ -184,6 +184,12 @@ class CatalogueItem(StrictModel):
     # Attributes the owner's document states explicitly ("veg", "250 g jar",
     # "2 HP, 1440 rpm") — never inferred.
     attributes: str = Field(default="", max_length=160)
+    # What a visitor looks for, as the owner said it (catalogue_capture): veg /
+    # non_veg / egg / vegan (or a dish named for its meat); mild / hot; the
+    # owner's own tag ("Bestseller", "Signature").
+    diet: Literal["", "veg", "non_veg", "egg", "vegan"] = ""
+    spice: Literal["", "mild", "medium", "hot"] = ""
+    tag: str = Field(default="", max_length=24)
 
 
 class CatalogueGroup(StrictModel):
@@ -513,7 +519,7 @@ class BusinessBlueprint(StrictModel):
     documents: list[DocumentRead] = Field(default_factory=list, max_length=6)
     # Owner-approved draft catalogue items created from the interview. Never
     # infer this from website copy or create sellable items automatically.
-    applied_setup_offerings: list[str] = Field(default_factory=list, max_length=12)
+    applied_setup_offerings: list[str] = Field(default_factory=list, max_length=300)
     # What kind of business the owner picked at creation (search-first
     # taxonomy). It seeds questions and recommendations; it is never a fact.
     category: CategorySeed | None = None

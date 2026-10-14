@@ -255,7 +255,8 @@ def _t(
 # What a question is for. Opening hours matter, but not before Locah knows
 # whether "fish" is one product, a category, or fifteen varieties.
 TIERS: dict[str, int] = {
-    "business.identity": 0, "offerings.main": 0, "offerings.structure": 0,
+    "business.identity": 0, "offerings.main": 0, "offerings.structure": 0, "offerings.catalogue": 0,
+    "offerings.traits": 1,
     "commerce.action": 0, "offerings.units": 0, "media.photos": 0, "brand.story": 0,
     "offerings.customisation": 0, "services.providers": 0, "b2b.customers": 0,
     "bookings.format": 0, "memberships.plans": 0,
@@ -284,6 +285,23 @@ TARGETS: tuple[Target, ...] = (
        "customers choose cuts or sizes — what the website's categories and product cards need",
        92, essential=True, after=("offerings.main",), when="catalogue_open",
        fallback={"en": "{structure}", "ta_en": "{structure}", "ta": "{structure}"}),
+    # The real list, not three words in a sentence: every dish, service,
+    # product, plan or room with its price — from a photo or PDF of the menu
+    # or price list, or typed out (catalogue_capture).
+    _t("offerings.catalogue", "Your full menu or price list",
+       "every item with its price, as on the owner's menu, rate card or price list — a photo or PDF "
+       "of it, or typed out ('Idli 40, Dosa 70') — so the website lists everything, priced",
+       90, relevant=("sells_products", "provides_services", "has_memberships"),
+       after=("offerings.main",), once=True,
+       fallback={"en": "Can you send me your full list with prices — a photo or PDF, or typed out?",
+                 "ta_en": "Unga full list price-oda anuppa mudiyumaa — photo, PDF illa type pannalaamaa?",
+                 "ta": "உங்க முழு பட்டியலை விலையோட அனுப்ப முடியுமா — படம், PDF அல்லது டைப் பண்ணலாமா?"}),
+    _t("offerings.traits", "Favourites, veg or non-veg",
+       "which items sell the most (to feature them), and for food which dishes are veg or non-veg",
+       55, relevant=("sells_products", "provides_services"), after=("offerings.catalogue",), once=True,
+       fallback={"en": "Which ones sell the most? I'll feature them.",
+                 "ta_en": "Edhu adhigama sell aagudhu?",
+                 "ta": "எது அதிகம் விற்கும்?"}),
     _t("offerings.units", "How products are sold (weight, size or packs)",
        "how customers choose quantity or variant — by weight, size, pieces, fixed packs, "
        "cuts, or custom", 72, requires=("sells_products",), unless=("made_to_order",),

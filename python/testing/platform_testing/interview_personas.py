@@ -164,9 +164,13 @@ PERSONAS: list[Persona] = [
             "phone": intel("9841098410", facts={"phone": "9841098410"}, answered={"contact.phone": "9841098410"}),
             "story": intel("Everything is baked fresh every morning, eggless options too.",
                            answered={"brand.story": "Everything is baked fresh every morning"}),
+            # "Send me your menu": the owner types it, prices and all.
+            "catalogue": intel("Milk bread 45, Veg puff 25, Egg puff 30, Butter cookies 120, Custom cakes 650 per kg",
+                               answered={"offerings.catalogue": "Milk bread 45, Veg puff 25"}),
         },
         core={"business.identity", "offerings.main", "commerce.action", "offerings.customisation"},
-        actions={"order_whatsapp", "visit"}, tools={"offerings-catalog", "orders"}, follow_ups=(2, 5),
+        # One more than before: the full priced list is asked before the first version.
+        actions={"order_whatsapp", "visit"}, tools={"offerings-catalog", "orders"}, follow_ups=(2, 6),
     ),
     Persona(
         "gym", "Grit Barbell Club", "Gym", ("fitness", "gym", "Gym"), "gym",

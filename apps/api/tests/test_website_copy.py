@@ -33,6 +33,7 @@ VARIANTS = {
     "category_showcase": ["image_cards", "tiles", "chips"],
     "product_showcase": ["category_boards", "commerce_grid", "menu_grid", "compact_list"],
     "fulfilment_strip": ["icons", "steps"],
+    "marquee": ["band", "outline"],
 }
 
 

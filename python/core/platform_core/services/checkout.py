@@ -20,6 +20,7 @@ from platform_core.models import (
     MediaAsset,
     MerchantConnection,
     Offering,
+    OfferingCategory,
     SalesOrder,
 )
 from platform_core.services.business import BusinessService
@@ -120,6 +121,22 @@ class CheckoutService:
             ids = list(o.image_asset_ids or [])
             return images.get(str(ids[0])) if ids else None
 
+        # Each item's category, so a website reads the catalogue in its own
+        # chapters (a menu's Starters, Mains, Desserts) — in the owner's order.
+        category_ids = {o.category_id for o in rows if o.category_id}
+        chapters: dict[str, tuple[str, int]] = {}
+        if category_ids:
+            for cat in (await session.execute(
+                select(OfferingCategory).where(
+                    OfferingCategory.id.in_(category_ids),
+                    OfferingCategory.business_id == business.id,
+                    OfferingCategory.status == "active",
+                )
+            )).scalars().all():
+                chapters[str(cat.id)] = (cat.name, cat.sort_order)
+        rows = sorted(rows, key=lambda o: (chapters.get(str(o.category_id), ("", 10_000))[1],
+                                           chapters.get(str(o.category_id), ("~", 0))[0].casefold()))
+
         from platform_core.services.offering_public import public_details
 
         details = await public_details(session, business.id, list(rows))
@@ -147,6 +164,7 @@ class CheckoutService:
                     "price_amount": float(o.price_amount) if o.price_amount is not None else None,
                     "currency": o.currency,
                     "image_url": _image_for(o),
+                    "category": chapters.get(str(o.category_id), ("", 0))[0] or None,
                     "availability": availability.get(str(o.id)),
                     **details[str(o.id)],
                 }

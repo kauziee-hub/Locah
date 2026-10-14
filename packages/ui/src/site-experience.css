@@ -1,0 +1,2144 @@
+/* ==========================================================================
+   LOCAH — the experience layer for tenant websites
+
+   Motion, depth and scroll choreography on top of website.css,
+   site-studio.css and site-families.css. Every effect here is driven by a
+   few numbers the motion runtime writes (apps/web/.../experience/motion.ts):
+
+     --p         0 → 1   an element's (or a pinned scene's) scroll progress
+     --mx --my  -1 → 1   the pointer over an element
+     --rx --ry           a card's lean toward the pointer
+     --tx --ty           a button's pull toward the pointer
+     --scroll    0 → 1   page progress (site root)
+     --mv       -1 → 1   scroll velocity (site root)
+     .is-in              an element has entered the viewport
+
+   Two rules hold everywhere:
+
+   1. Nothing is hidden unless [data-fx='on'] is on the site root. That
+      attribute is set before first paint only when the visitor has not asked
+      for reduced motion (and removed again if the runtime never starts). With
+      it off, every scene shows a complete, designed still state.
+   2. No LOCAH colour. Colour comes from --site-* only.
+   ========================================================================== */
+
+/* ------------------------------------------------------ motion languages */
+
+[data-locah-site] {
+  --fx-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --fx-dur: 1100ms;
+  --fx-stagger: 55ms;
+  --fx-dist: 44px;
+  --fx-nav-h: 68px;
+}
+[data-locah-site][data-motion-lang='snap'] {
+  --fx-ease: cubic-bezier(0.76, 0, 0.24, 1);
+  --fx-dur: 760ms;
+  --fx-stagger: 32ms;
+  --fx-dist: 64px;
+}
+[data-locah-site][data-motion-lang='float'] {
+  --fx-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --fx-dur: 950ms;
+  --fx-stagger: 60ms;
+  --fx-dist: 34px;
+}
+[data-locah-site][data-motion-lang='calm'] {
+  --fx-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --fx-dur: 700ms;
+  --fx-stagger: 40ms;
+  --fx-dist: 14px;
+}
+
+@property --spin {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+/* Smooth scrolling (Lenis) owns the scroll on desktop; the browser's own
+   smooth anchor scrolling would fight it. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+html.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+
+/* ---------------------------------------------------------------- reveals */
+
+[data-fx='on'] [data-reveal] {
+  transition:
+    opacity var(--fx-dur) var(--fx-ease),
+    transform var(--fx-dur) var(--fx-ease),
+    clip-path calc(var(--fx-dur) * 1.2) var(--fx-ease);
+}
+[data-fx='on'] [data-reveal]:not(.is-in) {
+  opacity: 0;
+  transform: translate3d(0, var(--fx-dist), 0);
+}
+[data-fx='on'] [data-reveal='fade']:not(.is-in) {
+  transform: none;
+}
+[data-fx='on'] [data-reveal='scale']:not(.is-in) {
+  transform: scale(0.94);
+}
+[data-fx='on'] [data-reveal='left']:not(.is-in) {
+  transform: translate3d(calc(var(--fx-dist) * -1.4), 0, 0);
+}
+[data-fx='on'] [data-reveal='right']:not(.is-in) {
+  transform: translate3d(calc(var(--fx-dist) * 1.4), 0, 0);
+}
+/* A picture opened like a curtain, the photograph settling inside it. The
+   curtain is on the frame's contents, never the frame: a box clipped to
+   nothing is never "in view", so it would never be revealed. */
+[data-fx='on'] [data-reveal='mask'] {
+  overflow: hidden;
+}
+[data-fx='on'] [data-reveal='mask']:not(.is-in) {
+  opacity: 1;
+  transform: none;
+  background: transparent;
+}
+[data-fx='on'] [data-reveal='mask'] > * {
+  transition:
+    clip-path calc(var(--fx-dur) * 1.25) var(--fx-ease),
+    transform calc(var(--fx-dur) * 1.6) var(--fx-ease);
+}
+[data-fx='on'] [data-reveal='mask']:not(.is-in) > * {
+  clip-path: inset(100% 0 0 0);
+  transform: scale(1.22);
+}
+[data-fx='on'] [data-reveal='mask'].is-in > * {
+  clip-path: inset(0 0 0 0);
+}
+
+/* A group: its children arrive one after another. Children rendered later
+   (a filtered list) appear at once — the group has already arrived. */
+[data-fx='on'] [data-reveal-group] > * {
+  transition:
+    opacity var(--fx-dur) var(--fx-ease),
+    transform var(--fx-dur) var(--fx-ease);
+  transition-delay: calc(var(--ri, 0) * var(--fx-stagger) * 1.6);
+}
+[data-fx='on'] [data-reveal-group]:not(.is-in) > * {
+  opacity: 0;
+  transform: translate3d(0, var(--fx-dist), 0);
+}
+[data-locah-site][data-motion-lang='float'][data-fx='on'] [data-reveal-group]:not(.is-in) > * {
+  transform: translate3d(0, var(--fx-dist), 0) rotate(-2deg) scale(0.97);
+}
+
+/* Words that rise into place. The runtime wraps each word (.fx-w > .fx-wi). */
+[data-fx='on'] [data-split]:not([data-split-done]) {
+  opacity: 0;
+}
+[data-locah-site] .fx-w {
+  display: inline-block;
+  vertical-align: top;
+  overflow: hidden;
+  padding: 0.02em 0.06em 0.14em 0.02em;
+  margin: -0.02em -0.06em -0.14em -0.02em;
+}
+[data-locah-site] .fx-wi {
+  display: inline-block;
+}
+[data-fx='on'] [data-split] .fx-wi {
+  transition:
+    transform calc(var(--fx-dur) * 1.05) var(--fx-ease),
+    opacity var(--fx-dur) var(--fx-ease);
+  transition-delay: calc(var(--wi) * var(--fx-stagger));
+}
+[data-fx='on'] [data-split]:not(.is-in) .fx-wi {
+  transform: translate3d(0, 108%, 0) rotate(4deg);
+}
+[data-locah-site][data-motion-lang='calm'][data-fx='on'] [data-split]:not(.is-in) .fx-wi {
+  transform: translate3d(0, 40%, 0);
+  opacity: 0;
+}
+/* Long display text reads word by word as it scrolls past: lit, not raised. */
+[data-locah-site] [data-split='read'] .fx-w {
+  overflow: visible;
+}
+[data-fx='on'] [data-split='read'] .fx-wi,
+[data-fx='on'] [data-split='read']:not(.is-in) .fx-wi {
+  transform: none;
+  transition: opacity 120ms linear;
+  opacity: clamp(0.14, calc(var(--lit, 1) * var(--wn) - var(--wi)), 1);
+}
+
+/* Something that drifts at its own speed while the page scrolls. */
+[data-fx='on'] [data-parallax] {
+  transform: translate3d(0, calc((var(--p, 0.5) - 0.5) * var(--speed, 0.18) * -100%), 0);
+  will-change: transform;
+}
+
+/* ------------------------------------------------------------ the header */
+
+[data-locah-site] .ls-nav {
+  transition:
+    transform 520ms var(--fx-ease),
+    background-color 300ms ease,
+    box-shadow 300ms ease;
+}
+[data-fx='on'][data-nav-away] .ls-nav {
+  transform: translate3d(0, -110%, 0);
+}
+[data-fx='on'][data-scrolled] .ls-nav {
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.35);
+}
+
+/* Page progress: a hairline in the brand colour. */
+.fx-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--site-accent);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--scroll, 0));
+  opacity: 0;
+}
+[data-fx='on'] .fx-progress {
+  opacity: 1;
+}
+
+/* Film grain, for families that want texture. Drawn, never downloaded. */
+[data-locah-site][data-grain] {
+  position: relative;
+}
+[data-locah-site][data-grain]::after,
+.fx-grain {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.fx-grain {
+  position: absolute;
+  z-index: 1;
+  opacity: 0.12;
+}
+
+/* The intro: the business's name, once per visit, then the curtain lifts. */
+.fx-intro {
+  display: none;
+}
+[data-fx='on']:not([data-intro='seen']) .fx-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+  pointer-events: none;
+  animation: fx-curtain 900ms var(--fx-ease) 1050ms both;
+}
+.fx-intro__name {
+  font-family: var(--site-display-font);
+  font-size: clamp(2.2rem, 1rem + 6vw, 6rem);
+  letter-spacing: -0.03em;
+  overflow: hidden;
+  padding: 0 1rem 0.12em;
+  text-align: center;
+  line-height: 1.05;
+}
+.fx-intro__name > span {
+  display: inline-block;
+  animation: fx-rise 900ms var(--fx-ease) 120ms both;
+}
+@keyframes fx-curtain {
+  to {
+    transform: translate3d(0, -100%, 0);
+    visibility: hidden;
+  }
+}
+@keyframes fx-rise {
+  from {
+    transform: translate3d(0, 110%, 0);
+  }
+}
+
+/* Buttons drawn toward the pointer. */
+[data-locah-site] [data-magnetic] {
+  transform: translate3d(var(--tx, 0px), var(--ty, 0px), 0);
+  transition:
+    transform 380ms var(--fx-ease),
+    filter 140ms ease;
+}
+
+/* Cards that lean toward the pointer, a light sliding across them. */
+[data-locah-site] [data-tilt] {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 420ms var(--fx-ease);
+  will-change: transform;
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-locah-site] [data-tilt]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      420px circle at var(--gx, 50%) var(--gy, 0%),
+      rgba(255, 255, 255, 0.16),
+      transparent 45%
+    );
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+  [data-locah-site] [data-tilt]:hover::after {
+    opacity: 1;
+  }
+}
+
+/* A hint that the page continues: a line that keeps falling. */
+.fx-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 2.2rem;
+  width: 1px;
+  height: 56px;
+  overflow: hidden;
+  z-index: 3;
+  background: color-mix(in srgb, currentColor 25%, transparent);
+}
+.fx-cue::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  animation: fx-cue 1.8s var(--fx-ease) infinite;
+}
+@keyframes fx-cue {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* ============================================================ hero scenes */
+
+/* Shared: a pinned stage, held while its section scrolls past. */
+.fx-zoom,
+.fx-orbit,
+.fx-plane,
+.fx-kinetic {
+  --p: 1;
+  position: relative;
+  padding: 0;
+  background: var(--site-bg);
+  color: var(--site-ink);
+}
+[data-fx='on'] :is(.fx-zoom, .fx-orbit, .fx-plane, .fx-kinetic) {
+  --p: 0;
+}
+.fx-zoom__stage,
+.fx-orbit__stage,
+.fx-plane__stage,
+.fx-kinetic__stage {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+}
+[data-fx='on'] :is(.fx-zoom__stage, .fx-orbit__stage, .fx-plane__stage, .fx-kinetic__stage) {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+}
+[data-fx='on'] .fx-zoom {
+  height: 230vh;
+}
+[data-fx='on'] .fx-orbit {
+  height: 220vh;
+}
+[data-fx='on'] .fx-plane {
+  height: 240vh;
+}
+[data-fx='on'] .fx-kinetic {
+  height: 190vh;
+}
+@media (max-width: 760px) {
+  [data-fx='on'] :is(.fx-zoom, .fx-orbit, .fx-plane) {
+    height: 175vh;
+  }
+  [data-fx='on'] .fx-kinetic {
+    height: 150vh;
+  }
+}
+
+/* cinematic_zoom — a framed picture opens to full-bleed. The words sit on the
+   page in ink; a white copy of them lives inside the frame, so the headline is
+   split exactly along the picture's edge — readable at every point. */
+.fx-zoom {
+  --e: clamp(0, calc(var(--p) * 1.75), 1);
+  --k: clamp(0, calc((var(--p) - 0.1) * 4), 1);
+  --z-top: 26%;
+  --z-right: 4%;
+  --z-bottom: 6%;
+  --z-left: 55%;
+}
+@media (max-width: 900px) {
+  .fx-zoom {
+    --z-top: 54%;
+    --z-right: 5%;
+    --z-bottom: 4%;
+    --z-left: 5%;
+  }
+}
+.fx-zoom__frame {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  /* Clicks fall through to the real words and buttons beneath. */
+  pointer-events: none;
+  clip-path: inset(
+    calc((1 - var(--e)) * var(--z-top)) calc((1 - var(--e)) * var(--z-right))
+      calc((1 - var(--e)) * var(--z-bottom)) calc((1 - var(--e)) * var(--z-left)) round
+      calc((1 - var(--e)) * 28px)
+  );
+}
+.fx-zoom__frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  transform: scale(calc(1.2 - var(--e) * 0.2));
+  transform-origin: 70% 60%;
+}
+.fx-zoom__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: calc(0.45 + var(--e) * 0.55);
+  background: linear-gradient(
+    100deg,
+    rgba(8, 8, 8, 0.82) 0%,
+    rgba(8, 8, 8, 0.55) 45%,
+    rgba(8, 8, 8, 0.18) 100%
+  );
+}
+.fx-zoom__copy {
+  position: relative;
+  z-index: 2;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding: calc(var(--fx-nav-h) + clamp(2rem, 1rem + 4vh, 4.5rem)) clamp(1.25rem, 0.5rem + 3vw, 3rem) 4rem;
+  color: var(--site-ink);
+}
+.fx-zoom__copy--light {
+  color: #fff;
+}
+/* The white copy is not an h1 (the page has one): it takes every rule the
+   real headline takes, so the two halves of a word line up exactly. */
+[data-locah-site] .fx-zoom__copy--light .ls-hero__headline {
+  font-family: var(--site-display-font);
+  font-weight: var(--site-heading-weight, 600);
+  font-stretch: var(--site-display-stretch, normal);
+  text-transform: var(--site-display-case, none);
+  text-wrap: balance;
+}
+[data-locah-site][data-personality='bold'][data-typography='modern_sans'] .fx-zoom__copy--light .ls-hero__headline {
+  text-transform: uppercase;
+}
+[data-locah-site] .fx-zoom .ls-hero__headline {
+  font-size: clamp(2.8rem, 1.2rem + 5vw, 6.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  /* Beside the framed picture at first, never over it. */
+  max-width: min(11ch, 38vw);
+  color: inherit;
+  margin: 0;
+}
+[data-locah-site] .fx-zoom .ls-hero__eyebrow {
+  color: var(--site-accent);
+}
+[data-locah-site] .fx-zoom .ls-hero__sub {
+  max-width: 40ch;
+  font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.35rem);
+}
+[data-locah-site] .fx-zoom .fx-late {
+  max-width: 46ch;
+}
+[data-fx='on'] .fx-zoom .fx-late {
+  opacity: clamp(0, calc((var(--p) - 0.5) * 4), 1);
+  transform: translate3d(0, calc((1 - clamp(0, calc((var(--p) - 0.5) * 4), 1)) * 30px), 0);
+}
+[data-locah-site] .fx-zoom .ls-btn--outline,
+[data-locah-site] .fx-zoom .ls-btn--ghost-onmedia {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-locah-site] .fx-zoom .ls-hero__badges li {
+  color: #fff;
+}
+.fx-zoom .fx-cue {
+  color: var(--site-ink);
+  opacity: calc(1 - var(--k));
+}
+[data-fx='on'] .fx-zoom .fx-late {
+  pointer-events: none;
+}
+[data-fx='on'] .fx-zoom[data-late] .fx-zoom__copy:not(.fx-zoom__copy--light) .fx-late {
+  pointer-events: auto;
+}
+@media (max-width: 900px) {
+  [data-locah-site] .fx-zoom .ls-hero__headline {
+    max-width: 14ch;
+    font-size: clamp(2.4rem, 1.2rem + 7vw, 4rem);
+  }
+}
+
+/* orbit — the business's own pictures on a turning ring beside the words. */
+.fx-orbit {
+  --card-h: clamp(160px, 36vh, 340px);
+  --card-w: calc(var(--card-h) * 0.76);
+}
+.fx-orbit__stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding-top: calc(var(--fx-nav-h) + clamp(1.25rem, 1rem + 2vh, 2.5rem));
+}
+@media (min-width: 900px) {
+  .fx-orbit__stage {
+    grid-template-rows: none;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: center;
+    padding: var(--fx-nav-h) max(clamp(1.25rem, 0.5rem + 3vw, 3rem), calc((100vw - 1240px) / 2)) 0;
+  }
+}
+.fx-orbit__copy {
+  position: relative;
+  z-index: 3;
+  max-width: 640px;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 3rem);
+}
+@media (min-width: 900px) {
+  .fx-orbit__copy {
+    padding-inline: 0;
+    margin: 0;
+  }
+}
+@media (max-width: 899px) {
+  .fx-orbit__copy {
+    text-align: center;
+    margin-inline: auto;
+  }
+  [data-locah-site] .fx-orbit .ls-hero__cta {
+    justify-content: center;
+  }
+  [data-locah-site] .fx-orbit .ls-hero__headline,
+  [data-locah-site] .fx-orbit .ls-hero__sub,
+  [data-locah-site] .fx-orbit .ls-hero__eyebrow {
+    margin-inline: auto;
+  }
+}
+[data-locah-site] .fx-orbit .ls-hero__headline {
+  font-size: clamp(2.3rem, 1rem + 4.2vw, 5.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  max-width: 12ch;
+  color: var(--site-ink);
+}
+[data-locah-site] .fx-orbit .ls-hero__sub {
+  color: var(--site-muted);
+}
+[data-locah-site] .fx-orbit .ls-btn--ghost-onmedia {
+  color: var(--site-ink);
+  border-color: var(--site-border);
+  background: transparent;
+}
+.fx-orbit__view {
+  position: relative;
+  align-self: stretch;
+  min-height: calc(var(--card-h) * 1.35);
+  perspective: 1400px;
+  perspective-origin: 50% 35%;
+  pointer-events: none;
+}
+.fx-orbit__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-w);
+  height: var(--card-h);
+  margin: calc(var(--card-h) / -2) 0 0 calc(var(--card-w) / -2);
+  transform-style: preserve-3d;
+  --r: calc(var(--card-w) * var(--n) * 0.18);
+  transform: translateZ(calc(var(--r) * -1)) rotateX(calc(-9deg + var(--my, 0) * 3deg))
+    rotateY(calc(var(--p) * -160deg + var(--spin) + var(--mx, 0) * 12deg));
+}
+[data-fx='on'] .fx-orbit__ring {
+  animation: fx-spin 70s linear infinite;
+}
+@keyframes fx-spin {
+  to {
+    --spin: -360deg;
+  }
+}
+.fx-orbit__card {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  border-radius: calc(var(--site-radius) + 6px);
+  overflow: hidden;
+  backface-visibility: hidden;
+  transform: rotateY(calc(var(--i) * 1turn / var(--n))) translateZ(var(--r));
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.55);
+  background: var(--site-bg-alt);
+}
+.fx-orbit__card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (max-width: 760px) {
+  .fx-orbit {
+    --card-h: clamp(140px, 27vh, 220px);
+  }
+}
+/* The ring needs the room: in a scene the facts under the buttons wait. */
+[data-locah-site] .fx-orbit .ls-hero__badges {
+  display: none;
+}
+
+/* plane — a tilted wall of pictures that straightens toward the visitor. */
+.fx-plane {
+  background: var(--site-bg);
+}
+.fx-plane__view {
+  position: absolute;
+  inset: 0;
+  perspective: 1300px;
+  perspective-origin: 70% 30%;
+  overflow: hidden;
+}
+.fx-plane__grid {
+  position: absolute;
+  top: -10%;
+  left: 18%;
+  width: 92%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px, 1.4vw, 22px);
+  transform-origin: 50% 40%;
+  transform: rotateX(calc((1 - var(--p)) * 46deg)) rotateZ(calc((1 - var(--p)) * -20deg))
+    translate3d(calc((1 - var(--p)) * 4%), calc(var(--p) * -14%), 0) scale(calc(1.32 - var(--p) * 0.18));
+}
+.fx-plane__col {
+  display: grid;
+  gap: clamp(10px, 1.4vw, 22px);
+}
+.fx-plane__col:nth-child(odd) {
+  transform: translate3d(0, calc((var(--p) - 0.5) * -16%), 0);
+}
+.fx-plane__col:nth-child(even) {
+  transform: translate3d(0, calc((var(--p) - 0.5) * 16% + 8%), 0);
+}
+.fx-plane__tile {
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--site-radius);
+  background: var(--site-bg-alt);
+  box-shadow: 0 30px 50px -30px rgba(0, 0, 0, 0.5);
+}
+.fx-plane__tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-plane__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    96deg,
+    var(--site-bg) 0%,
+    color-mix(in srgb, var(--site-bg) 86%, transparent) 30%,
+    color-mix(in srgb, var(--site-bg) 10%, transparent) 62%,
+    transparent 80%
+  );
+  opacity: calc(1 - var(--p) * 0.9);
+}
+.fx-plane__copy {
+  position: relative;
+  z-index: 3;
+  padding: calc(var(--fx-nav-h) + clamp(3rem, 2rem + 8vh, 9rem)) clamp(1.25rem, 0.5rem + 3vw, 3rem) 3rem;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.fx-plane__copy > * {
+  max-width: 34rem;
+}
+[data-fx='on'] .fx-plane__copy {
+  opacity: clamp(0, calc(1 - (var(--p) - 0.35) * 2.5), 1);
+  transform: translate3d(0, calc(var(--p) * -60px), 0);
+}
+[data-locah-site] .fx-plane .ls-hero__headline {
+  font-size: clamp(2.6rem, 1.3rem + 5vw, 6.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+  max-width: 11ch;
+  color: var(--site-ink);
+}
+[data-locah-site] .fx-plane .ls-hero__sub {
+  color: var(--site-muted);
+}
+[data-locah-site] .fx-plane .ls-btn--ghost-onmedia {
+  color: var(--site-ink);
+  border-color: var(--site-border);
+  background: color-mix(in srgb, var(--site-bg) 70%, transparent);
+}
+@media (max-width: 900px) {
+  .fx-plane__grid {
+    left: 0;
+    width: 140%;
+    top: 30%;
+  }
+  .fx-plane__scrim {
+    background: linear-gradient(
+      180deg,
+      var(--site-bg) 0%,
+      color-mix(in srgb, var(--site-bg) 88%, transparent) 42%,
+      transparent 75%
+    );
+  }
+  .fx-plane__copy {
+    padding-top: calc(var(--fx-nav-h) + 2rem);
+  }
+}
+
+/* kinetic — poster type that pulls apart around a growing picture. */
+.fx-kinetic__stage {
+  display: grid;
+  align-items: center;
+}
+.fx-kinetic__inner {
+  max-width: none;
+  padding: calc(var(--fx-nav-h) + 2rem) clamp(1.25rem, 0.5rem + 3vw, 3rem) 3rem;
+}
+[data-locah-site] .fx-kinetic .fx-kinetic__title {
+  display: grid;
+  gap: 0.02em;
+  max-width: none;
+  /* As large as a poster — but the longest word always fits the screen. */
+  font-size: min(
+    clamp(3rem, 0.6rem + 9.6vw, 12.5rem),
+    calc((100vw - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem)) / (var(--hero-longest, 8) * 0.82))
+  );
+  line-height: 0.88;
+  letter-spacing: -0.055em;
+  color: var(--site-ink);
+}
+.fx-kinetic__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.18em;
+  white-space: normal;
+}
+.fx-kinetic__line--a {
+  transform: translate3d(calc(var(--p) * -6%), 0, 0);
+}
+.fx-kinetic__line--b {
+  justify-content: flex-end;
+  text-align: right;
+  transform: translate3d(calc(var(--p) * 6%), 0, 0);
+}
+.fx-kinetic__stage {
+  overflow: hidden;
+}
+[data-locah-site] .fx-kinetic__line--b .ls-accent {
+  color: var(--site-primary);
+  font-style: italic;
+}
+.fx-kinetic__pill {
+  flex: none;
+  display: inline-block;
+  height: 0.8em;
+  width: calc(1.6em + var(--p) * 2.6em);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--site-bg-alt);
+  transform: translateY(0.04em);
+  box-shadow: 0 0 0 0.04em var(--site-primary);
+}
+.fx-kinetic__pill img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(calc(1.3 - var(--p) * 0.3));
+}
+.fx-kinetic__foot {
+  margin-top: clamp(1.5rem, 1rem + 3vw, 3.5rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+  border-top: 1px solid var(--site-border);
+  padding-top: 1.5rem;
+}
+[data-locah-site] .fx-kinetic__foot .ls-hero__sub {
+  margin: 0;
+  color: var(--site-muted);
+}
+[data-locah-site] .fx-kinetic .ls-hero__cta {
+  margin: 0;
+}
+[data-locah-site] .fx-kinetic .ls-btn--ghost-onmedia {
+  color: var(--site-ink);
+  border-color: var(--site-border);
+  background: transparent;
+}
+@media (max-width: 760px) {
+  .fx-kinetic__line--b {
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+/* depth — one photograph, and framed pictures floating at different depths. */
+.fx-depth {
+  --p: 0.5;
+  display: grid;
+  align-items: center;
+  min-height: clamp(620px, 96vh, 1000px);
+  padding-block: calc(var(--fx-nav-h) + 3rem) 4rem;
+  color: #fff;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0b0b0c;
+}
+.fx-depth__bg {
+  position: absolute;
+  inset: -4%;
+  z-index: -1;
+}
+.fx-depth__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translate3d(calc(var(--mx, 0) * -14px), calc(var(--my, 0) * -10px + (var(--p) - 0.5) * 120px), 0)
+    scale(calc(1.06 + var(--p) * 0.1));
+  transition: transform 600ms var(--fx-ease);
+}
+.fx-depth::before {
+  z-index: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(6, 6, 6, 0.85) 0%,
+    rgba(6, 6, 6, 0.55) 45%,
+    rgba(6, 6, 6, 0.15) 100%
+  ) !important;
+}
+.fx-depth__copy {
+  z-index: 2;
+}
+[data-locah-site] .fx-depth .ls-hero__headline {
+  color: #fff;
+  font-size: clamp(2.8rem, 1.5rem + 5.4vw, 6.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  max-width: 12ch;
+}
+[data-locah-site] .fx-depth .ls-hero__eyebrow,
+[data-locah-site] .fx-depth .ls-accent {
+  color: var(--site-accent);
+}
+[data-locah-site] .fx-depth .ls-accent {
+  display: block;
+  font-style: italic;
+}
+.fx-depth__floats {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.fx-depth__float {
+  position: absolute;
+  margin: 0;
+  width: clamp(130px, 15vw, 240px);
+  aspect-ratio: 4 / 5;
+  border-radius: calc(var(--site-radius) + 4px);
+  overflow: hidden;
+  border: 6px solid color-mix(in srgb, #fff 92%, transparent);
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.7);
+  transform: translate3d(
+      calc(var(--mx, 0) * var(--d) * 30px),
+      calc(var(--my, 0) * var(--d) * 22px + (var(--p) - 0.5) * var(--d) * -260px),
+      0
+    )
+    rotate(var(--rot));
+  transition: transform 700ms var(--fx-ease);
+}
+.fx-depth__float img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-depth__float--0 {
+  --d: 1;
+  --rot: 5deg;
+  right: 8%;
+  top: 18%;
+}
+.fx-depth__float--1 {
+  --d: 0.55;
+  --rot: -6deg;
+  right: 24%;
+  top: 52%;
+  width: clamp(110px, 12vw, 190px);
+}
+.fx-depth__float--2 {
+  --d: 1.4;
+  --rot: 3deg;
+  right: 3%;
+  top: 60%;
+  width: clamp(100px, 10vw, 160px);
+}
+@media (max-width: 900px) {
+  .fx-depth__float--1,
+  .fx-depth__float--2 {
+    display: none;
+  }
+  .fx-depth__float--0 {
+    top: auto;
+    bottom: 6%;
+    right: 6%;
+    width: 120px;
+    opacity: 0.9;
+  }
+}
+
+/* aurora — a living gradient in the brand's colours. */
+.fx-aurora {
+  --p: 0.5;
+  display: grid;
+  align-items: center;
+  min-height: clamp(600px, 92vh, 960px);
+  padding-block: calc(var(--fx-nav-h) + 3rem) 4rem;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--site-bg);
+  color: var(--site-ink);
+}
+.fx-aurora__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.fx-aurora__canvas[data-live] {
+  opacity: 1;
+}
+.fx-aurora__wash {
+  position: absolute;
+  inset: -20%;
+  z-index: -2;
+  filter: blur(60px);
+}
+.fx-aurora__wash span {
+  position: absolute;
+  width: 55%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+.fx-aurora__wash span:nth-child(1) {
+  background: var(--site-primary);
+  left: 50%;
+  top: 0;
+}
+.fx-aurora__wash span:nth-child(2) {
+  background: var(--site-accent);
+  left: 10%;
+  top: 40%;
+}
+.fx-aurora__wash span:nth-child(3) {
+  background: color-mix(in srgb, var(--site-primary) 50%, var(--site-bg));
+  left: 60%;
+  top: 55%;
+}
+[data-fx='on'] .fx-aurora__wash span {
+  animation: fx-drift 18s ease-in-out infinite alternate;
+}
+[data-fx='on'] .fx-aurora__wash span:nth-child(2) {
+  animation-duration: 23s;
+  animation-direction: alternate-reverse;
+}
+@keyframes fx-drift {
+  to {
+    transform: translate3d(-12%, 10%, 0) scale(1.15);
+  }
+}
+.fx-aurora__copy {
+  z-index: 2;
+}
+.fx-aurora::after {
+  /* keep the words legible over any colour the gradient reaches */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--site-bg) 62%, transparent) 0%,
+    color-mix(in srgb, var(--site-bg) 18%, transparent) 50%,
+    transparent 80%
+  );
+}
+[data-locah-site] .fx-aurora .ls-hero__headline {
+  color: var(--site-ink);
+  font-size: clamp(2.8rem, 1.2rem + 6.4vw, 7.6rem);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  max-width: 12ch;
+}
+[data-locah-site] .fx-aurora .ls-hero__sub {
+  color: color-mix(in srgb, var(--site-ink) 78%, transparent);
+}
+[data-locah-site] .fx-aurora .ls-btn--ghost-onmedia {
+  color: var(--site-ink);
+  border-color: color-mix(in srgb, var(--site-ink) 25%, transparent);
+  background: color-mix(in srgb, var(--site-bg) 40%, transparent);
+}
+[data-locah-site] .fx-aurora .ls-accent {
+  color: var(--site-primary);
+}
+
+/* Every older hero: its photograph settles slowly on arrival, and drifts
+   behind the words while the visitor scrolls on. */
+.ls-hero__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ls-hero:has(> .ls-hero__bg) {
+  isolation: isolate;
+}
+.ls-hero__bg img {
+  position: absolute;
+  top: -8%;
+  left: 0;
+  width: 100%;
+  height: 116%;
+  max-width: none;
+  object-fit: cover;
+}
+[data-fx='on'] .ls-hero__bg img {
+  animation: fx-settle 2.6s var(--fx-ease) both;
+  transform: translate3d(0, calc((var(--p, 0.5) - 0.5) * 14%), 0);
+}
+/* The runtime's reveals replace the older one-off entrance. */
+[data-fx='on'] .ls-hero__inner > * {
+  animation: none !important;
+}
+@keyframes fx-settle {
+  from {
+    scale: 1.14;
+  }
+}
+[data-fx='on'] .ls-hero__media[data-reveal='mask'] img {
+  transform: scale(1.04);
+}
+
+/* ===================================================== catalogue layouts */
+
+/* menu_book — a real menu: chapters by category, a rail that follows you,
+   every dish with its price, its diet mark and its picture where there is one. */
+.fx-menu {
+  scroll-margin-top: 4rem;
+}
+.fx-menu__layout {
+  max-width: 1180px;
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+}
+@media (min-width: 980px) {
+  .fx-menu__layout {
+    grid-template-columns: 220px 1fr;
+    align-items: start;
+  }
+  .fx-menu__head {
+    grid-column: 1 / -1;
+  }
+}
+.fx-menu__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 3rem;
+  border-bottom: 1px solid var(--site-border);
+  padding-bottom: clamp(1.25rem, 1rem + 1vw, 2rem);
+}
+[data-locah-site] .fx-menu__head .ls-title {
+  font-size: clamp(2.4rem, 1.4rem + 4vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+.fx-menu__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  color: var(--site-muted);
+}
+.fx-menu__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.fx-menu__rail {
+  position: sticky;
+  top: calc(var(--fx-nav-h) + 1rem);
+  z-index: 5;
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 0.5rem;
+  background: var(--site-bg);
+}
+.ls-section--alt .fx-menu__rail {
+  background: var(--site-bg-alt);
+}
+.fx-menu__rail::-webkit-scrollbar {
+  display: none;
+}
+.fx-menu__rail a {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--site-muted);
+  border: 1px solid var(--site-border);
+  transition:
+    color 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+.fx-menu__rail a small {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.fx-menu__rail a[aria-current='true'] {
+  color: var(--site-primary-fg);
+  background: var(--site-primary);
+  border-color: var(--site-primary);
+}
+@media (min-width: 980px) {
+  .fx-menu__rail {
+    top: calc(var(--fx-nav-h) + 2rem);
+    flex-direction: column;
+    overflow: visible;
+    background: transparent;
+    padding: 0;
+    gap: 0.15rem;
+  }
+  .ls-section--alt .fx-menu__rail {
+    background: transparent;
+  }
+  .fx-menu__rail a {
+    border: 0;
+    border-radius: 0;
+    padding: 0.6rem 0 0.6rem 1rem;
+    border-left: 2px solid var(--site-border);
+    justify-content: space-between;
+    font-size: 1rem;
+  }
+  .fx-menu__rail a[aria-current='true'] {
+    background: transparent;
+    color: var(--site-ink);
+    border-left-color: var(--site-primary);
+  }
+}
+.fx-menu__chapter {
+  scroll-margin-top: calc(var(--fx-nav-h) + 5rem);
+  padding-bottom: clamp(2rem, 1.5rem + 2vw, 3.5rem);
+}
+.fx-menu__chapter + .fx-menu__chapter {
+  border-top: 1px solid var(--site-border);
+  padding-top: clamp(2rem, 1.5rem + 2vw, 3.5rem);
+}
+.fx-menu__chapter-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.fx-menu__num {
+  font-family: var(--site-caption-font, var(--site-font));
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--site-accent);
+  font-weight: 700;
+}
+.fx-menu__chapter-head h3 {
+  font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.5rem);
+  letter-spacing: -0.03em;
+}
+.fx-menu__chapter-head p {
+  grid-column: 2;
+  margin: 0;
+  color: var(--site-muted);
+  max-width: 56ch;
+}
+.fx-menu__banner {
+  grid-column: 1 / -1;
+  margin: 0.75rem 0 0.5rem;
+  aspect-ratio: 21 / 8;
+  border-radius: var(--site-radius);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+}
+.fx-menu__banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-menu__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem 2.5rem;
+}
+@media (min-width: 760px) {
+  .fx-menu__items {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.fx-menu__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.15rem 1rem;
+  align-items: start;
+  padding: 1rem 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--site-ink) 14%, transparent);
+}
+.fx-menu__item--plain {
+  grid-template-columns: 1fr auto;
+}
+.fx-menu__thumb {
+  grid-row: span 3;
+  width: clamp(64px, 6vw, 92px);
+  aspect-ratio: 1;
+  border-radius: calc(var(--site-radius) + 2px);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+}
+.fx-menu__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms var(--fx-ease);
+}
+.fx-menu__item:hover .fx-menu__thumb img {
+  transform: scale(1.08);
+}
+.fx-menu__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+  font-family: var(--site-display-font);
+  font-size: 1.12rem;
+  font-weight: var(--site-heading-weight, 600);
+  line-height: 1.25;
+  margin: 0;
+}
+.fx-menu__desc {
+  grid-column: -3 / -2;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--site-muted);
+  line-height: 1.5;
+}
+.fx-menu__item--plain .fx-menu__desc {
+  grid-column: 1;
+}
+.fx-menu__price {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fx-menu__price small {
+  display: block;
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--site-muted);
+}
+.fx-menu__act {
+  grid-column: -3 / -1;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+.fx-menu__item--plain .fx-menu__act {
+  grid-column: 1 / -1;
+}
+[data-locah-site] .fx-menu__act .ls-btn {
+  min-height: 34px;
+  padding: 0 0.9rem;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--site-primary);
+  border: 1px solid color-mix(in srgb, var(--site-primary) 45%, transparent);
+}
+[data-locah-site] .fx-menu__act .ls-btn:hover {
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+}
+/* The Indian food mark: a square with a dot — green veg, brown non-veg. */
+.fx-diet {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+.fx-diet::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fx-diet--veg,
+.fx-diet--vegan {
+  color: #138a36;
+}
+.fx-diet--non_veg {
+  color: #a3341c;
+}
+.fx-diet--non_veg::after {
+  border-radius: 0;
+  width: 0;
+  height: 0;
+  background: none;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid currentColor;
+}
+.fx-diet--egg {
+  color: #c9a100;
+}
+.fx-spice {
+  font-size: 0.78rem;
+  letter-spacing: -0.1em;
+  color: #c2410c;
+}
+.fx-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--site-font);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--site-accent) 18%, transparent);
+  color: color-mix(in srgb, var(--site-accent) 70%, var(--site-ink));
+}
+
+/* rail — a horizontal run of large cards, pinned while it travels. */
+.fx-rail {
+  padding-inline: 0;
+}
+.fx-rail__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem 2rem;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 3rem);
+  max-width: 1240px;
+  margin: 0 auto clamp(1.5rem, 1rem + 2vw, 2.75rem);
+}
+[data-locah-site] .fx-rail__head .ls-head {
+  margin: 0;
+}
+.fx-rail__count {
+  font-family: var(--site-caption-font, var(--site-font));
+  font-size: 0.9rem;
+  color: var(--site-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fx-rail__track {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-inline: clamp(1.25rem, 0.5rem + 3vw, 3rem);
+}
+.fx-rail__track::-webkit-scrollbar {
+  display: none;
+}
+.fx-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 1.5rem;
+  display: flex;
+  gap: clamp(14px, 1.6vw, 26px);
+  width: max-content;
+}
+.fx-rail__card {
+  position: relative;
+  scroll-snap-align: start;
+  width: clamp(250px, 26vw, 380px);
+  border-radius: calc(var(--site-radius) + 4px);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+  border: 1px solid var(--site-border);
+  display: flex;
+  flex-direction: column;
+}
+.fx-rail__media {
+  aspect-ratio: 4 / 5;
+  max-height: min(48vh, 440px);
+  width: 100%;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--site-primary) 10%, var(--site-bg-alt));
+}
+.fx-rail__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 900ms var(--fx-ease);
+}
+.fx-rail__card:hover .fx-rail__media img {
+  transform: scale(1.06);
+}
+.fx-rail__body {
+  padding: 1.1rem 1.2rem 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+  flex: 1;
+}
+.fx-rail__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+.fx-rail__row h3 {
+  font-size: 1.2rem;
+}
+.fx-rail__body p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--site-muted);
+}
+.fx-rail__kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--site-accent);
+}
+.fx-rail__index {
+  position: absolute;
+  top: 0.9rem;
+  left: 1rem;
+  z-index: 2;
+  font-family: var(--site-caption-font, var(--site-font));
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  mix-blend-mode: difference;
+}
+.fx-rail__bar {
+  height: 2px;
+  margin: 0.5rem clamp(1.25rem, 0.5rem + 3vw, 3rem) 0;
+  background: var(--site-border);
+  max-width: 1240px;
+  overflow: hidden;
+  display: none;
+}
+.fx-rail__bar span {
+  display: block;
+  height: 100%;
+  background: var(--site-primary);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+}
+/* Pinned: the section holds while the cards travel past. */
+[data-fx='on'] .fx-rail[data-rail-pinned] {
+  height: calc(100vh + var(--track) * 1px);
+  padding: 0;
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__track {
+  overflow: visible;
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__list {
+  transform: translate3d(calc(var(--p, 0) * var(--track) * -1px), 0, 0);
+  will-change: transform;
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__bar {
+  display: block;
+}
+
+/* bento — a curated range as an asymmetric grid, the first thing largest. */
+.fx-bento {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(12px, 1.4vw, 20px);
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 900px) {
+  .fx-bento {
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: clamp(180px, 17vw, 250px);
+  }
+  .fx-bento > :first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+  .fx-bento > :nth-child(4) {
+    grid-column: span 2;
+  }
+}
+.fx-bento__cell {
+  position: relative;
+  min-height: 200px;
+  border-radius: calc(var(--site-radius) + 6px);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+  border: 1px solid var(--site-border);
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.fx-bento__cell img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+  transition: transform 1.1s var(--fx-ease);
+}
+.fx-bento__cell:hover img {
+  transform: scale(1.06);
+}
+.fx-bento__cell--pic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.05) 60%);
+}
+.fx-bento__copy {
+  padding: clamp(1rem, 0.8rem + 1vw, 1.6rem);
+  display: grid;
+  gap: 0.35rem;
+}
+.fx-bento__cell--pic .fx-bento__copy {
+  color: #fff;
+}
+.fx-bento__copy h3 {
+  font-size: clamp(1.1rem, 0.9rem + 0.9vw, 1.7rem);
+}
+.fx-bento > :first-child .fx-bento__copy h3 {
+  font-size: clamp(1.6rem, 1.1rem + 2vw, 3rem);
+}
+.fx-bento__copy p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.86;
+}
+.fx-bento__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+[data-locah-site] .fx-bento__cell--pic .ls-price small {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* spotlight — one signature thing per row, large, alternating. */
+.fx-spot {
+  display: grid;
+  gap: clamp(3rem, 2rem + 5vw, 7rem);
+}
+.fx-spot__row {
+  display: grid;
+  gap: clamp(1.5rem, 1rem + 3vw, 4rem);
+  align-items: center;
+}
+@media (min-width: 900px) {
+  .fx-spot__row {
+    grid-template-columns: 1.15fr 1fr;
+  }
+  .fx-spot__row:nth-child(even) .fx-spot__media {
+    order: 2;
+  }
+}
+.fx-spot__media {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 5 / 4;
+  border-radius: calc(var(--site-radius) + 6px);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+}
+.fx-spot__media img {
+  width: 100%;
+  height: 118%;
+  object-fit: cover;
+  translate: 0 calc((var(--p, 0.5) - 0.5) * -14%);
+}
+.fx-spot__copy {
+  display: grid;
+  gap: 0.75rem;
+  align-content: center;
+}
+.fx-spot__num {
+  font-family: var(--site-display-font);
+  font-size: clamp(4rem, 2rem + 7vw, 9rem);
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px color-mix(in srgb, var(--site-primary) 70%, transparent);
+}
+.fx-spot__copy h3 {
+  font-size: clamp(1.8rem, 1.2rem + 2.4vw, 3.4rem);
+  letter-spacing: -0.035em;
+}
+.fx-spot__copy p {
+  color: var(--site-muted);
+  font-size: 1.05rem;
+  max-width: 46ch;
+  margin: 0;
+}
+.fx-spot__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  margin-top: 0.5rem;
+}
+[data-locah-site] .fx-spot__foot .ls-price strong {
+  font-size: 1.4rem;
+}
+
+/* stack — cards that stick and stack: plans, services, projects. */
+.fx-stack {
+  --n: 3;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(1rem, 0.5rem + 2vw, 2rem);
+}
+.fx-stack__card {
+  --cover: 0;
+  position: sticky;
+  top: calc(var(--fx-nav-h) + 1.25rem + var(--i) * 14px);
+  display: grid;
+  gap: 1.5rem;
+  min-height: min(68vh, 560px);
+  padding: clamp(1.5rem, 1rem + 2.5vw, 3.25rem);
+  border-radius: calc(var(--site-radius) + 10px);
+  border: 1px solid var(--site-border);
+  background: var(--site-bg);
+  box-shadow: 0 -20px 60px -40px rgba(0, 0, 0, 0.45);
+  transform-origin: 50% 0%;
+  overflow: hidden;
+}
+.ls-section--alt .fx-stack__card {
+  background: var(--site-bg-alt);
+}
+[data-fx='on'] .fx-stack__card {
+  --cover: clamp(0, calc(var(--p, 0) * var(--n) - var(--i) - 0.85), 1);
+  transform: scale(calc(1 - var(--cover) * 0.06));
+  filter: brightness(calc(1 - var(--cover) * 0.18));
+}
+.fx-stack__card:nth-child(3n + 2) {
+  background: color-mix(in srgb, var(--site-primary) 9%, var(--site-bg));
+}
+.fx-stack__card:nth-child(3n + 3) {
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+  border-color: transparent;
+}
+.fx-stack__card:nth-child(3n + 3) :is(.fx-stack__body p, .fx-stack__kicker, .ls-price small) {
+  color: color-mix(in srgb, var(--site-primary-fg) 78%, transparent);
+}
+.fx-stack__card:nth-child(3n + 3) .ls-btn {
+  background: var(--site-primary-fg);
+  color: var(--site-primary);
+}
+@media (min-width: 900px) {
+  .fx-stack__card {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+}
+.fx-stack__body {
+  display: grid;
+  align-content: space-between;
+  gap: 1.25rem;
+}
+.fx-stack__kicker {
+  font-family: var(--site-caption-font, var(--site-font));
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--site-accent);
+}
+.fx-stack__body h3 {
+  font-size: clamp(2rem, 1.2rem + 3vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+.fx-stack__body p {
+  margin: 0;
+  color: var(--site-muted);
+  font-size: 1.05rem;
+  max-width: 44ch;
+}
+.fx-stack__price strong {
+  font-family: var(--site-display-font);
+  font-size: clamp(2rem, 1.4rem + 2vw, 3.2rem);
+  letter-spacing: -0.03em;
+}
+.fx-stack__media {
+  border-radius: calc(var(--site-radius) + 4px);
+  overflow: hidden;
+  min-height: 220px;
+  background: color-mix(in srgb, var(--site-primary) 12%, var(--site-bg-alt));
+}
+.fx-stack__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-stack__big {
+  display: grid;
+  place-items: center;
+  font-family: var(--site-display-font);
+  font-size: clamp(5rem, 3rem + 8vw, 11rem);
+  letter-spacing: -0.06em;
+  line-height: 1;
+  color: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* ========================================================== story layouts */
+
+/* word_reveal — the owner's story, lit word by word as it is read. */
+.fx-read {
+  --p: 0;
+  --lit: clamp(0, calc((var(--p) - 0.18) / 0.45), 1);
+}
+.fx-read__inner {
+  max-width: 1080px;
+  margin-inline: auto;
+}
+.fx-read__text {
+  font-family: var(--site-display-font);
+  font-size: clamp(1.7rem, 1rem + 2.6vw, 3.4rem);
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  font-weight: var(--site-heading-weight, 500);
+  margin: 1.25rem 0 0;
+  text-wrap: pretty;
+}
+.fx-read__quote {
+  margin: clamp(2rem, 1.5rem + 2vw, 3.5rem) 0 0;
+  padding-left: 1.25rem;
+  border-left: 3px solid var(--site-accent);
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.3rem);
+  font-style: italic;
+  color: var(--site-muted);
+  max-width: 50ch;
+}
+.fx-read__figure {
+  margin: clamp(2rem, 1.5rem + 2vw, 3.5rem) 0 0;
+  border-radius: calc(var(--site-radius) + 6px);
+  overflow: hidden;
+  aspect-ratio: 21 / 9;
+}
+.fx-read__figure img {
+  width: 100%;
+  height: 120%;
+  object-fit: cover;
+  translate: 0 calc((var(--p, 0.5) - 0.5) * -12%);
+}
+
+/* sticky_split — the picture holds while the story scrolls beside it. */
+.fx-sticky {
+  display: grid;
+  gap: clamp(2rem, 1rem + 4vw, 5rem);
+  max-width: 1180px;
+  margin-inline: auto;
+}
+@media (min-width: 900px) {
+  .fx-sticky {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .fx-sticky__media {
+    position: sticky;
+    top: calc(var(--fx-nav-h) + 2rem);
+  }
+}
+.fx-sticky__media {
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: calc(var(--site-radius) + 6px);
+  overflow: hidden;
+  background: var(--site-bg-alt);
+}
+.fx-sticky__media img {
+  width: 100%;
+  height: 115%;
+  object-fit: cover;
+  translate: 0 calc((var(--p, 0.5) - 0.5) * -10%);
+}
+.fx-sticky__copy {
+  display: grid;
+  gap: 1.25rem;
+  padding-block: clamp(0rem, 2vw, 4rem);
+}
+[data-locah-site] .fx-sticky__copy .ls-title {
+  font-size: clamp(2.2rem, 1.3rem + 3vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+[data-locah-site] .fx-sticky__copy .ls-about__body {
+  font-size: 1.12rem;
+  line-height: 1.75;
+}
+.fx-sticky__quote {
+  margin: 1rem 0 0;
+  font-family: var(--site-display-font);
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.4rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--site-primary);
+}
+.fx-sticky__quote::before {
+  content: '“';
+  display: block;
+  font-size: 2.4em;
+  line-height: 0.6;
+  color: var(--site-accent);
+}
+
+/* collage — pictures overlapping at different depths beside the story. */
+.fx-collage {
+  display: grid;
+  gap: clamp(2rem, 1rem + 4vw, 5rem);
+  max-width: 1180px;
+  margin-inline: auto;
+  align-items: center;
+}
+@media (min-width: 900px) {
+  .fx-collage {
+    grid-template-columns: 1.1fr 1fr;
+  }
+}
+.fx-collage__stage {
+  position: relative;
+  min-height: clamp(360px, 42vw, 560px);
+}
+.fx-collage__pic {
+  position: absolute;
+  margin: 0;
+  border-radius: calc(var(--site-radius) + 4px);
+  overflow: hidden;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.45);
+  background: var(--site-bg-alt);
+}
+.fx-collage__pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-collage__pic--0 {
+  inset: 0 22% 14% 0;
+}
+.fx-collage__pic--1 {
+  width: 46%;
+  aspect-ratio: 4 / 5;
+  right: 0;
+  bottom: 0;
+  --speed: 0.35;
+}
+.fx-collage__pic--2 {
+  width: 30%;
+  aspect-ratio: 1;
+  right: 8%;
+  top: -4%;
+  --speed: 0.6;
+}
+
+/* ============================================================== bands */
+
+/* marquee — the business's words, always moving, faster as you scroll. */
+.fx-marquee {
+  --gap: clamp(1.5rem, 1rem + 2vw, 3.5rem);
+  overflow: hidden;
+  padding-block: clamp(1.1rem, 0.8rem + 1.2vw, 2rem);
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+  border-block: 1px solid color-mix(in srgb, var(--site-primary-fg) 12%, transparent);
+}
+.fx-marquee--outline {
+  background: var(--site-bg);
+  color: var(--site-ink);
+  border-color: var(--site-border);
+}
+.fx-marquee__track {
+  display: flex;
+  width: max-content;
+  transform: skewX(calc(var(--mv, 0) * -8deg));
+  transition: transform 300ms ease-out;
+}
+.fx-marquee__list {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding-right: var(--gap);
+  margin: 0;
+  list-style: none;
+  font-family: var(--site-display-font);
+  font-size: clamp(1.6rem, 1rem + 3vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+.fx-marquee--outline .fx-marquee__list li:nth-child(even) {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--site-ink);
+}
+.fx-marquee__list li::after {
+  content: '✦';
+  display: inline-block;
+  margin-left: var(--gap);
+  font-size: 0.5em;
+  vertical-align: middle;
+  color: var(--site-accent);
+}
+.fx-marquee:not(.fx-marquee--outline) .fx-marquee__list li::after {
+  color: inherit;
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-fx='on'] .fx-marquee__track {
+    animation: fx-marquee var(--marquee-dur, 38s) linear infinite;
+  }
+}
+@keyframes fx-marquee {
+  to {
+    translate: -50% 0;
+  }
+}
+
+/* cta_band giant — the last word, set enormous. */
+.fx-cta {
+  --p: 0.5;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(5rem, 3rem + 10vw, 11rem) clamp(1.25rem, 0.5rem + 3vw, 3rem);
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+  text-align: center;
+}
+.fx-cta__bg {
+  position: absolute;
+  inset: -12% 0;
+  z-index: -2;
+}
+.fx-cta__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translate3d(0, calc((var(--p) - 0.5) * 16%), 0) scale(1.05);
+}
+.fx-cta--pic {
+  color: #fff;
+}
+.fx-cta--pic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(6, 6, 6, 0.58);
+}
+[data-locah-site] .fx-cta__title {
+  font-size: clamp(2.6rem, 1rem + 7vw, 8.4rem);
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+  max-width: 14ch;
+  margin-inline: auto;
+}
+.fx-cta__body {
+  margin: 1.5rem auto 0;
+  max-width: 46ch;
+  font-size: 1.1rem;
+  opacity: 0.86;
+}
+.fx-cta__actions {
+  margin-top: clamp(2rem, 1.5rem + 2vw, 3rem);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+[data-locah-site] .fx-cta .ls-btn--primary,
+[data-locah-site] .fx-cta .ls-btn--onmedia {
+  min-height: 60px;
+  padding: 0 2.25rem;
+  font-size: 1.05rem;
+  border-radius: 999px;
+  background: var(--site-accent);
+  color: var(--site-accent-fg, #111);
+}
+
+/* highlights counters — the owner's own numbers, counted up. */
+.ls-highlights--counters .ls-highlights__value {
+  font-family: var(--site-display-font);
+  font-size: clamp(2.6rem, 1.4rem + 4vw, 5rem);
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: var(--site-primary);
+}
+
+/* Footer: the business's name, set as large as the page allows. */
+[data-locah-site] .ls-foot__statement.fx-foot-name {
+  overflow: hidden;
+}
+
+/* ============================================================== print */
+@media print {
+  [data-fx] [data-reveal],
+  [data-fx] [data-reveal-group] > *,
+  [data-fx] .fx-wi {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+  .fx-intro,
+  .fx-progress {
+    display: none !important;
+  }
+}
+
+/* The chooser sheet: an item's packs, cuts and add-ons, over the page. */
+[data-locah-site] .ls-sheet {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: min(86vh, 760px);
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--site-radius) + 10px);
+  background: var(--site-bg);
+  color: var(--site-ink);
+  box-shadow: 0 40px 120px -30px rgba(0, 0, 0, 0.55);
+}
+[data-locah-site] .ls-sheet::backdrop {
+  background: rgba(8, 8, 8, 0.55);
+  backdrop-filter: blur(4px);
+}
+[data-locah-site] .ls-sheet[open] {
+  animation: fx-sheet 420ms var(--fx-ease) both;
+}
+@keyframes fx-sheet {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0) scale(0.98);
+  }
+}
+.ls-sheet__body {
+  position: relative;
+  padding: 1.25rem;
+}
+.ls-sheet__close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--site-border);
+  background: var(--site-bg);
+  color: var(--site-ink);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  [data-locah-site] .ls-sheet {
+    margin: auto 0 0;
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 18px 18px 0 0;
+  }
+}
+.fx-rail__rest {
+  padding: clamp(1.5rem, 1rem + 2vw, 3rem) clamp(1.25rem, 0.5rem + 3vw, 3rem) 0;
+  max-width: 1240px;
+}

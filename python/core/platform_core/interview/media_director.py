@@ -176,11 +176,13 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
     featured = FEATURED_ITEMS.get(arche, 0)
     items: list[Slot] = []
     if featured and not evidence:
-        # Round-robin across groups so every kind of dish is represented.
+        # Round-robin across groups so every kind of dish is represented —
+        # the owner's bestsellers first in each.
+        ordered = {g.name: sorted(g.items, key=lambda i: 0 if i.tag else 1) for g in groups}
         for depth in range(4):
             for group in groups:
-                if depth < len(group.items) and len(items) < featured:
-                    item = group.items[depth]
+                if depth < len(ordered[group.name]) and len(items) < featured:
+                    item = ordered[group.name][depth]
                     subject = _clean(f"{item.name} ({group.name})")
                     if subject:
                         items.append(Slot(f"item:{slug(item.name)}", subject, "4:3", "offering",

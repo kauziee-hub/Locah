@@ -104,6 +104,14 @@
         "tools/acceptance/stack/web.sh"
       ],
       "port": 3100
+    },
+    {
+      "name": "site-lab",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/site-lab/serve.sh"
+      ],
+      "port": 3005
     }
   ]
 }

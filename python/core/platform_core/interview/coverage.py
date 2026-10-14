@@ -48,6 +48,7 @@ Importance = Literal["blocking", "high_value", "enrichment", "optional"]
 DIMENSION: dict[str, Dimension] = {
     "business.identity": "identity_positioning",
     "offerings.main": "offerings", "offerings.structure": "offerings", "offerings.units": "offerings",
+    "offerings.catalogue": "offerings", "offerings.traits": "offerings",
     "offerings.customisation": "offerings",
     "b2b.customers": "customer_type",
     "commerce.action": "customer_conversion", "contact.phone": "customer_conversion",
@@ -109,6 +110,16 @@ def relevant(target: Target, prof: Profile, bp: BusinessBlueprint) -> bool:
         return False
     if target.id in prof.playbook.elevate:
         return True
+    if target.id in {"offerings.catalogue", "offerings.traits"}:
+        # Only where the website IS the catalogue (a menu, a service list, a
+        # price list, plans, rooms) — and once Locah knows what is sold.
+        from platform_core.interview.catalogue_capture import catalogue_led
+
+        if not catalogue_led(bp):
+            return False
+        if target.id == "offerings.traits":
+            return any(g.items for g in bp.taxonomy.groups)
+        return True
     if target.id == "offerings.structure":
         # A range whose groups have no items yet is worth one question in trades
         # where people choose inside a group: cuts, dishes, projects.
@@ -139,6 +150,21 @@ def importance(target_id: str, prof: Profile, bp: BusinessBlueprint) -> Importan
         return "high_value"
     if target_id == "offerings.structure":
         return "high_value" if (products or property_led or pb.offer_kind == "menu_item") else "enrichment"
+    if target_id == "offerings.catalogue":
+        # The site's catalogue is the site: asked before the first version —
+        # except where the visit is the thing (a clinic, a lawyer, a tutor):
+        # there how to book matters more than a price list.
+        from platform_core.interview.design_system import _SERVICE_MODE
+        from platform_core.interview.playbooks import playbook_key
+
+        if pb.offer_kind in {"service", "package", "class"} and \
+                _SERVICE_MODE.get(playbook_key(bp)) in {"care", "advisory", "learning"}:
+            return "enrichment"
+        return "high_value"
+    if target_id == "offerings.traits":
+        # Veg or non-veg is what a diner checks first; favourites help everyone.
+        items = sum(len(g.items) for g in bp.taxonomy.groups)
+        return "high_value" if pb.offer_kind == "menu_item" and items >= 4 else "enrichment"
     if target_id == "offerings.units":
         return "high_value" if products and ordering and pb.offer_kind in {"weighed_product", "product"} \
             else "optional"
@@ -197,6 +223,17 @@ def state(bp: BusinessBlueprint, target_id: str) -> TargetState:
 
 def coverage(bp: BusinessBlueprint, target_id: str) -> Coverage:
     s = state(bp, target_id)
+    if target_id == "offerings.catalogue" and s.status not in {"declined", "deferred"}:
+        from platform_core.interview.catalogue_capture import completeness
+
+        level = str(completeness(bp))
+        return "sufficient" if level == "sufficient" else "partial" if level == "partial" else "unknown"
+    if target_id == "offerings.traits" and s.status not in {"declined", "deferred"}:
+        from platform_core.interview.catalogue_capture import traits_known
+
+        if traits_known(bp):
+            return "sufficient"
+        return "partial" if s.status in {"answered", "partial"} else "unknown"
     if target_id == "business.identity" and s.status not in {"answered", "partial"}:
         # A business the owner named by kind, that has said what it offers, is identified.
         if bp.category and bp.category.source == "owner_picked" and _offer_known(bp):
@@ -377,4 +414,5 @@ SHORT: dict[str, str] = {
     "fulfilment.mode": "delivery or pickup", "b2b.customers": "who buys from you",
     "operations.team": "your team", "brand.feel": "the look you'd like",
     "offerings.structure": "your range in detail", "b2b.process": "how buyers order",
+    "offerings.catalogue": "your full menu or price list", "offerings.traits": "your bestsellers",
 }

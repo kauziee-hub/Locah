@@ -8,6 +8,9 @@ import { LanguageSwitch } from './LanguageSwitch'
 import { SiteWordsProvider } from './SiteWords'
 import type { PublicWebsitePayload } from '@/lib/public-website'
 import { LANG_LOCALE, offered, siteWords, type SiteLang } from '@/lib/site-words'
+import { MOTION_BOOT, SiteMotion } from './experience/SiteMotion'
+import { siteExperience } from './experience/experience'
+import type { Pic } from './experience/HeroScenes'
 
 /**
  * The shell of a published tenant website.
@@ -242,6 +245,16 @@ export function WebsitePageView({
   const reachable = Boolean(contact.phone || waHref)
   const nav = data.navigation || []
   const sections = data.page.sections.filter((s) => s.is_visible !== false)
+  const experience = siteExperience(theme)
+  // Every picture on this page, once, in page order: what a hero scene (a
+  // ring, a wall, floating cards) and a story collage compose with.
+  const pictures: Pic[] = []
+  for (const section of sections) {
+    for (const [key, asset] of Object.entries(section.assets || {})) {
+      if (!asset?.url || key === 'logo_asset_id') continue
+      if (!pictures.some((p) => p.url === asset.url)) pictures.push({ url: asset.url, alt_text: asset.alt_text })
+    }
+  }
   const capabilities = data.capabilities || {}
   const canOrder = Boolean(capabilities.order)
   const canBook = Boolean(capabilities.book)
@@ -326,8 +339,24 @@ export function WebsitePageView({
       data-surface={surface || undefined}
       data-footer={family ? footerStyle : undefined}
       data-mobile-hero-focus={heroFocus}
+      data-motion-lang={experience.motion}
+      data-scroll={experience.scroll}
+      data-grain={experience.grain ? '' : undefined}
       style={styleVars}
+      // The boot script below marks the root before first paint; React must
+      // not treat that as a mismatch.
+      suppressHydrationWarning
     >
+      <script dangerouslySetInnerHTML={{ __html: MOTION_BOOT }} />
+      <SiteMotion />
+      {experience.progress ? <div className="fx-progress" aria-hidden="true" /> : null}
+      {experience.intro && !data.is_preview ? (
+        <div className="fx-intro" aria-hidden="true">
+          <p className="fx-intro__name">
+            <span>{name}</span>
+          </p>
+        </div>
+      ) : null}
       <SiteWordsProvider lang={lang}>
       {data.is_preview ? (
         <aside
@@ -427,6 +456,7 @@ export function WebsitePageView({
               contact={contact}
               businessName={name}
               previewToken={previewToken}
+              pictures={pictures}
             />
           </div>
         ))}
@@ -470,7 +500,7 @@ export function WebsitePageView({
 
       <footer className={`ls-foot ${reachable ? 'ls-foot--with-bar' : ''}`}>
         {family && footerStyle === 'statement' ? (
-          <p className="ls-foot__statement" aria-hidden="true">
+          <p className="ls-foot__statement fx-foot-name" aria-hidden="true" data-split="">
             {name}
           </p>
         ) : null}

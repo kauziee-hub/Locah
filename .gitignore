@@ -62,3 +62,6 @@ acceptance-out/
 locah-accept-*/
 .next-verify/
 .next-otp-verify/
+.next-lab/
+# Site lab fixtures (tools/site-lab/serve.sh)
+.site-lab/

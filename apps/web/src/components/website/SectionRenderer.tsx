@@ -6,6 +6,14 @@ import { ProductShowcase } from './ProductShowcase'
 import { ReviewsSection } from './ReviewsSection'
 import { withPreviewToken } from './preview-links'
 import { siteWords, type SiteLang, type Words } from '@/lib/site-words'
+import { HeroScene, sceneFor, type HeroParts, type Pic } from './experience/HeroScenes'
+import { StorySection } from './experience/Story'
+import { CategoryScene, CtaGiant, Marquee } from './experience/Bands'
+
+/** Hero layouts that are scenes (see experience/HeroScenes). */
+const SCENES = new Set(['cinematic_zoom', 'orbit', 'plane', 'kinetic', 'depth', 'aurora'])
+/** Story layouts drawn by experience/Story. */
+const STORIES = new Set(['word_reveal', 'sticky_split', 'collage'])
 
 /**
  * Renders one platform website section.
@@ -241,9 +249,19 @@ function Heading({
   const showEyebrow = eyebrow && eyebrow.toLowerCase() !== title.toLowerCase()
   return (
     <div className={`ls-head ${center ? 'ls-head--center' : ''}`}>
-      {showEyebrow ? <p className="ls-eyebrow">{eyebrow}</p> : null}
-      <h2 className="ls-title">{title}</h2>
-      {subtitle ? <p className="ls-sub">{subtitle}</p> : null}
+      {showEyebrow ? (
+        <p className="ls-eyebrow" data-reveal="fade">
+          {eyebrow}
+        </p>
+      ) : null}
+      <h2 className="ls-title" data-split="">
+        {title}
+      </h2>
+      {subtitle ? (
+        <p className="ls-sub" data-reveal="">
+          {subtitle}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -329,10 +347,14 @@ export function SectionRenderer({
   businessName,
   previewToken,
   lang = 'en',
+  pictures = [],
 }: {
   section: Section
   lang?: SiteLang
   businessSlug: string
+  /** Every picture on this page, in order — what a hero scene or a collage
+   *  composes with. Only the business's own (or its drafts), never stock. */
+  pictures?: Pic[]
   /** Position on the page — used only to alternate section grounds. */
   index?: number
   /** The business's live capabilities, so a section never offers an action the
@@ -394,48 +416,78 @@ export function SectionRenderer({
         resolvePath(str(c.cta_url || c.cta_path), contact, businessName, t),
         capabilities
       )
-      const onMedia = !split && Boolean(image)
+      const scene = SCENES.has(variant) ? sceneFor(variant, pictures, image) : ''
+      const onMedia = scene ? ['depth', 'cinematic_zoom'].includes(scene) : !split && Boolean(image)
       const actions =
         (ctaLabel && ctaPath) || contact?.phone || contact?.whatsapp ? (
           <div className="ls-hero__cta">
             {ctaLabel && ctaPath ? (
-              <Cta
-                className={`ls-btn ls-btn--primary ${onMedia ? 'ls-btn--onmedia' : ''}`}
-                label={ctaLabel}
-                path={ctaPath}
-                slug={businessSlug}
-                previewToken={previewToken}
-              />
+              <span data-magnetic="" style={{ display: 'inline-flex' }}>
+                <Cta
+                  className={`ls-btn ls-btn--primary ${onMedia ? 'ls-btn--onmedia' : ''}`}
+                  label={ctaLabel}
+                  path={ctaPath}
+                  slug={businessSlug}
+                  previewToken={previewToken}
+                />
+              </span>
             ) : null}
             <ContactActions
               t={t}
               contact={contact}
               businessName={businessName}
-              onMedia={onMedia || !split}
+              onMedia={onMedia || (!split && !scene)}
               primaryPath={ctaLabel ? ctaPath : ''}
             />
           </div>
         ) : null
-      const copy = (
-        <>
-          {eyebrow ? <p className="ls-hero__eyebrow">{eyebrow}</p> : null}
-          <h1 className="ls-hero__headline">
+      const parts: HeroParts = {
+        headline,
+        accent,
+        eyebrow: eyebrow ? (
+          <p className="ls-hero__eyebrow" data-reveal="fade">
+            {eyebrow}
+          </p>
+        ) : null,
+        title: (
+          <h1 className="ls-hero__headline" data-split="">
             <Accented text={headline} accent={accent} />
           </h1>
-          {sub ? <p className="ls-hero__sub">{sub}</p> : null}
-          {actions}
-          {badges.length ? (
-            <ul className="ls-hero__badges">
-              {badges.map((badge) => (
-                <li key={badge}>
-                  <span className="ls-hero__tick" aria-hidden="true">
-                    ✓
-                  </span>
-                  {badge}
-                </li>
-              ))}
-            </ul>
-          ) : null}
+        ),
+        sub: sub ? (
+          <p className="ls-hero__sub" data-reveal="">
+            {sub}
+          </p>
+        ) : null,
+        actions: actions ? <div data-reveal="">{actions}</div> : null,
+        badges: badges.length ? (
+          <ul className="ls-hero__badges" data-reveal-group="">
+            {badges.map((badge) => (
+              <li key={badge}>
+                <span className="ls-hero__tick" aria-hidden="true">
+                  ✓
+                </span>
+                {badge}
+              </li>
+            ))}
+          </ul>
+        ) : null,
+      }
+      // The longest word decides how large a wordmark headline may be: at 9rem
+      // "CONDITIONING" is wider than a phone, and pushed the buttons off-screen.
+      const longest = Math.max(4, ...headline.split(/\s+/).map((word) => word.length))
+
+      if (scene) {
+        return <HeroScene variant={scene} parts={parts} image={image} pictures={pictures} longest={longest} />
+      }
+
+      const copy = (
+        <>
+          {parts.eyebrow}
+          {parts.title}
+          {parts.sub}
+          {parts.actions}
+          {parts.badges}
         </>
       )
 
@@ -443,10 +495,10 @@ export function SectionRenderer({
         return (
           <section className={`ls-hero ls-hero--${variant} ${image ? '' : 'ls-hero--noimage'}`}>
             <div className="ls-hero__inner">{copy}</div>
-            <div className="ls-hero__media">
+            <div className="ls-hero__media" data-reveal={image ? 'mask' : 'scale'}>
               {image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={image.url} alt={image.alt_text || ''} />
+                <img src={image.url} alt={image.alt_text || ''} fetchPriority="high" />
               ) : (
                 <span className="ls-hero__monogram" aria-hidden="true">
                   {(businessName || headline).trim().charAt(0)}
@@ -457,12 +509,10 @@ export function SectionRenderer({
         )
       }
 
-      // The longest word decides how large a wordmark headline may be: at 9rem
-      // "CONDITIONING" is wider than a phone, and pushed the buttons off-screen.
-      const longest = Math.max(4, ...headline.split(/\s+/).map((word) => word.length))
       return (
         <section
           className={`ls-hero ls-hero--${variant} ${image ? 'ls-hero--hasimage' : 'ls-hero--noimage'}`}
+          data-progress=""
           style={
             {
               ...(image ? { backgroundImage: `url(${image.url})` } : {}),
@@ -470,6 +520,14 @@ export function SectionRenderer({
             } as CSSProperties
           }
         >
+          {image ? (
+            // The same photograph as a layer the page can move: it settles on
+            // arrival and drifts behind the words as the visitor scrolls.
+            <div className="ls-hero__bg" aria-hidden="true">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.url} alt="" fetchPriority="high" />
+            </div>
+          ) : null}
           <div className="ls-hero__inner">{copy}</div>
         </section>
       )
@@ -481,20 +539,43 @@ export function SectionRenderer({
       const title = str(c.title)
       const body = str(c.body)
       const anchor = str(c.anchor) || undefined
+      if (STORIES.has(variant)) {
+        return (
+          <StorySection
+            variant={variant}
+            anchor={anchor}
+            eyebrow={str(c.eyebrow) || t('Our story')}
+            title={title}
+            body={body}
+            quote={str(c.quote)}
+            image={image}
+            pictures={pictures}
+            alt={alt}
+          />
+        )
+      }
       if (variant === 'story_split' && image) {
         return (
-          <section id={anchor} className={`ls-section ls-story ${alt ? 'ls-section--alt' : ''}`}>
+          <section id={anchor} className={`ls-section ls-story ${alt ? 'ls-section--alt' : ''}`} data-progress="">
             <div className="ls-inner ls-story__grid">
-              <div className="ls-story__media">
+              <div className="ls-story__media" data-reveal="mask">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={image.url} alt={image.alt_text || title} loading="lazy" />
               </div>
               <div className="ls-story__copy">
-                <p className="ls-eyebrow">{str(c.eyebrow) || t('Our story')}</p>
-                <h2 className="ls-title">{title}</h2>
-                <p className="ls-about__body">{body}</p>
+                <p className="ls-eyebrow" data-reveal="fade">
+                  {str(c.eyebrow) || t('Our story')}
+                </p>
+                <h2 className="ls-title" data-split="">
+                  {title}
+                </h2>
+                <p className="ls-about__body" data-reveal="">
+                  {body}
+                </p>
                 {c.quote ? (
-                  <blockquote className="ls-story__quote">{str(c.quote)}</blockquote>
+                  <blockquote className="ls-story__quote" data-reveal="">
+                    {str(c.quote)}
+                  </blockquote>
                 ) : null}
               </div>
             </div>
@@ -510,8 +591,14 @@ export function SectionRenderer({
           >
             <div className="ls-inner ls-inner--prose">
               <Heading eyebrow={t('About')} title={title} />
-              <p className="ls-about__body">{body}</p>
-              {c.quote ? <blockquote className="ls-story__quote">{str(c.quote)}</blockquote> : null}
+              <p className="ls-about__body" data-reveal="">
+                {body}
+              </p>
+              {c.quote ? (
+                <blockquote className="ls-story__quote" data-reveal="">
+                  {str(c.quote)}
+                </blockquote>
+              ) : null}
             </div>
           </section>
         )
@@ -521,13 +608,13 @@ export function SectionRenderer({
         <section className={`ls-section ls-about--${variant} ${alt ? 'ls-section--alt' : ''}`}>
           <div className="ls-inner">
             <div className="ls-about__split">
-              <div className="ls-about__media">
+              <div className="ls-about__media" data-reveal="mask">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={image.url} alt={image.alt_text || title} />
               </div>
               <div>
                 <Heading eyebrow={t('About')} title={title} />
-                <p className="ls-about__body" style={{ marginTop: '1rem' }}>
+                <p className="ls-about__body" style={{ marginTop: '1rem' }} data-reveal="">
                   {body}
                 </p>
               </div>
@@ -567,6 +654,37 @@ export function SectionRenderer({
       )
       // A band with nothing to press is a banner with no point.
       if (!(ctaLabel && ctaPath) && !contact?.phone && !contact?.whatsapp) return null
+      if (variant === 'giant') {
+        return (
+          <CtaGiant
+            headline={str(c.headline)}
+            body={str(c.body)}
+            image={image}
+            actions={
+              <>
+                {ctaLabel && ctaPath ? (
+                  <span data-magnetic="" style={{ display: 'inline-flex' }}>
+                    <Cta
+                      className="ls-btn ls-btn--primary"
+                      label={ctaLabel}
+                      path={ctaPath}
+                      slug={businessSlug}
+                      previewToken={previewToken}
+                    />
+                  </span>
+                ) : null}
+                <ContactActions
+                  t={t}
+                  contact={contact}
+                  businessName={businessName}
+                  onMedia
+                  primaryPath={ctaLabel ? ctaPath : ''}
+                />
+              </>
+            }
+          />
+        )
+      }
       return (
         <section
           className={`ls-cta ls-cta--${variant} ${image ? 'ls-cta--hasimage' : ''}`}
@@ -578,18 +696,26 @@ export function SectionRenderer({
         >
           <div className="ls-cta__inner">
             <div>
-              <h2 className="ls-cta__headline">{str(c.headline)}</h2>
-              {c.body ? <p className="ls-cta__body">{str(c.body)}</p> : null}
+              <h2 className="ls-cta__headline" data-split="">
+                {str(c.headline)}
+              </h2>
+              {c.body ? (
+                <p className="ls-cta__body" data-reveal="">
+                  {str(c.body)}
+                </p>
+              ) : null}
             </div>
-            <div className="ls-cta__actions">
+            <div className="ls-cta__actions" data-reveal="">
               {ctaLabel && ctaPath ? (
-                <Cta
-                  className="ls-btn ls-btn--onmedia"
-                  label={ctaLabel}
-                  path={ctaPath}
-                  slug={businessSlug}
-                  previewToken={previewToken}
-                />
+                <span data-magnetic="" style={{ display: 'inline-flex' }}>
+                  <Cta
+                    className="ls-btn ls-btn--onmedia"
+                    label={ctaLabel}
+                    path={ctaPath}
+                    slug={businessSlug}
+                    previewToken={previewToken}
+                  />
+                </span>
               ) : null}
               <ContactActions
                 t={t}
@@ -620,7 +746,7 @@ export function SectionRenderer({
         >
           <div className="ls-inner">
             <Heading eyebrow={t('Get in touch')} title={str(c.title) || t('Visit us')} />
-            <div className="ls-contact__actions">
+            <div className="ls-contact__actions" data-reveal="">
               <ContactActions t={t} contact={contact} businessName={businessName} />
               {findable(address) ? (
                 <a
@@ -634,7 +760,7 @@ export function SectionRenderer({
               ) : null}
             </div>
             <div className="ls-contact__grid">
-              <ul className="ls-contact__list">
+              <ul className="ls-contact__list" data-reveal-group="">
                 {address ? (
                   <li className="ls-contact__item">
                     <span className="ls-contact__label">{t('Address')}</span>
@@ -689,10 +815,13 @@ export function SectionRenderer({
         <section className={`ls-highlights ls-highlights--${variant}`} aria-label={t('At a glance')}>
           <div className="ls-inner">
             {c.title ? <Heading eyebrow={t('At a glance')} title={str(c.title)} center /> : null}
-            <dl className="ls-highlights__list">
+            <dl className="ls-highlights__list" data-reveal-group="">
               {rows.map((row, i) => (
                 <div key={i} className="ls-highlights__item">
-                  <dt className="ls-highlights__value">{row.value}</dt>
+                  {/* The owner's own number, counted up once it is seen. */}
+                  <dt className="ls-highlights__value" data-count="">
+                    {row.value}
+                  </dt>
                   <dd className="ls-highlights__label">{row.label}</dd>
                 </div>
               ))}
@@ -719,7 +848,7 @@ export function SectionRenderer({
               subtitle={c.subtitle ? str(c.subtitle) : undefined}
             />
             {variant === 'steps' ? (
-              <ol className="ls-steps">
+              <ol className="ls-steps" data-reveal-group="">
                 {rows.map((row, i) => (
                   <li key={i} className="ls-step">
                     <span className="ls-step__n" aria-hidden="true">
@@ -734,6 +863,7 @@ export function SectionRenderer({
               <ul
                 className={`ls-feature-grid ls-feature-grid--${variant}`}
                 data-count={rows.length}
+                data-reveal-group=""
               >
                 {rows.map((row, i) => (
                   <li key={i} className="ls-feature">
@@ -753,6 +883,24 @@ export function SectionRenderer({
       const rows = listOf(c.items)
       if (rows.length === 0) return null
       const variant = v || 'image_cards'
+      if (variant === 'rail' || variant === 'bento') {
+        return (
+          <CategoryScene
+            variant={variant}
+            anchor={str(c.anchor) || undefined}
+            title={str(c.title)}
+            subtitle={str(c.subtitle)}
+            alt={alt}
+            rows={rows.map((row, i) => ({
+              name: str(row.name),
+              description: str(row.description),
+              meta: str(row.meta),
+              tags: Array.isArray(row.tags) ? row.tags.map(String).slice(0, 6) : [],
+              image: assets[`items.${i}`],
+            }))}
+          />
+        )
+      }
       return (
         <section
           id={str(c.anchor) || undefined}
@@ -760,10 +908,16 @@ export function SectionRenderer({
         >
           <div className="ls-inner">
             <div className="ls-head ls-head--showcase">
-              <h2 className="ls-title">{str(c.title)}</h2>
-              {c.subtitle ? <p className="ls-sub">{str(c.subtitle)}</p> : null}
+              <h2 className="ls-title" data-split="">
+                {str(c.title)}
+              </h2>
+              {c.subtitle ? (
+                <p className="ls-sub" data-reveal="">
+                  {str(c.subtitle)}
+                </p>
+              ) : null}
             </div>
-            <ul className="ls-category-grid" data-count={rows.length}>
+            <ul className="ls-category-grid" data-count={rows.length} data-reveal-group="">
               {rows.map((row, i) => {
                 const picture = assets[`items.${i}`]
                 const tags = Array.isArray(row.tags) ? row.tags.map(String).slice(0, 6) : []
@@ -771,6 +925,7 @@ export function SectionRenderer({
                   <li
                     key={str(row.name)}
                     className={`ls-category ${picture ? 'ls-category--image' : ''}`}
+                    data-tilt={picture ? '' : undefined}
                   >
                     {picture ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -810,6 +965,9 @@ export function SectionRenderer({
         description: str(row.description) || undefined,
         price: str(row.price) || undefined,
         unit: str(row.unit) || undefined,
+        diet: str(row.diet) || undefined,
+        spice: str(row.spice) || undefined,
+        tag: str(row.tag) || undefined,
         image: assets[`items.${i}`],
       }))
       if (itemRows.length === 0) return null
@@ -849,8 +1007,12 @@ export function SectionRenderer({
           className={`ls-section ls-facts ls-facts--${v || 'icons'} ${alt ? 'ls-section--alt' : ''}`}
         >
           <div className="ls-inner">
-            {c.title ? <h2 className="ls-title ls-facts__title">{str(c.title)}</h2> : null}
-            <ul className="ls-facts__list" data-count={rows.length}>
+            {c.title ? (
+              <h2 className="ls-title ls-facts__title" data-split="">
+                {str(c.title)}
+              </h2>
+            ) : null}
+            <ul className="ls-facts__list" data-count={rows.length} data-reveal-group="">
               {rows.map((row, i) => (
                 <li key={i} className="ls-fact">
                   <span className="ls-fact__badge">
@@ -902,7 +1064,7 @@ export function SectionRenderer({
                 <h2 className="ls-title">{str(c.title)}</h2>
               </div>
             ) : null}
-            <div className={`ls-gallery ls-gallery--${variant}`}>
+            <div className={`ls-gallery ls-gallery--${variant}`} data-reveal-group="">
               {images.map((img, i) => (
                 <figure key={i} className="ls-gallery__item" style={{ margin: 0 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -992,6 +1154,16 @@ export function SectionRenderer({
 
     case 'reviews_section':
       return <ReviewsSection slug={businessSlug} lang={lang} title={str(c.title) || t('What our customers say')} subtitle={str(c.subtitle) || undefined} alt={alt} />
+
+    /* --------------------------------------------------------- marquee */
+    case 'marquee':
+      return (
+        <Marquee
+          items={Array.isArray(c.items) ? c.items.map(String) : []}
+          variant={v || 'band'}
+          label={str(c.label) || businessName || ''}
+        />
+      )
 
     /* --------------------------------------------------- location_list */
     case 'location_list': {

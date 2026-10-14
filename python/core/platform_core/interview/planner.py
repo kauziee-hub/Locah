@@ -57,6 +57,14 @@ ASKS: tuple[Ask, ...] = (
         "ta_en": "{structure}",
         "ta": "{structure}",
     }),
+    # The real list: a photo or PDF of the menu / price list, or typed out.
+    # Worded per trade (catalogue_capture.ASK) — "{catalogue}" is filled in phrase().
+    Ask("catalogue", ("offerings.catalogue", "offerings.main"), {
+        "en": "{catalogue}", "ta_en": "{catalogue}", "ta": "{catalogue}",
+    }),
+    Ask("traits", ("offerings.traits",), {
+        "en": "{traits}", "ta_en": "{traits}", "ta": "{traits}",
+    }),
     Ask("conversion", ("commerce.action",), {
         "en": "When someone finds {name} online, what should they be able to do — order, book, ask for a "
               "quote, or call or WhatsApp you?",
@@ -194,8 +202,20 @@ def rank(bp: BusinessBlueprint, business_type: str | None = None, *, prof: Profi
         "blocking", "high_value", "enrichment", "optional"}
     asked_before = {a.ask for a in bp.asks}
     last = bp.asks[-1].ask if bp.asks else ""
+    from platform_core.interview.catalogue_capture import catalogue_led
+
+    # Where the website IS the catalogue (a menu, a service list), "send me
+    # your menu" is how Locah learns what is sold — prices and all — so it
+    # stands in for the plain "what do you offer?".
+    # Not when they named something vague ("all types of meat": which ones,
+    # first), nor for made-to-order work or where the visit is the thing.
+    menu_first = (catalogue_led(bp) and "catalogue" not in asked_before
+                  and coverage(bp, "offerings.main") == "unknown" and not prof.has("made_to_order")
+                  and importance("offerings.catalogue", prof, bp) == "high_value")
     out: list[Ranked] = []
     for ask in ASKS:
+        if menu_first and ask.id == "offer":
+            continue
         lead = ask.targets[0]
         target = TARGETS_BY_ID[lead]
         if not relevant(target, prof, bp):
@@ -227,6 +247,10 @@ def rank(bp: BusinessBlueprint, business_type: str | None = None, *, prof: Profi
             score += WEIGHT[imp] * uncertainty * (t.value / 100) * (1.0 if index == 0 else 0.35)
         if ask.id in asked_before:
             score *= 0.35
+        if ask.id == "catalogue" and menu_first and not resolved(
+                bp, "offerings.main", importance("offerings.main", prof, bp)):
+            # It answers what the business sells too: asked as the essential it is.
+            score = max(score, WEIGHT["blocking"])
         if ask.id == "photos" and any(
             t != "media.photos" and importance(t, prof, bp) in {"blocking", "high_value"}
             and relevant(TARGETS_BY_ID[t], prof, bp) and not resolved(bp, t, importance(t, prof, bp))
@@ -334,6 +358,11 @@ def phrase(ask: Ask, bp: BusinessBlueprint, lang: str, *, prof: Profile | None =
         if narrow:
             ask = ASKS_BY_ID[narrow]
     template = template or ask.text.get(lang) or ask.text["en"]
+    if "{catalogue}" in template or "{traits}" in template:
+        from platform_core.interview import catalogue_capture
+
+        template = template.replace("{catalogue}", catalogue_capture.ask(bp, lang)).replace(
+            "{traits}", catalogue_capture.traits_ask(bp, lang))
     structure = ""
     if "{structure}" in template:
         structure = structure_question(bp, lang if lang != "ta" else "ta") or (

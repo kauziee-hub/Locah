@@ -23,13 +23,15 @@ import re
 from typing import Any
 
 from platform_core.interview.creative_director import CreativeDirection
+from platform_core.interview.catalogue_capture import item_traits
+from platform_core.interview.experience import choose_experience, marquee_words
 from platform_core.interview.media_director import picture_for, slug
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, TargetState
 from platform_core.interview.taxonomy import normalise_name
 from platform_core.interview.website_copy import WebsiteCopy
 from platform_core.validation.website import validate_generation_payload
 
-COMPOSER_VERSION = "creative-composer-v3"
+COMPOSER_VERSION = "creative-composer-v4"
 
 # What the browse section is called, by archetype. "What we do" is for services
 # only — for a shop it hides the fact that there are things to buy.
@@ -50,6 +52,19 @@ _COMMERCE = {"product_commerce", "menu_commerce"}
 _GENERIC_TITLE = re.compile(
     r"^\s*(what we do|our services|what we offer|our offerings|(?:available|our) options|"
     r"our products|products|offerings|services|our items|items|browse|explore)\s*$", re.I)
+
+
+def _expected_pictures(bp: BusinessBlueprint) -> int:
+    """Pictures this site will have once its media plan is done: the ready
+    ones, and the drafts still to be drawn where drawing is possible."""
+    ready = sum(1 for p in bp.media_plan if p.status == "ready")
+    planned = sum(1 for p in bp.media_plan if p.status == "planned" and p.source == "gemini_generated")
+    if planned:
+        from platform_core.website.image_generation import image_generation_available
+
+        if not image_generation_available():
+            planned = 0
+    return ready + planned
 
 
 def _facts(bp: BusinessBlueprint) -> dict[str, str]:
@@ -365,6 +380,8 @@ def browse_sections(
             picture = picture_for(bp, f"item:{slug(name)}") or picture_for(bp, f"project:{slug(name)}")
             if picture:
                 entry["image_asset_id"] = picture
+            # Veg or non-veg, how hot, the owner's own "Bestseller" — as they said it.
+            entry.update(item_traits(item))
             items.append(entry)
     categories: list[dict[str, Any]] = []
     for group in groups:
@@ -605,6 +622,43 @@ def compose_site(
             sections.remove(found)
             sections.insert(1, found)
 
+    # How this site moves and which scenes it is built from (experience.py):
+    # chosen from what the page really carries, so a ring only where there
+    # are pictures for it and a menu book only where there are dishes.
+    experience = choose_experience(
+        bp, archetype=arche, family=direction.family, dims=dims, sections=sections,
+        expected_pictures=_expected_pictures(bp),
+        choices=(direction.model_choices or {}).get("experience") or None,
+    )
+    showcases = [s for s in sections if s["section_type_id"] == "product_showcase"]
+    for section in sections:
+        kind = section["section_type_id"]
+        if kind == "hero" and experience.hero:
+            section["layout_variant"] = experience.hero
+        elif kind == "about" and experience.story:
+            section["layout_variant"] = experience.story
+        elif kind == "cta_band" and experience.cta:
+            section["layout_variant"] = experience.cta
+        elif kind == "highlights" and experience.motion != "calm":
+            section["layout_variant"] = "counters"
+    if not showcases and experience.catalogue in {"rail", "bento"}:
+        # A range known only by its categories takes the same composition.
+        categories = next((s for s in sections if s["section_type_id"] == "category_showcase"), None)
+        if categories:
+            categories["layout_variant"] = experience.catalogue
+    if showcases and experience.catalogue:
+        showcases[0]["layout_variant"] = experience.catalogue
+        # A second range (a gym's memberships under its programmes) stacks,
+        # unless the first already does.
+        for extra in showcases[1:]:
+            if experience.catalogue != "stack" and extra["layout_variant"] == "plan_cards":
+                extra["layout_variant"] = "stack"
+    if experience.marquee:
+        words = marquee_words(sections, list(hero.get("badges") or []))
+        if len(words) >= 3:
+            sections.insert(1, {"section_type_id": "marquee", "layout_variant": experience.marquee,
+                                "content": {"items": words}})
+
     for section in sections:
         section["is_visible"] = True
 
@@ -649,6 +703,8 @@ def compose_site(
         # not layer its serif and weights on top of it.
         "typography_direction": "modern_sans",
         "creative_direction": direction.model_dump(mode="json"),
+        # Motion language and scenes — read by the renderer's experience layer.
+        "experience": experience.theme(),
         "mobile": direction.mobile,
         "composer_version": COMPOSER_VERSION,
         "generation": meta or {},

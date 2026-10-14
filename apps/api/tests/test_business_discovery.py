@@ -247,6 +247,10 @@ N2 = {
     "next_target": "operations.hours",
     "next_question": "What are your opening hours?",
 }
+# The owner's own prices, per cut: read by rule from what they typed.
+N4 = {"answered": [ans("offerings.catalogue", "Your prices per kg.", "Chicken curry cut 240/kg")],
+      "acknowledgement": "Prices noted.", "next_target": "contact.location",
+      "next_question": "Where is the shop?"}
 N3 = {"acknowledgement": "Sure.", "next_target": "brand.story",
       "next_question": "What should people remember about Ishant Proteins?"}
 N5 = {"answered": [ans("fulfilment.mode", "You deliver and offer pickup.",
@@ -303,6 +307,16 @@ async def test_the_ishant_proteins_conversation():
     assert "?" in reply(bp) and "photo" not in reply(bp).lower()
 
     bp = await say_(bp, "We deliver ourselves around Nookampalayam and Perumbakkam, people can pick up too", N5)
+    # The website's catalogue IS the shop: the price of each cut is asked
+    # before the first version, in the trade's own words.
+    assert bp.last_asked_target == "offerings.catalogue"
+    assert "/kg" in reply(bp) and "rate board" in reply(bp)
+    bp = await say_(bp, "Chicken curry cut 240/kg, Boneless 380/kg, Mutton curry cut 800/kg, Seer fish 950/kg", N4)
+    groups = {g.name: g for g in bp.taxonomy.groups}
+    chicken = {i.name: (i.price, i.unit) for i in groups["Chicken"].items}
+    assert chicken["Curry cut"] == ("240", "per kg") and chicken["Boneless"] == ("380", "per kg")
+    assert {i.name: i.price for i in groups["Mutton"].items}["Curry cut"] == "800"
+    assert {i.name: i.price for i in groups["Fish & Seafood"].items}["Seer fish"] == "950"
     assert bp.last_asked_target == "contact.location"
     bp = await say_(bp, "In nookampalayam road", N7)
     # V4: the last question before the first version — what pictures or menu the
@@ -337,7 +351,9 @@ async def test_the_ishant_proteins_conversation():
     # Prices only as the owner said them — an invented one is dropped.
     groups = {g.name: g for g in bp.taxonomy.groups}
     assert (groups["Chicken"].price, groups["Chicken"].unit) == ("₹240", "per kg")
-    assert groups["Fish & Seafood"].price == "" and "price" in groups["Fish & Seafood"].needs
+    # The model's ₹999 for all fish was never said; seer fish keeps the owner's 950.
+    assert groups["Fish & Seafood"].price == ""
+    assert {i.name: i.price for i in groups["Fish & Seafood"].items}["Seer fish"] == "950"
     assert bp.discovery["operations.hours"].asked <= 1
     asked = [t for t, s in bp.discovery.items() if s.asked]
     assert all(bp.discovery[t].asked <= 2 for t in asked)
