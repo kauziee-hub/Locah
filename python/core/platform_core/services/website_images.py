@@ -20,9 +20,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platform_core.logging import get_logger
 from platform_core.models import Business, BusinessProfile, Offering, WebsitePage, WebsiteSection, WebsiteVersion
 from platform_core.services.media import MediaService
-from platform_core.interview.media_director import REAL_PHOTO_MESSAGE, image_policy, section_image_prompt
+from platform_core.interview.media_director import (
+    REAL_PHOTO_MESSAGE,
+    image_policy,
+    section_image_brief,
+    section_image_prompt,
+)
 from platform_core.website.media_prompts import PROMPT_VERSION
-from platform_core.website.image_generation import generate_image_bytes
+from platform_core.website.image_generation import generate_image_bytes, picture_source
 
 _log = get_logger("website.images")
 _MAX_OFFERING_IMAGES = 6
@@ -74,6 +79,56 @@ class WebsiteImageService:
         return {"ok": True, "hero": hero, "offerings": offerings}
 
     @staticmethod
+    async def _obtain(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        theme: dict[str, Any],
+        section_type: str,
+        trade: str,
+        subject: str,
+        planned: tuple[str, str],
+        purpose: str,
+        alt_text: str,
+        original_filename: str,
+        generated_for: str | None = None,
+    ) -> dict[str, Any] | None:
+        """One picture for one slot, persisted as a media asset — or None.
+
+        By default a real photograph found and verified online; a drawn picture
+        only where IMAGE_PROVIDER=gemini. A persist failure raises (the caller
+        words it); no picture found returns None.
+        """
+        prompt, aspect = planned
+        if picture_source() == "stock":
+            from platform_core.website.image_retrieval import retrieve_for_slot
+
+            brief = section_image_brief(theme, section_type, trade, subject=subject)
+            if brief is None:
+                return None
+            photo = (await retrieve_for_slot(brief)).found
+            if photo is None:
+                return None
+            retrieved: dict[str, Any] = await MediaService.persist_retrieved(
+                session, business_id=business_id, actor_id=actor_id, purpose=purpose,
+                url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type, alt_text=alt_text,
+                credit=f"{photo.photographer} via {photo.provider.title()}",
+                width=photo.width, height=photo.height,
+                generated_for=generated_for, prompt_version=PROMPT_VERSION,
+            )
+            return retrieved
+        generated = await generate_image_bytes(prompt, aspect_ratio=aspect)
+        if generated is None:
+            return None
+        drawn: dict[str, Any] = await MediaService.persist_generated(
+            session, business_id=business_id, actor_id=actor_id, purpose=purpose,
+            mime_type=generated.mime_type, body=generated.bytes, alt_text=alt_text,
+            original_filename=original_filename, generated_for=generated_for, prompt_version=PROMPT_VERSION,
+        )
+        return drawn
+
+    @staticmethod
     async def _theme_of(session: AsyncSession, section: WebsiteSection) -> dict[str, Any]:
         """The theme of the draft this section belongs to (its creative direction)."""
         page = await session.get(WebsitePage, section.page_id)
@@ -123,27 +178,20 @@ class WebsiteImageService:
             if wanted == "draw" else None
         if planned is None:
             return {"ok": False, "reason": "needs_real_photo", "detail": REAL_PHOTO_MESSAGE}
-        prompt, aspect = planned
-        generated = await generate_image_bytes(prompt, aspect_ratio=aspect)
-        if generated is None:
+        slot = f"editor:{section.section_type_id}" + (f":{list_key}.{index}" if list_key is not None else "")
+        asset = await WebsiteImageService._obtain(
+            session, business_id=business_id, actor_id=actor_id, theme=theme,
+            section_type=section.section_type_id, trade=_trade(business), subject=subject, planned=planned,
+            purpose="website",
+            alt_text=f"Illustrative picture: {subject}"[:200] if subject else "Illustrative picture",
+            original_filename="generated-section.png", generated_for=slot,
+        )
+        if asset is None:
             return {
                 "ok": False,
                 "reason": "generation_unavailable",
                 "detail": "Image generation did not return a picture. You can upload one instead.",
             }
-        slot = f"editor:{section.section_type_id}" + (f":{list_key}.{index}" if list_key is not None else "")
-        asset = await MediaService.persist_generated(
-            session,
-            business_id=business_id,
-            actor_id=actor_id,
-            purpose="website",
-            mime_type=generated.mime_type,
-            body=generated.bytes,
-            alt_text=f"Illustrative picture: {subject}"[:200] if subject else "Illustrative picture",
-            original_filename="generated-section.png",
-            generated_for=slot,
-            prompt_version=PROMPT_VERSION,
-        )
         if row is not None and list_key is not None and index is not None:
             row["image_asset_id"] = asset["id"]
             rows = list(content[list_key])
@@ -199,23 +247,17 @@ class WebsiteImageService:
         planned = section_image_prompt(draft.theme or {}, target.section_type_id, business_type or "")
         if planned is None:
             return "needs_real_photo"
-        generated = await generate_image_bytes(planned[0], aspect_ratio=planned[1])
-        if generated is None:
-            return "generation_failed"
         try:
-            asset = await MediaService.persist_generated(
-                session,
-                business_id=business_id,
-                actor_id=actor_id,
-                purpose="website",
-                mime_type=generated.mime_type,
-                body=generated.bytes,
-                alt_text="Illustrative picture",
-                original_filename="generated-section.png",
+            asset = await WebsiteImageService._obtain(
+                session, business_id=business_id, actor_id=actor_id, theme=draft.theme or {},
+                section_type=target.section_type_id, trade=business_type or "", subject="", planned=planned,
+                purpose="website", alt_text="Illustrative picture", original_filename="generated-section.png",
             )
         except Exception as exc:  # noqa: BLE001
             _log.warning("website.images.hero_persist_failed", error=str(exc)[:300])
             return "persist_failed"
+        if asset is None:
+            return "generation_failed"
         content = dict(target.content or {})
         content["image_asset_id"] = asset["id"]
         target.content = content
@@ -295,27 +337,21 @@ class WebsiteImageService:
         planned = section_image_prompt(theme, "product_showcase", business_type or "", subject=offering.title)
         if planned is None:
             return {"ok": False, "reason": "needs_real_photo", "detail": REAL_PHOTO_MESSAGE}
-        generated = await generate_image_bytes(planned[0], aspect_ratio=planned[1])
-        if generated is None:
-            return {"ok": False, "reason": "generation_unavailable",
-                    "detail": "Image generation did not return a picture. You can upload one instead."}
         try:
-            asset = await MediaService.persist_generated(
-                session,
-                business_id=business_id,
-                actor_id=actor_id,
-                purpose="offering",
-                mime_type=generated.mime_type,
-                body=generated.bytes,
+            asset = await WebsiteImageService._obtain(
+                session, business_id=business_id, actor_id=actor_id, theme=theme,
+                section_type="product_showcase", trade=business_type or "", subject=offering.title,
+                planned=planned, purpose="offering",
                 alt_text=f"Illustrative picture: {offering.title}"[:200],
-                original_filename=f"generated-{offering.id}.jpg",
-                generated_for=f"offering:{offering.id}",
-                prompt_version=PROMPT_VERSION,
+                original_filename=f"generated-{offering.id}.jpg", generated_for=f"offering:{offering.id}",
             )
         except Exception as exc:  # noqa: BLE001
             _log.warning("website.images.offering_persist_failed", error=str(exc)[:300])
             return {"ok": False, "reason": "persist_failed",
                     "detail": "The picture could not be saved. You can upload one instead."}
+        if asset is None:
+            return {"ok": False, "reason": "generation_unavailable",
+                    "detail": "Image generation did not return a picture. You can upload one instead."}
         return {"ok": True, "asset": asset}
 
     @staticmethod

@@ -119,10 +119,22 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   preference). The model proposes; deterministic readers and planners decide what
   is stored and what is asked next. It works with the model down. English, Tamil
   and Tanglish are supported in the same conversation.
-- Website generation, document reading and image drawing go through the provider
-  abstraction (`AI_PROVIDER`, `IMAGE_PROVIDER`, `VOICE_PROVIDER`; Gemini in
-  production, `replay` locally). Generated pictures are stored as media assets and
-  stay marked as drafts until the owner keeps them.
+- Website generation and document reading go through the provider abstraction
+  (`AI_PROVIDER`: DeepSeek by default, Gemini selectable, `replay` locally; voice is
+  separate, `VOICE_PROVIDER`, Gemini). Provider calls live in
+  `website/ai_provider.py`; the Creative Director never names a vendor.
+- **Website pictures are found, not drawn.** For each picture slot the
+  MediaDirector plans (hero, categories, items, story), `website/image_retrieval.py`
+  asks the provider for search queries, queries a stock-photo API
+  (`website/image_search.py`), filters candidates without a model, shows the best
+  few to a vision-capable model in one call, applies LOCAH's own acceptance rule,
+  checks the winner's URL serves an image, and otherwise retries with the rejection
+  reasons (bounded by `IMAGE_MAX_ROUNDS`). Nothing is downloaded: a verified photo
+  is a `media_assets` row whose `public_url` is the stock URL (`source_type
+  stock_photo`, bucket `external`), referenced by id like any picture. Factual
+  slots are never filled, and a slot that finds nothing stays empty — never an
+  unchecked picture. Gemini drawing remains only as the explicit
+  `IMAGE_PROVIDER=gemini` opt-in (and the only way to draw a logo).
 - **AI employees** (`platform_core/ai_employees/`) run on one runtime with tool
   tiers (T0 read … T3 owner approval), an allowlist per employee, limits and a kill
   switch; every decision is an `ai_actions` row. The AI Employee Sandbox simulates

@@ -63,7 +63,7 @@ from platform_core.services.outbox import OutboxService
 from platform_core.services.website import WebsiteService
 from platform_core.services.website_composition import WebsiteCompositionService
 from platform_core.website.generation_plan import GenerationPlan, build_plan
-from platform_core.website.image_generation import image_generation_available
+from platform_core.website.image_generation import image_generation_available, picture_source, pictures_available
 from platform_core.website.template_registry import TEMPLATES_BY_ID
 
 
@@ -368,6 +368,43 @@ async def _queue_logo(
     request.status = "queued"
 
 
+async def place_found_pictures(
+    session: AsyncSession,
+    bp: BusinessBlueprint,
+    found: list[tuple[Any, Any]],
+    *,
+    business_id: UUID,
+    actor_id: UUID | None,
+    generation_job_id: UUID | None,
+) -> int:
+    """Record what the picture search found, slot by slot. Returns how many slots filled.
+
+    A slot that found nothing is marked failed with its reason and stays empty;
+    one that found a verified photograph becomes a URL-backed asset (nothing is
+    downloaded) and is cached on the Blueprint by slot key.
+    """
+    from platform_core.interview.media_director import record, slug  # noqa: F401
+    from platform_core.website.media_prompts import PROMPT_VERSION
+
+    placed = 0
+    for slot, outcome in found:
+        photo = outcome.found
+        if photo is None:
+            record(bp, slot, None, outcome.reason, stock=True)
+            continue
+        asset = await MediaService.persist_retrieved(
+            session, business_id=business_id, actor_id=actor_id, purpose="website",
+            url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type,
+            alt_text=f"Photograph: {slot.subject or 'cover'}"[:200],
+            credit=f"{photo.photographer} via {photo.provider.title()}",
+            width=photo.width, height=photo.height,
+            generated_for=slot.key, generation_job_id=generation_job_id, prompt_version=PROMPT_VERSION,
+        )
+        record(bp, slot, UUID(asset["id"]), stock=True)
+        placed += 1
+    return placed
+
+
 class BusinessInterviewService:
     @staticmethod
     async def load_business(
@@ -509,10 +546,16 @@ class BusinessInterviewService:
                 else "Voice isn't available on this server. Chat saves the same interview state.",
             },
             "image_generation": {
-                "available": image_generation_available(),
-                "reason": "Locah can draw a logo if you have none, or cover artwork. It is "
-                "marked as generated — never a photo of your business. Your own photos and "
-                "logo always come first.",
+                "available": pictures_available(),
+                "reason": (
+                    "Locah can draw a logo if you have none, or cover artwork. It is "
+                    "marked as generated — never a photo of your business. Your own photos and "
+                    "logo always come first."
+                    if image_generation_available() else
+                    "Locah can find real, matching photographs for your website. They are "
+                    "stock photos — never pictures of your business. Your own photos always "
+                    "come first."
+                ),
             },
         }
 
@@ -558,7 +601,7 @@ class BusinessInterviewService:
                 proposed = await BusinessInterviewOrchestrator.turn(
                     initial, command.text, field=command.field,
                     business_type=business.business_type,
-                    image_available=image_generation_available(),
+                    image_available=pictures_available(),
                     via=command.via,
                 )
             except ValueError as exc:
@@ -661,7 +704,9 @@ class BusinessInterviewService:
             if command.media.role == "logo":
                 bp.logo_state = "uploaded"
         elif command.action == "image":
-            if not image_generation_available():
+            role = command.image_role
+            # A logo can only be drawn; cover pictures can be drawn or found.
+            if not (image_generation_available() if role == "logo" else pictures_available()):
                 raise ValidationError(
                     "Image generation is not configured. You can upload an image instead."
                 )
@@ -669,7 +714,6 @@ class BusinessInterviewService:
                 raise ValidationError(
                     "Use the website editor to request more artwork after building."
                 )
-            role = command.image_role
             if role == "logo" and any(m.role == "logo" for m in bp.media_assets):
                 raise ValidationError("You already added a logo. Your own logo is used.")
             bp.media_generation_requests = [
@@ -1226,6 +1270,7 @@ class BusinessInterviewService:
             pictures_expected,
             plan_media,
             record,
+            retrieve_missing,
             slug,
         )
         from platform_core.interview.site_composer import compose_site
@@ -1251,22 +1296,31 @@ class BusinessInterviewService:
         trade = _trade(bp, direction.archetype)
         plan_media(bp, direction)
         images_started = time.monotonic()
-        drawn = await draw_missing(bp, direction, trade)
-        images_ms = int((time.monotonic() - images_started) * 1000)
-        drawn_ok = 0
-        for slot, image, reason in drawn:
-            if image is None:
-                record(bp, slot, None, reason)
-                continue
-            asset = await MediaService.persist_generated(
-                session, business_id=job.business_id, actor_id=job.triggered_by or business.primary_owner_identity_id,
-                purpose="website", mime_type=image.mime_type, body=image.bytes,
-                alt_text=f"Illustrative picture: {slot.subject or 'cover'}"[:200],
-                original_filename=f"draft-{slug(slot.key)}.png",
-                generated_for=slot.key, generation_job_id=job.id, prompt_version=PROMPT_VERSION,
-            )
-            record(bp, slot, UUID(asset["id"]))
-            drawn_ok += 1
+        actor = job.triggered_by or business.primary_owner_identity_id
+        if picture_source() == "stock":
+            # Real photographs, found and checked slot by slot (website.image_retrieval).
+            found = await retrieve_missing(bp, direction, trade)
+            drawn = found
+            images_ms = int((time.monotonic() - images_started) * 1000)
+            drawn_ok = await place_found_pictures(
+                session, bp, found, business_id=job.business_id, actor_id=actor, generation_job_id=job.id)
+        else:
+            drawn = await draw_missing(bp, direction, trade)
+            images_ms = int((time.monotonic() - images_started) * 1000)
+            drawn_ok = 0
+            for slot, image, reason in drawn:
+                if image is None:
+                    record(bp, slot, None, reason)
+                    continue
+                asset = await MediaService.persist_generated(
+                    session, business_id=job.business_id, actor_id=actor,
+                    purpose="website", mime_type=image.mime_type, body=image.bytes,
+                    alt_text=f"Illustrative picture: {slot.subject or 'cover'}"[:200],
+                    original_filename=f"draft-{slug(slot.key)}.png",
+                    generated_for=slot.key, generation_job_id=job.id, prompt_version=PROMPT_VERSION,
+                )
+                record(bp, slot, UUID(asset["id"]))
+                drawn_ok += 1
         hero_ready = any(p.key == "hero" and p.status == "ready" for p in bp.media_plan) or bool(
             [m for m in owner_photos(bp) if m.role == "hero"])
         recomposed = expected and not hero_ready

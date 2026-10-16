@@ -408,12 +408,84 @@ class MediaService:
         return MediaService.serialize(asset)
 
     @staticmethod
+    async def persist_retrieved(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        purpose: str,
+        url: str,
+        page_url: str,
+        mime_type: str,
+        alt_text: str | None,
+        credit: str,
+        width: int | None = None,
+        height: int | None = None,
+        generated_for: str | None = None,
+        generation_job_id: uuid.UUID | None = None,
+        prompt_version: str | None = None,
+    ) -> dict[str, Any]:
+        """Record a real photograph found online as a ready media asset.
+
+        Nothing is downloaded or stored: the asset's `public_url` IS the verified
+        stock URL (website.image_retrieval checked it serves an image), and the
+        bucket is `external` so no storage code looks for an object. Sections
+        still hold only the asset id (Doc 12 §12.6), so the renderer and the
+        editor treat it like any other picture. Provenance: `stock_photo`, the
+        photo's page in `storage_key`, the photographer's credit in
+        `original_filename`.
+        """
+        from platform_core.website.image_search import url_allowed
+
+        MediaService.permission_for(purpose)
+        if not url_allowed(url):
+            raise ValidationError("A found picture must be an https link on an allowed photo host")
+        normalized_mime = (mime_type or "image/jpeg").strip().lower()
+        if normalized_mime not in ALLOWED_MIME_TYPES:
+            normalized_mime = "image/jpeg"
+        asset = MediaAsset(
+            id=uuid.uuid4(),
+            business_id=business_id,
+            uploader_identity_id=actor_id,
+            original_filename=credit[:200] or None,
+            mime_type=normalized_mime,
+            size_bytes=None,
+            width=width,
+            height=height,
+            bucket="external",
+            storage_key=(page_url or url)[:1000],
+            public_url=url,
+            alt_text=alt_text,
+            purpose=purpose,
+            status="ready",
+            source_type="stock_photo",
+            generated_for=(generated_for or None),
+            generation_job_id=generation_job_id,
+            prompt_version=(prompt_version or None),
+            approval_state="draft",
+        )
+        session.add(asset)
+        await session.flush()
+        await AuditService.record(
+            session,
+            event_type="media.asset_retrieved",
+            actor_identity_id=actor_id,
+            actor_context="business",
+            business_id=business_id,
+            resource_type="media_asset",
+            resource_id=asset.id,
+            action="retrieve",
+            after_state={"purpose": purpose, "source": "stock_photo", "slot": generated_for},
+        )
+        return MediaService.serialize(asset)
+
+    @staticmethod
     async def approve_draft(
         session: AsyncSession, *, business_id: uuid.UUID, asset_id: uuid.UUID
     ) -> dict[str, Any]:
         """The owner keeps a picture LOCAH drew. It stays marked as generated."""
         asset = await MediaService._get(session, business_id=business_id, asset_id=asset_id)
-        if asset.source_type != "gemini_generated":
+        if asset.source_type not in {"gemini_generated", "stock_photo"}:
             raise ValidationError("Only a draft picture LOCAH made needs approving")
         asset.approval_state = "approved"
         await session.flush()

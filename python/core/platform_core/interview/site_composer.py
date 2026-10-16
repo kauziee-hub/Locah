@@ -58,11 +58,12 @@ def _expected_pictures(bp: BusinessBlueprint) -> int:
     """Pictures this site will have once its media plan is done: the ready
     ones, and the drafts still to be drawn where drawing is possible."""
     ready = sum(1 for p in bp.media_plan if p.status == "ready")
-    planned = sum(1 for p in bp.media_plan if p.status == "planned" and p.source == "gemini_generated")
+    planned = sum(1 for p in bp.media_plan
+                  if p.status == "planned" and p.source in {"gemini_generated", "stock_retrieved"})
     if planned:
-        from platform_core.website.image_generation import image_generation_available
+        from platform_core.website.image_generation import pictures_available
 
-        if not image_generation_available():
+        if not pictures_available():
             planned = 0
     return ready + planned
 

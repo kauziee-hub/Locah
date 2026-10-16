@@ -48,6 +48,10 @@ os.environ.pop("XAI_API_KEY", None)
 # Gemini is the default provider and its key is paid. A test that forgets to
 # stub the provider must fail fast into the deterministic path, never spend.
 os.environ.pop("GEMINI_API_KEY", None)
+# DeepSeek is the default provider and the photo search has a key of its own:
+# neither may be live in the suite. A test that wants one sets it and stubs it.
+os.environ.pop("DEEPSEEK_API_KEY", None)
+os.environ.pop("PEXELS_API_KEY", None)
 os.environ["IMAGE_PROVIDER"] = "none"
 
 # The suite writes to a database a deployed worker also polls. Every job it

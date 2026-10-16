@@ -1,10 +1,11 @@
 """AI model provider abstraction (Doc 12 §12.2).
 
-`get_ai_provider()` returns Gemini — LOCAH's only AI provider — or, for local
-acceptance runs, the recorded replay provider; `UnavailableAIProvider` when no
-key is configured. Callers describe a *purpose*; each provider maps the
-purpose to its own model, so no vendor model name leaks into business logic.
-Callers always keep the deterministic fallback path (Doc 12 §12.1) regardless.
+`get_ai_provider()` returns DeepSeek by default (`AI_PROVIDER=deepseek`), Gemini
+when `AI_PROVIDER=gemini`, or, for local acceptance runs, the recorded replay
+provider; `UnavailableAIProvider` when no key is configured. Callers describe a
+*purpose*; each provider maps the purpose to its own model, so no vendor model
+name leaks into business logic. Callers always keep the deterministic fallback
+path (Doc 12 §12.1) regardless. Voice is separate: `VOICE_PROVIDER` stays Gemini.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -80,6 +82,12 @@ class UnavailableAIProvider:
 
     async def generate_structured_from_file(
         self, prompt: str, data: bytes, mime_type: str, schema: dict[str, Any],
+        model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        raise RuntimeError("AI provider not configured (no key for AI_PROVIDER)")
+
+    async def generate_structured_with_images(
+        self, prompt: str, images: list[Any], schema: dict[str, Any],
         model_config: dict[str, Any], timeout_seconds: int,
     ) -> dict[str, Any]:
         raise RuntimeError("AI provider not configured (no key for AI_PROVIDER)")
@@ -277,7 +285,7 @@ class GeminiProvider:
 
     def build_body(
         self, prompt: str, schema: dict[str, Any], model_config: dict[str, Any],
-        file: tuple[bytes, str] | None = None,
+        file: tuple[bytes, str] | None = None, more_files: list[tuple[bytes, str]] | None = None,
     ) -> dict[str, Any]:
         purpose = model_config.get("purpose")
         generation: dict[str, Any] = {
@@ -291,11 +299,12 @@ class GeminiProvider:
         if thinking:
             generation["thinkingConfig"] = {"thinkingLevel": thinking}
         parts: list[dict[str, Any]] = []
-        if file is not None:
-            import base64
+        import base64
 
-            # The owner's own document, inline: a menu photo or a catalogue PDF.
-            parts.append({"inlineData": {"mimeType": file[1], "data": base64.b64encode(file[0]).decode()}})
+        # The owner's own document, inline: a menu photo or a catalogue PDF —
+        # or the candidate pictures a judge is asked to compare.
+        for attached in ([file] if file is not None else []) + list(more_files or []):
+            parts.append({"inlineData": {"mimeType": attached[1], "data": base64.b64encode(attached[0]).decode()}})
         parts.append({"text": prompt})
         body: dict[str, Any] = {
             "contents": [{"role": "user", "parts": parts}],
@@ -332,16 +341,29 @@ class GeminiProvider:
         """One structured answer about one file the owner gave (a menu, a catalogue)."""
         return await self._structured(prompt, schema, model_config, timeout_seconds, file=(data, mime_type))
 
+    async def generate_structured_with_images(
+        self, prompt: str, images: list[Any], schema: dict[str, Any],
+        model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        """One structured answer about several pictures. Gemini is sent the bytes,
+        not a link, so a URL-only picture is refused and the caller supplies bytes."""
+        if any(getattr(image, "data", None) is None for image in images):
+            raise AIProviderPermanentError("gemini needs the picture bytes, not a link")
+        return await self._structured(
+            prompt, schema, model_config, timeout_seconds,
+            more_files=[(image.data, image.mime_type) for image in images],
+        )
+
     async def _structured(
         self, prompt: str, schema: dict[str, Any], model_config: dict[str, Any], timeout_seconds: int,
-        file: tuple[bytes, str] | None = None,
+        file: tuple[bytes, str] | None = None, more_files: list[tuple[bytes, str]] | None = None,
     ) -> dict[str, Any]:
         purpose = model_config.get("purpose")
         guard_external_ai("text", self.provider_name, str(purpose or ""))
         primary = str(model_config.get("model") or self.model_for(purpose))
         fallbacks = (os.getenv("GEMINI_FALLBACK_MODEL") or GEMINI_FALLBACK_MODEL).split(",")
         models = [primary] + [m.strip() for m in fallbacks if m.strip() and m.strip() != primary]
-        body = self.build_body(prompt, schema, model_config, file)
+        body = self.build_body(prompt, schema, model_config, file, more_files)
         started = time.monotonic()
         failure: Exception | None = None
         for attempt, model in enumerate(models):
@@ -459,18 +481,238 @@ class GeminiProvider:
         return text
 
 
+# ---------------------------------------------------------------- DeepSeek
+
+DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
+# The model LOCAH was asked to use. Pin another with DEEPSEEK_MODEL; the id is
+# sent exactly as configured and never silently swapped for a different model.
+DEEPSEEK_DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+
+# Routine extraction and picture judging answer while someone waits, so they skip
+# the reasoning pass (DeepSeek's `thinking` switch). Website strategy and copy
+# keep the model's default deliberation, as Gemini's "medium" level did.
+_DEEPSEEK_NO_THINKING = frozenset({
+    "business.interview", "document.extract", "image.query", "image.judge",
+})
+
+_IMAGE_MIME_PREFIX = "image/"
+
+
+@dataclass(frozen=True)
+class ImageInput:
+    """One picture handed to a vision-capable model: a public https URL, or the
+    bytes themselves (sent inline as a data URL, held in memory only)."""
+
+    url: str | None = None
+    data: bytes | None = None
+    mime_type: str = "image/jpeg"
+
+    def as_url(self) -> str:
+        if self.url:
+            return self.url
+        import base64
+
+        return f"data:{self.mime_type};base64,{base64.b64encode(self.data or b'').decode()}"
+
+
+class DeepSeekProvider:
+    """DeepSeek `/chat/completions` (OpenAI-compatible) with JSON-object output.
+
+    DeepSeek has no server-side schema enforcement: the schema travels in the
+    system message and the answer is held to it afterwards by `_fit`, exactly as
+    Gemini's is, and every caller still re-validates with its own Pydantic model.
+    Pictures go in as `image_url` content parts. A rejected key, an unknown model
+    or an over-quota account is permanent for the request; only 5xx and timeouts
+    are worth another attempt, and the caller owns that policy.
+    """
+
+    provider_name = "deepseek"
+
+    def __init__(self, api_key: str, model: str = DEEPSEEK_DEFAULT_MODEL,
+                 base_url: str = DEEPSEEK_DEFAULT_BASE_URL) -> None:
+        self._api_key = api_key
+        self._model = model
+        self._base_url = base_url.rstrip("/")
+        self.last_usage: dict[str, Any] | None = None
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    def model_for(self, purpose: str | None) -> str:
+        key = str(purpose or "")
+        if key == "business.interview":
+            return os.getenv("DEEPSEEK_INTERVIEW_MODEL", "").strip() or self._model
+        if key.startswith("website."):
+            return os.getenv("DEEPSEEK_WEBSITE_MODEL", "").strip() or self._model
+        if key.startswith("document."):
+            return os.getenv("DEEPSEEK_DOCUMENT_MODEL", "").strip() or self._model
+        if key.startswith("image."):
+            return os.getenv("DEEPSEEK_VISION_MODEL", "").strip() or self._model
+        return self._model
+
+    def build_body(
+        self, prompt: str, schema: dict[str, Any], model_config: dict[str, Any],
+        images: list[ImageInput] | None = None,
+    ) -> dict[str, Any]:
+        purpose = str(model_config.get("purpose") or "")
+        schema_text = json.dumps(_inline_schema(schema), separators=(",", ":"), ensure_ascii=False)
+        system = str(model_config.get("system_prompt") or "").strip()
+        instruction = (
+            "Reply with exactly one JSON object and nothing else. It must conform to this JSON Schema "
+            "(descriptions state each field's limits):\n" + schema_text
+        )
+        content: Any = prompt
+        if images:
+            content = [{"type": "image_url", "image_url": {"url": image.as_url()}} for image in images]
+            content.append({"type": "text", "text": prompt})
+        body: dict[str, Any] = {
+            "model": str(model_config.get("model") or self.model_for(purpose)),
+            "messages": [
+                {"role": "system", "content": (system + "\n\n" if system else "") + instruction},
+                {"role": "user", "content": content},
+            ],
+            "response_format": {"type": "json_object"},
+            "max_tokens": int(model_config.get("max_output_tokens", 8192)),
+            "stream": False,
+        }
+        if "temperature" in model_config:
+            body["temperature"] = float(model_config["temperature"])
+        if purpose in _DEEPSEEK_NO_THINKING:
+            body["thinking"] = {"type": "disabled"}
+        return body
+
+    async def generate_structured(
+        self, prompt: str, schema: dict[str, Any], model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        return await self._structured(prompt, schema, model_config, timeout_seconds)
+
+    async def generate_structured_from_file(
+        self, prompt: str, data: bytes, mime_type: str, schema: dict[str, Any],
+        model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        """One structured answer about one picture the owner gave (a menu photo).
+
+        DeepSeek reads pictures, not PDFs: a PDF is refused clearly so the caller
+        takes its existing path for an unreadable document.
+        """
+        if not str(mime_type).lower().startswith(_IMAGE_MIME_PREFIX):
+            raise AIProviderPermanentError(
+                f"deepseek reads pictures, not {mime_type or 'this file type'}; send a photo of the page"
+            )
+        return await self._structured(
+            prompt, schema, model_config, timeout_seconds,
+            images=[ImageInput(data=data, mime_type=str(mime_type).lower())],
+        )
+
+    async def generate_structured_with_images(
+        self, prompt: str, images: list[ImageInput], schema: dict[str, Any],
+        model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        """One structured answer about several pictures at once (the picture judge)."""
+        return await self._structured(prompt, schema, model_config, timeout_seconds, images=images)
+
+    async def _structured(
+        self, prompt: str, schema: dict[str, Any], model_config: dict[str, Any], timeout_seconds: int,
+        images: list[ImageInput] | None = None,
+    ) -> dict[str, Any]:
+        purpose = model_config.get("purpose")
+        guard_external_ai("text", self.provider_name, str(purpose or ""))
+        body = self.build_body(prompt, schema, model_config, images)
+        started = time.monotonic()
+        data = await self._post(body, purpose, float(timeout_seconds))
+        parsed = self._parse(data, str(body["model"]), purpose, started)
+        clipped = _fit(parsed, _inline_schema(schema))
+        return clipped if isinstance(clipped, dict) else parsed
+
+    async def _post(self, body: dict[str, Any], purpose: Any, timeout: float) -> dict[str, Any]:
+        started = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                    json=body,
+                )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("ai.deepseek.call_failed", model=body.get("model"), purpose=purpose,
+                         error=type(exc).__name__)
+            raise
+        latency_ms = int((time.monotonic() - started) * 1000)
+        if response.status_code >= 400:
+            try:
+                reason = str((response.json().get("error") or {}).get("message", ""))[:200]
+            except ValueError:
+                reason = response.text[:200]
+            _log.warning("ai.deepseek.call_failed", model=body.get("model"), purpose=purpose,
+                         status_code=response.status_code, latency_ms=latency_ms, reason=reason)
+            if response.status_code == 402:
+                # Insufficient balance: every retry and every model fails the same way.
+                raise AIProviderBillingError(f"deepseek billing refused the request (402): {reason}")
+            if response.status_code in (400, 401, 403, 404, 422, 429):
+                raise AIProviderPermanentError(
+                    f"deepseek rejected the request ({response.status_code}): {reason}")
+            raise RuntimeError(f"deepseek unavailable ({response.status_code}): {reason}")
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
+
+    def _parse(self, data: dict[str, Any], model: str, purpose: Any, started: float) -> dict[str, Any]:
+        latency_ms = int((time.monotonic() - started) * 1000)
+        raw_usage = data.get("usage")
+        usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
+        details = usage.get("completion_tokens_details")
+        reasoning = details.get("reasoning_tokens") if isinstance(details, dict) else None
+        self.last_usage = {
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "thinking_tokens": reasoning,
+            "total_tokens": usage.get("total_tokens"),
+            "latency_ms": latency_ms,
+            "model": model,
+        }
+        _log.info("ai.deepseek.completed", model=model, purpose=purpose, latency_ms=latency_ms,
+                  prompt_units=usage.get("prompt_tokens"), output_units=usage.get("completion_tokens"),
+                  thinking_units=reasoning)
+        text = self.extract_text(data)
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.index("{"):] if "{" in text else text
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("DeepSeek returned non-JSON output") from exc
+        if not isinstance(parsed, dict):
+            raise RuntimeError("DeepSeek returned a non-object JSON value")
+        return parsed
+
+    @staticmethod
+    def extract_text(data: dict[str, Any]) -> str:
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise RuntimeError("DeepSeek returned no choices")
+        first = choices[0]
+        raw_message = first.get("message")
+        message: dict[str, Any] = raw_message if isinstance(raw_message, dict) else {}
+        # `reasoning_content` is the model's working, never the answer.
+        text = str(message.get("content") or "").strip()
+        if not text:
+            raise RuntimeError(f"DeepSeek returned empty content ({first.get('finish_reason', 'unknown')})")
+        return text
+
+
 def configured_provider_name() -> str:
     """Which provider is configured, without revealing anything about its key."""
-    return os.getenv("AI_PROVIDER", "gemini").strip().lower() or "gemini"
+    return os.getenv("AI_PROVIDER", "deepseek").strip().lower() or "deepseek"
 
 
 def get_ai_provider() -> AIModelProvider:
     """The one configured provider, or none at all.
 
-    There is deliberately no second provider: a busy Gemini model falls back
-    only to other Gemini models (GEMINI_FALLBACK_MODEL). When no key is
-    configured, callers get `UnavailableAIProvider` and take their existing
-    deterministic path.
+    DeepSeek is the default; `AI_PROVIDER=gemini` selects Gemini. There is no
+    silent second vendor: a failed request is never retried on another provider
+    (Gemini falls back only to other Gemini models, GEMINI_FALLBACK_MODEL). When
+    no key is configured, callers get `UnavailableAIProvider` and take their
+    existing deterministic path.
     """
     choice = configured_provider_name()
     if choice == "replay":
@@ -482,13 +724,20 @@ def get_ai_provider() -> AIModelProvider:
             replay: AIModelProvider = ReplayProvider(replay_file)
             return replay
         return UnavailableAIProvider()
+    if choice == "deepseek":
+        api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+        if api_key:
+            model = os.getenv("DEEPSEEK_MODEL", DEEPSEEK_DEFAULT_MODEL).strip() or DEEPSEEK_DEFAULT_MODEL
+            base_url = os.getenv("DEEPSEEK_BASE_URL", DEEPSEEK_DEFAULT_BASE_URL).strip() or DEEPSEEK_DEFAULT_BASE_URL
+            return DeepSeekProvider(api_key, model, base_url)
+        return UnavailableAIProvider()
     if choice == "gemini":
         api_key = os.getenv("GEMINI_API_KEY", "").strip()
         if api_key:
             model = os.getenv("GEMINI_MODEL", GEMINI_DEFAULT_MODEL).strip() or GEMINI_DEFAULT_MODEL
             return GeminiProvider(api_key, model)
         return UnavailableAIProvider()
-    # Gemini is LOCAH's only AI provider; any other value (e.g. a leftover
-    # AI_PROVIDER=xai) means no model at all — never a silent second vendor.
+    # Any other value (e.g. a leftover AI_PROVIDER=xai) means no model at all —
+    # never a silent second vendor.
     _log.warning("website.ai_provider.unsupported", provider=choice)
     return UnavailableAIProvider()

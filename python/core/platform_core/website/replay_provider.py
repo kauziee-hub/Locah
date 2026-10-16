@@ -61,6 +61,13 @@ class ReplayProvider:
                 return dict(recorded)
         raise LookupError("no recording for this request")
 
+    async def generate_structured_with_images(
+        self, prompt: str, images: list[Any], schema: dict[str, Any],
+        model_config: dict[str, Any], timeout_seconds: int,
+    ) -> dict[str, Any]:
+        """A picture judgement has no recording: it fails like an unreachable model."""
+        raise LookupError("no recording for a picture judgement")
+
     async def generate_structured_from_file(
         self, prompt: str, data: bytes, mime_type: str, schema: dict[str, Any],
         model_config: dict[str, Any], timeout_seconds: int,

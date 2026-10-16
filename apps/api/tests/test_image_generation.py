@@ -106,10 +106,14 @@ def test_availability_follows_the_configured_provider(monkeypatch: pytest.Monkey
     monkeypatch.delenv("IMAGE_PROVIDER", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("XAI_API_KEY", "xai-present")
-    # Gemini is the only image provider; an old xAI key switches nothing on.
+    # Gemini drawing is an explicit opt-in; an old xAI key switches nothing on.
     assert image_generation_available() is False
+    monkeypatch.setenv("IMAGE_PROVIDER", "gemini")
+    assert image_generation_available() is False  # named, but no key
     monkeypatch.setenv("GEMINI_API_KEY", "g-present")
     assert image_generation_available() is True
+    monkeypatch.delenv("IMAGE_PROVIDER")
+    assert image_generation_available() is False  # the default is stock photos, not drawing
     monkeypatch.setenv("IMAGE_PROVIDER", "xai")
     assert image_generation_available() is False
     monkeypatch.setenv("IMAGE_PROVIDER", "none")
@@ -142,7 +146,7 @@ class _Recorder:
 async def test_gemini_generation_sends_the_key_in_a_header_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("IMAGE_PROVIDER", raising=False)
+    monkeypatch.setenv("IMAGE_PROVIDER", "gemini")
     monkeypatch.delenv("GEMINI_IMAGE_MODEL", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "g-secret")
     png = b"\x89PNG bytes"
@@ -170,7 +174,7 @@ async def test_gemini_generation_sends_the_key_in_a_header_only(
 async def test_a_gemini_failure_does_not_spend_on_the_other_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("IMAGE_PROVIDER", raising=False)
+    monkeypatch.setenv("IMAGE_PROVIDER", "gemini")
     monkeypatch.setenv("GEMINI_API_KEY", "g-secret")
     monkeypatch.setenv("XAI_API_KEY", "xai-secret")
     recorder = _Recorder(httpx.Response(429, json={"error": {"message": "quota"}}))

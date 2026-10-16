@@ -1,20 +1,23 @@
-"""Opt-in generated artwork. Never synthesize photos of actual staff/products.
+"""Opt-in cover artwork and logo. Never synthesize photos of actual staff/products.
 
-Two things an owner may ask Locah to draw, and only when they ask:
+Two things an owner may ask Locah for, and only when they ask:
 
-  hero  wide editorial artwork for the top of the homepage — mood and
-        material for the trade, never a picture of the business itself;
-  logo  a one-letter monogram, for an owner who has no logo yet.
+  hero  a wide picture for the top of the homepage — mood and material for the
+        trade, never a picture of the business itself. By default a real
+        photograph found online and checked (website.image_retrieval, marked
+        STOCK_PHOTO); drawn (AI_GENERATED) only where IMAGE_PROVIDER=gemini;
+  logo  a one-letter monogram, for an owner who has no logo yet. Only ever
+        drawn (IMAGE_PROVIDER=gemini): a logo cannot be found.
 
-Both are stored as ordinary media assets marked AI_GENERATED, and both lose to
-anything the owner uploads: a hero section that already has a picture keeps
-it, and an uploaded logo is never replaced.
+Both are stored as ordinary media assets, and both lose to anything the owner
+uploads: a hero section that already has a picture keeps it, and an uploaded
+logo is never replaced.
 """
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -41,7 +44,9 @@ from platform_core.website.image_generation import (
     FAILURE_REASONS,
     brand_logo_prompt,
     generate_image,
+    picture_source,
 )
+from platform_core.website.image_retrieval import FoundImage
 from platform_core.website.template_registry import TEMPLATES_BY_ID
 
 
@@ -106,8 +111,11 @@ async def generate_interview_media(
     if not work:
         return
     # Generate outside the row lock — a slow provider must not block the owner.
-    drawn: dict[str, GeneratedImage | None] = {}
+    drawn: dict[str, Any] = {}
     for request in work:
+        if request.role == "hero" and adapter is None and picture_source() == "stock":
+            drawn[request.role] = await find_hero_photo(bp)  # a FoundImage, or None
+            continue
         prompt, aspect = prompt_for(request, bp)
         drawn[request.role] = await (adapter or ExistingImageAdapter()).generate(
             prompt, aspect_ratio=aspect
@@ -131,12 +139,67 @@ async def generate_interview_media(
             continue
         if role == "logo":
             await _apply_logo(session, business_id, actor_id, bp, request, generated)
+        elif isinstance(generated, FoundImage):
+            await _apply_hero_found(
+                session, business_id, actor_id, generation_job_id, bp, request, generated
+            )
         else:
             await _apply_hero(
                 session, business_id, actor_id, generation_job_id, bp, request, generated
             )
     bp.revision += 1
     await BusinessInterviewService.save(session, business, bp)
+
+
+async def find_hero_photo(bp: BusinessBlueprint) -> FoundImage | None:
+    """A verified real photograph for the cover, in the site's own visual world."""
+    from platform_core.interview.creative_director import direct
+    from platform_core.interview.media_director import plan_slots
+    from platform_core.website.image_retrieval import brief_for_slot, retrieve_for_slot
+
+    direction = direct(bp, media_expected=True)  # this job is finding the picture
+    hero = next(s for s in plan_slots(bp, direction) if s.key == "hero")
+    outcome = await retrieve_for_slot(
+        brief_for_slot(hero, direction, classification_seed(bp).replace("_", " ")))
+    return outcome.found
+
+
+async def _apply_hero_found(
+    session: AsyncSession,
+    business_id: UUID,
+    actor_id: UUID,
+    generation_job_id: UUID,
+    bp: BusinessBlueprint,
+    request: MediaGenerationRequest,
+    found: FoundImage,
+) -> None:
+    asset = await MediaService.persist_retrieved(
+        session,
+        business_id=business_id,
+        actor_id=actor_id,
+        purpose="website",
+        url=found.url,
+        page_url=found.page_url,
+        mime_type=found.mime_type,
+        alt_text="Photograph for the top of the website",
+        credit=f"{found.photographer} via {found.provider.title()}",
+        width=found.width,
+        height=found.height,
+        generated_for="hero",
+        generation_job_id=generation_job_id,
+    )
+    request.status = "ready"
+    request.asset_id = UUID(asset["id"])
+    bp.media_assets.append(
+        MediaReference(
+            asset_id=request.asset_id, role="hero", label="Stock photo · cover", source="STOCK_PHOTO",
+        )
+    )
+    # Same hand-off as a drawn cover: personalization places it if it is still running.
+    job = await session.get(WebsiteGenerationJob, generation_job_id)
+    if job is not None and job.status in {"pending", "running"}:
+        return
+    await place_ready_artwork(session, business_id, bp)
 
 
 async def _apply_hero(

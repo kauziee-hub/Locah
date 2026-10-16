@@ -2,7 +2,7 @@
 
 `LOCAH_TEST_NO_EXTERNAL_AI=1` turns it on. With it on:
 
-* every provider path — Gemini text, images and Live voice credentials —
+* every provider path — DeepSeek and Gemini text, Gemini images and Live voice credentials —
   calls :func:`guard_external_ai`
   immediately before its network request, and the call raises
   :class:`ExternalAICallBlocked` instead of spending anything;
@@ -37,6 +37,7 @@ ENV = "LOCAH_TEST_NO_EXTERNAL_AI"
 AI_HOSTS = frozenset({
     "generativelanguage.googleapis.com",
     "aiplatform.googleapis.com",
+    "api.deepseek.com",
     "api.x.ai",
     "api.openai.com",
     "api.anthropic.com",

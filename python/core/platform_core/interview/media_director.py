@@ -10,8 +10,10 @@ will exist):
 
 1. the owner's own uploads, then pictures from their menu/catalogue,
 2. pictures already on the business,
-3. Gemini-drawn drafts — by default, unless the owner asked for a text-led
-   site (``visual_consent == "none"``),
+3. a real photograph found online and checked against the slot
+   (``website.image_retrieval``) — by default, unless the owner asked for a
+   text-led site (``visual_consent == "none"``); a Gemini-drawn draft only where
+   drawing was switched on by name (``IMAGE_PROVIDER=gemini``),
 4. otherwise a designed typographic treatment.
 
 The media truth policy (``interview.models.TruthClass``) decides what may be
@@ -27,8 +29,9 @@ drawn at all:
   named project, a photographer's or an interior studio's work. Never drawn;
   the card is typographic until the owner's photo arrives.
 
-Every draft is marked AI_GENERATED on the Blueprint, cached by slot key (a
-rebuild never redraws), and loses to a real photo the moment one exists.
+Every found photo is marked STOCK_PHOTO (a drawn draft AI_GENERATED) on the
+Blueprint, cached by slot key (a rebuild never searches again), and loses to the
+owner's real photo the moment one exists. Factual slots are never filled either way.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ import asyncio
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 from platform_core.interview.creative_director import CreativeDirection
@@ -47,7 +51,7 @@ from platform_core.interview.models import (
     PlannedMedia,
     TruthClass,
 )
-from platform_core.website.image_generation import GeneratedImage, generate_image
+from platform_core.website.image_generation import GeneratedImage, generate_image, picture_source
 from platform_core.website.media_prompts import (
     PROMPT_VERSION,
     aspect_for_hero,
@@ -136,9 +140,9 @@ def pictures_expected(bp: BusinessBlueprint, *, images_available: bool | None = 
     if owner_photos(bp):
         return True
     if images_available is None:
-        from platform_core.website.image_generation import image_generation_available
+        from platform_core.website.image_generation import pictures_available
 
-        images_available = image_generation_available()
+        images_available = pictures_available()
     return drafts_allowed(bp) and images_available
 
 
@@ -230,13 +234,13 @@ def plan_media(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Plan
             entry.source = "catalogue_extracted" if source == "CATALOGUE_EXTRACTED" else "owner_uploaded"
             entry.asset_id, entry.status = own, "ready"
         elif drawn:
-            entry.source, entry.asset_id, entry.status = "gemini_generated", drawn, "ready"
+            entry.source, entry.asset_id, entry.status = _source_of(bp, drawn), drawn, "ready"
         elif slot.truth_class == "factual":
             entry.status, entry.reason = "skipped", "Needs a real photo — never drawn."
         elif not drafts_allowed(bp):
             entry.status, entry.reason = "skipped", "Text-led website, as the owner asked."
         else:
-            entry.source = "gemini_generated"
+            entry.source = "stock_retrieved" if picture_source() != "gemini" else "gemini_generated"
         plan.append(entry)
     bp.media_plan = plan[:24]
     return list(plan[:24])
@@ -247,6 +251,12 @@ def cached(bp: BusinessBlueprint, key: str) -> UUID | None:
     request = next((r for r in bp.media_generation_requests
                     if r.role == "visual" and r.key == key and r.status == "ready" and r.asset_id), None)
     return request.asset_id if request else None
+
+
+def _source_of(bp: BusinessBlueprint, asset_id: UUID) -> str:
+    """How a ready picture got onto the site: found online, or drawn."""
+    found = next((m for m in bp.media_assets if m.asset_id == asset_id), None)
+    return "stock_retrieved" if found is not None and found.source == "STOCK_PHOTO" else "gemini_generated"
 
 
 def owner_photo(bp: BusinessBlueprint, slot: Slot) -> UUID | None:
@@ -311,11 +321,7 @@ async def draw_missing(
     Never a factual slot, never when the owner asked for a text-led site, never
     a slot the owner removed, never a slot already filled.
     """
-    if not drafts_allowed(bp):
-        return []
-    todo = [s for s in plan_slots(bp, direction)
-            if s.truth_class != "factual" and not owner_photo(bp, s) and not cached(bp, s.key)
-            and not _removed(bp, s.key)]
+    todo = _slots_to_fill(bp, direction)
     if not todo:
         return []
     gate = asyncio.Semaphore(concurrency)
@@ -329,8 +335,45 @@ async def draw_missing(
     return list(await asyncio.gather(*(one(s) for s in todo)))
 
 
-def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str = "") -> None:
-    """Remember a drawn (or failed) slot on the Blueprint, and in its media plan."""
+def _slots_to_fill(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot]:
+    """Mood and representative slots with no picture yet — never a factual one,
+    never when the owner asked for a text-led site, never a removed slot."""
+    if not drafts_allowed(bp):
+        return []
+    return [s for s in plan_slots(bp, direction)
+            if s.truth_class != "factual" and not owner_photo(bp, s) and not cached(bp, s.key)
+            and not _removed(bp, s.key)]
+
+
+async def retrieve_missing(
+    bp: BusinessBlueprint,
+    direction: CreativeDirection,
+    trade: str,
+    *,
+    concurrency: int = 3,
+    retriever: Callable[..., Awaitable[list[tuple[Any, Any]]]] | None = None,
+) -> list[tuple[Slot, Any]]:
+    """Find a verified real photograph for every slot that has none, a few at a time.
+
+    The same slots `draw_missing` would draw, found instead of drawn: the brief
+    comes from the Creative Director's own shoot brief, the loop is
+    `website.image_retrieval`, and a slot that finds nothing stays empty.
+    Returns (slot, Outcome) pairs.
+    """
+    from platform_core.website.image_retrieval import brief_for_slot, retrieve_many
+
+    todo = _slots_to_fill(bp, direction)
+    if not todo:
+        return []
+    briefs = [brief_for_slot(s, direction, trade) for s in todo]
+    by_key = {s.key: s for s in todo}
+    results = await (retriever or retrieve_many)(briefs, concurrency=concurrency)
+    return [(by_key[brief.key], outcome) for brief, outcome in results]
+
+
+def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str = "", *,
+           stock: bool = False) -> None:
+    """Remember a found or drawn (or failed) slot on the Blueprint, and in its media plan."""
     bp.media_generation_requests = [
         r for r in bp.media_generation_requests if not (r.role == "visual" and r.key == slot.key)
     ]
@@ -341,13 +384,15 @@ def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str
     if asset_id and all(m.asset_id != asset_id for m in bp.media_assets):
         bp.media_assets.append(MediaReference(
             asset_id=asset_id, role=slot.role if slot.role in {"hero", "offering"} else "gallery",
-            label=slot.label, source="AI_GENERATED",
+            label=slot.label.replace("Draft visual", "Stock photo") if stock else slot.label,
+            source="STOCK_PHOTO" if stock else "AI_GENERATED",
         ))
     for entry in bp.media_plan:
         if entry.key == slot.key:
             entry.status = "ready" if asset_id else "failed"
             entry.asset_id = asset_id or entry.asset_id
-            entry.source = "gemini_generated" if asset_id else entry.source
+            if asset_id:
+                entry.source = "stock_retrieved" if stock else "gemini_generated"
             entry.reason = "" if asset_id else (reason or "error")[:200]
 
 
@@ -379,6 +424,35 @@ def section_image_prompt(
         return None
     return build_prompt(subject=subject or trade, purpose="item", truth_class="representative", brief=brief,
                         trade=trade), "4:3"
+
+
+def section_image_brief(theme: dict[str, object], section_type: str, trade: str, *, subject: str = "") -> Any:
+    """The `SlotBrief` for one picture asked for from the editor or a legacy fill —
+    the same slot `section_image_prompt` would draw, in the site's own visual
+    world — or None where a found picture would stand in for evidence."""
+    from platform_core.website.image_retrieval import brief_for_slot
+
+    direction = theme.get("creative_direction") if isinstance(theme.get("creative_direction"), dict) else {}
+    assert isinstance(direction, dict)
+    arche = str(direction.get("archetype") or theme.get("site_archetype") or "")
+    shown = direction or {"palette": {"mode": theme.get("palette_mode", "light"),
+                                      "primary": theme.get("primary_color", ""),
+                                      "accent": theme.get("accent_color", "")},
+                          "hero": theme.get("hero_style", "")}
+    hero = str(direction.get("hero") or theme.get("hero_style") or "")
+    if section_type in {"hero", "cta_band"}:
+        slot = Slot("hero" if section_type == "hero" else "cta", subject or _HERO_MOOD.get(arche, trade),
+                    aspect_for_hero(hero) if section_type == "hero" else "16:9", "hero", "",
+                    purpose="hero", truth_class="mood", section=section_type)
+    elif section_type in {"about", "text_block"}:
+        slot = Slot("story", subject or _STORY.get(arche, trade), "4:5", "gallery", "",
+                    purpose="story", truth_class="mood", section=section_type)
+    elif arche in _EVIDENCE_LED_ARCHETYPES:
+        return None
+    else:
+        slot = Slot("item", subject or trade, "4:3", "offering", "", purpose="item",
+                    truth_class="representative", section=section_type)
+    return brief_for_slot(slot, shown, trade)
 
 
 # What the editor may offer for each picture a section can carry — the one

@@ -192,7 +192,7 @@ async def test_a_stale_job_does_nothing(wired):
 
 async def test_the_owner_can_ask_for_a_logo_but_not_over_their_own(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "g-present")
-    monkeypatch.delenv("IMAGE_PROVIDER", raising=False)
+    monkeypatch.setenv("IMAGE_PROVIDER", "gemini")  # a logo can only be drawn, and drawing is opt-in
     bp = blueprint()
     business = Business(id=bp.business_id, version=1, metadata_={"interview": bp.model_dump(mode="json")})
     monkeypatch.setattr(Service, "load_business", AsyncMock(return_value=business))

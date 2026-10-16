@@ -10,9 +10,13 @@ be drawn (the media truth policy) — is decided by the MediaDirector, and every
 website prompt is written by `website.media_prompts` from the site's own shoot
 brief. Logo prompts live here.
 
-Provider: Gemini only (IMAGE_PROVIDER=gemini, the default, GEMINI_IMAGE_MODEL);
-IMAGE_PROVIDER=none switches drawing off. A failed image is a missing image,
-never a second paid call.
+Drawing is no longer how a website gets its pictures. The default is
+`IMAGE_PROVIDER=stock`: real photographs found, looked at and verified by
+`website.image_retrieval`, which cost a few text/vision calls instead of an image
+model. Gemini drawing remains only as an explicit opt-in (`IMAGE_PROVIDER=gemini`,
+GEMINI_IMAGE_MODEL) — it is never a fallback — and is the only way to draw a
+logo. `IMAGE_PROVIDER=none` switches pictures off. A failed image is a missing
+image, never a second paid call.
 """
 
 from __future__ import annotations
@@ -76,12 +80,31 @@ def brand_logo_prompt(
 
 
 def image_provider() -> str:
-    return (os.getenv("IMAGE_PROVIDER") or "gemini").strip().lower()
+    return (os.getenv("IMAGE_PROVIDER") or "stock").strip().lower()
 
 
 def image_generation_available() -> bool:
-    """Whether Gemini image generation is configured. No key, no button."""
+    """Whether Gemini image DRAWING is configured (explicit opt-in). No key, no button."""
     return image_provider() == "gemini" and bool(os.getenv("GEMINI_API_KEY", "").strip())
+
+
+def picture_source() -> str | None:
+    """Where this server's website pictures come from: "gemini" (drawn, opt-in),
+    "stock" (found and verified online) or None. Drawing wins only when it was
+    asked for by name; otherwise real photographs, when they can be found AND checked."""
+    if image_generation_available():
+        return "gemini"
+    if image_provider() == "stock":
+        from platform_core.website.image_retrieval import retrieval_configured
+
+        if retrieval_configured():
+            return "stock"
+    return None
+
+
+def pictures_available() -> bool:
+    """Whether the build can put pictures on a site at all."""
+    return picture_source() is not None
 
 
 def image_model() -> str:

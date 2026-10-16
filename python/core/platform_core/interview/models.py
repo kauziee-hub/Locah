@@ -281,7 +281,9 @@ class MediaReference(StrictModel):
     # USER_UPLOAD: the owner's own picture. CATALOGUE_EXTRACTED: a picture that
     # came out of the owner's menu/catalogue — still theirs. AI_GENERATED: a
     # draft LOCAH drew; it always loses to either of the others.
-    source: Literal["USER_UPLOAD", "AI_GENERATED", "CATALOGUE_EXTRACTED"] = "USER_UPLOAD"
+    # STOCK_PHOTO: a real photograph found online and checked against the slot
+    # (website.image_retrieval) — never presented as the business's own.
+    source: Literal["USER_UPLOAD", "AI_GENERATED", "CATALOGUE_EXTRACTED", "STOCK_PHOTO"] = "USER_UPLOAD"
 
 
 # How far a picture may stand in for the real thing (the media truth policy):
@@ -295,7 +297,7 @@ class MediaReference(StrictModel):
 TruthClass = Literal["factual", "representative", "mood", "graphic"]
 MediaSource = Literal[
     "owner_uploaded", "catalogue_extracted", "existing_business_asset", "gemini_generated",
-    "graphic_generated",
+    "graphic_generated", "stock_retrieved",
 ]
 
 
