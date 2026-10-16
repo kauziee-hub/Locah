@@ -484,9 +484,17 @@ class GeminiProvider:
 # ---------------------------------------------------------------- DeepSeek
 
 DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
-# The model LOCAH was asked to use. Pin another with DEEPSEEK_MODEL; the id is
-# sent exactly as configured and never silently swapped for a different model.
-DEEPSEEK_DEFAULT_MODEL = "DeepSeek-V4.1-Flash"
+# The model LOCAH was asked to use: DeepSeek's "DeepSeek-V4.1-Flash". That is its
+# DISPLAY name; its API id (GET /models) is `deepseek-flash`, which takes text and
+# image input. Pin another id with DEEPSEEK_MODEL; it is sent as configured. The
+# display name is accepted too and mapped to the id of the same model.
+DEEPSEEK_DEFAULT_MODEL = "deepseek-flash"
+_DEEPSEEK_MODEL_IDS = {"deepseek-v4.1-flash": "deepseek-flash"}
+
+
+def deepseek_model_id(configured: str) -> str:
+    """The API id for a configured model: the display name maps to its id; anything else is as given."""
+    return _DEEPSEEK_MODEL_IDS.get(configured.strip().casefold(), configured.strip())
 
 # Routine extraction and picture judging answer while someone waits, so they skip
 # the reasoning pass (DeepSeek's `thinking` switch). Website strategy and copy
@@ -542,13 +550,13 @@ class DeepSeekProvider:
     def model_for(self, purpose: str | None) -> str:
         key = str(purpose or "")
         if key == "business.interview":
-            return os.getenv("DEEPSEEK_INTERVIEW_MODEL", "").strip() or self._model
+            return deepseek_model_id(os.getenv("DEEPSEEK_INTERVIEW_MODEL", "")) or self._model
         if key.startswith("website."):
-            return os.getenv("DEEPSEEK_WEBSITE_MODEL", "").strip() or self._model
+            return deepseek_model_id(os.getenv("DEEPSEEK_WEBSITE_MODEL", "")) or self._model
         if key.startswith("document."):
-            return os.getenv("DEEPSEEK_DOCUMENT_MODEL", "").strip() or self._model
+            return deepseek_model_id(os.getenv("DEEPSEEK_DOCUMENT_MODEL", "")) or self._model
         if key.startswith("image."):
-            return os.getenv("DEEPSEEK_VISION_MODEL", "").strip() or self._model
+            return deepseek_model_id(os.getenv("DEEPSEEK_VISION_MODEL", "")) or self._model
         return self._model
 
     def build_body(
@@ -727,7 +735,7 @@ def get_ai_provider() -> AIModelProvider:
     if choice == "deepseek":
         api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
         if api_key:
-            model = os.getenv("DEEPSEEK_MODEL", DEEPSEEK_DEFAULT_MODEL).strip() or DEEPSEEK_DEFAULT_MODEL
+            model = deepseek_model_id(os.getenv("DEEPSEEK_MODEL", "").strip() or DEEPSEEK_DEFAULT_MODEL)
             base_url = os.getenv("DEEPSEEK_BASE_URL", DEEPSEEK_DEFAULT_BASE_URL).strip() or DEEPSEEK_DEFAULT_BASE_URL
             return DeepSeekProvider(api_key, model, base_url)
         return UnavailableAIProvider()

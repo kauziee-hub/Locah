@@ -255,7 +255,7 @@ def parse_commons(payload: Any) -> list[ImageCandidate]:
             return _plain(item.get("value") if isinstance(item, dict) else "")
 
         licence = field("LicenseShortName")
-        thumb = str(info.get("thumburl") or "")
+        thumb = str(info.get("thumburl") or "").split("?", 1)[0]   # drop Wikimedia's utm_* tracking
         try:
             width, height = int(info.get("width") or 0), int(info.get("height") or 0)
         except (TypeError, ValueError):

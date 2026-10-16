@@ -470,7 +470,7 @@ async def test_verify_image_url_refuses_a_url_outside_the_allowlist_without_any_
 COMMONS = {"query": {"pages": {
     "11": {"pageid": 11, "title": "File:Raw chicken on a board.jpg", "index": 2, "imageinfo": [{
         "width": 4000, "height": 2600, "mime": "image/jpeg", "descriptionurl": "https://commons.wikimedia.org/wiki/File:Raw_chicken_on_a_board.jpg",
-        "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Raw_chicken_on_a_board.jpg/1280px-Raw_chicken_on_a_board.jpg",
+        "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Raw_chicken_on_a_board.jpg/1280px-Raw_chicken_on_a_board.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
         "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"}, "Artist": {"value": "<a href=\"//x\">Ada &amp; Co</a>"},
                         "ImageDescription": {"value": "<p>Chicken on a <b>board</b></p>"}}}]},
     "12": {"pageid": 12, "title": "File:Best match.jpg", "index": 1, "imageinfo": [{
@@ -497,7 +497,7 @@ def test_commons_keeps_only_freely_licensed_photographs_best_match_first() -> No
     chicken = found[1]
     assert chicken.image_url.startswith("https://upload.wikimedia.org/") and "/1280px-" in chicken.image_url
     assert "/500px-" in chicken.preview_url and chicken.preview_url.split("/500px-")[0] == chicken.image_url.split("/1280px-")[0]
-    assert url_allowed(chicken.preview_url)
+    assert url_allowed(chicken.preview_url) and "?" not in chicken.image_url + chicken.preview_url
     assert chicken.photographer == "Ada & Co" and chicken.description.startswith("Raw chicken on a board. Chicken on a board")
     assert chicken.licence == "CC BY-SA 4.0" and url_allowed(chicken.image_url)
     assert chicken.credit_line() == "Ada & Co via Wikimedia Commons (CC BY-SA 4.0)"

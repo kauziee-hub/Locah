@@ -75,7 +75,7 @@ def test_deepseek_is_the_default_provider(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     provider = get_ai_provider()
     assert isinstance(provider, DeepSeekProvider) and provider.provider_name == "deepseek"
-    assert provider.model_name == DEEPSEEK_DEFAULT_MODEL == "DeepSeek-V4.1-Flash"
+    assert provider.model_name == DEEPSEEK_DEFAULT_MODEL == "deepseek-flash"
 
 
 def test_the_model_id_is_sent_exactly_as_configured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,6 +84,18 @@ def test_the_model_id_is_sent_exactly_as_configured(monkeypatch: pytest.MonkeyPa
     assert get_ai_provider().model_name == "some-pinned-model"
     monkeypatch.setenv("DEEPSEEK_MODEL", "  ")
     assert get_ai_provider().model_name == DEEPSEEK_DEFAULT_MODEL  # blank means the default, not nothing
+
+
+@pytest.mark.parametrize("configured", ["DeepSeek-V4.1-Flash", "deepseek-v4.1-flash", " DEEPSEEK-V4.1-FLASH "])
+def test_the_display_name_of_the_requested_model_maps_to_its_api_id(
+    monkeypatch: pytest.MonkeyPatch, configured: str
+) -> None:
+    """DeepSeek lists the model as id `deepseek-flash`, name `DeepSeek-V4.1-Flash` (GET /models)."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.setenv("DEEPSEEK_MODEL", configured)
+    assert get_ai_provider().model_name == "deepseek-flash"
+    monkeypatch.setenv("DEEPSEEK_VISION_MODEL", configured)
+    assert DeepSeekProvider("k").model_for("image.judge") == "deepseek-flash"
 
 
 def test_without_a_deepseek_key_there_is_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,7 +142,7 @@ async def test_a_structured_request_is_built_for_the_chat_completions_endpoint(m
     assert call["headers"]["Authorization"] == "Bearer ds-secret"
     assert "ds-secret" not in json.dumps(call["body"]) and "ds-secret" not in call["url"]
     body = call["body"]
-    assert body["model"] == DEEPSEEK_DEFAULT_MODEL and body["response_format"] == {"type": "json_object"}
+    assert body["model"] == "deepseek-flash" and body["response_format"] == {"type": "json_object"}
     assert body["max_tokens"] == 500 and body["temperature"] == 0.4 and body["stream"] is False
     system, user = body["messages"]
     assert system["role"] == "system" and system["content"].startswith("Be brief.")
