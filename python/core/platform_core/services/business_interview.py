@@ -396,7 +396,7 @@ async def place_found_pictures(
             session, business_id=business_id, actor_id=actor_id, purpose="website",
             url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type,
             alt_text=f"Photograph: {slot.subject or 'cover'}"[:200],
-            credit=f"{photo.photographer} via {photo.provider.title()}",
+            credit=photo.credit or f"{photo.photographer} via {photo.provider.title()}",
             width=photo.width, height=photo.height,
             generated_for=slot.key, generation_job_id=generation_job_id, prompt_version=PROMPT_VERSION,
         )

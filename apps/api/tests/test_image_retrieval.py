@@ -58,6 +58,7 @@ def bad(index: int, why: str = "wrong subject") -> dict[str, Any]:
 
 class FakeSearch:
     provider_name = "fake"
+    query_hint = "Two to four plain words."
 
     def __init__(self, *rounds: list[ImageCandidate]) -> None:
         self.rounds = list(rounds)
@@ -102,11 +103,17 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
                  "IMAGE_ALLOWED_HOSTS", "IMAGE_SEARCH_PROVIDER", "PEXELS_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(ir, "_URL_INPUT_REFUSED", False)
+    # The scripted model takes links; tests of the other modes set their own.
+    monkeypatch.setenv("IMAGE_VISION_INPUT", "url")
 
     async def ok(url: str, **kw: Any) -> tuple[bool, str]:
         return True, "image/jpeg"
 
+    async def no_network(url: str, **kw: Any) -> Any:
+        raise AssertionError(f"a test reached the network for a preview: {url}")
+
     monkeypatch.setattr(ir, "verify_image_url", ok)
+    monkeypatch.setattr(ir, "fetch_preview", no_network)
 
 
 # ---------------------------------------------------------------- search client
@@ -134,10 +141,16 @@ def test_only_https_pexels_cdn_urls_are_allowed(monkeypatch: pytest.MonkeyPatch)
     assert url_allowed("https://cdn.two.test/x.jpg") and not url_allowed("https://images.pexels.com/a.jpg")
 
 
-def test_search_needs_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert not search_configured()
+def test_the_search_source_follows_the_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_core.website.image_search import search_provider_name
+
+    # auto: no Pexels key means Wikimedia Commons, which needs none.
+    assert search_provider_name() == "commons" and search_configured()
     monkeypatch.setenv("PEXELS_API_KEY", "px")
-    assert search_configured()
+    assert search_provider_name() == "pexels" and search_configured()
+    monkeypatch.delenv("PEXELS_API_KEY")
+    monkeypatch.setenv("IMAGE_SEARCH_PROVIDER", "pexels")
+    assert not search_configured()             # asked for by name, but no key
     monkeypatch.setenv("IMAGE_SEARCH_PROVIDER", "other")
     assert not search_configured()
 
@@ -291,9 +304,12 @@ async def test_a_factual_slot_is_never_searched() -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_search_key_or_no_vision_provider_means_no_picture_rather_than_an_unchecked_one() -> None:
+async def test_no_search_key_or_no_vision_provider_means_no_picture_rather_than_an_unchecked_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from platform_core.website.ai_provider import UnavailableAIProvider
 
+    monkeypatch.setenv("IMAGE_SEARCH_PROVIDER", "pexels")   # named, but keyless: no search service at all
     assert (await retrieve_for_slot(brief(), provider=FakeAI([]), search=None)).reason == "not_configured"
     assert (await retrieve_for_slot(brief(), provider=UnavailableAIProvider(), search=FakeSearch())).reason \
         == "not_configured"
@@ -341,6 +357,7 @@ async def test_when_the_provider_refuses_picture_links_previews_are_sent_from_me
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fetched: list[str] = []
+    monkeypatch.setenv("IMAGE_VISION_INPUT", "auto")
 
     async def preview(url: str, **kw: Any) -> ImageInput | None:
         fetched.append(url)
@@ -447,3 +464,126 @@ async def test_verify_image_url_refuses_a_url_outside_the_allowlist_without_any_
     monkeypatch.undo()
     monkeypatch.setattr(ir.httpx, "AsyncClient", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no request")))
     assert await ir.verify_image_url("http://169.254.169.254/latest/meta-data") == (False, "url_not_allowed")
+
+
+# ---------------------------------------------------------------- Wikimedia Commons (no key)
+COMMONS = {"query": {"pages": {
+    "11": {"pageid": 11, "title": "File:Raw chicken on a board.jpg", "index": 2, "imageinfo": [{
+        "width": 4000, "height": 2600, "mime": "image/jpeg", "descriptionurl": "https://commons.wikimedia.org/wiki/File:Raw_chicken_on_a_board.jpg",
+        "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Raw_chicken_on_a_board.jpg/1280px-Raw_chicken_on_a_board.jpg",
+        "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"}, "Artist": {"value": "<a href=\"//x\">Ada &amp; Co</a>"},
+                        "ImageDescription": {"value": "<p>Chicken on a <b>board</b></p>"}}}]},
+    "12": {"pageid": 12, "title": "File:Best match.jpg", "index": 1, "imageinfo": [{
+        "width": 3000, "height": 2000, "mime": "image/jpeg", "descriptionurl": "https://commons.wikimedia.org/wiki/File:Best_match.jpg",
+        "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Best_match.jpg/1280px-Best_match.jpg",
+        "extmetadata": {"LicenseShortName": {"value": "Public domain"}, "Artist": {"value": "Grace"}}}]},
+    "13": {"pageid": 13, "title": "File:Noncommercial.jpg", "index": 3, "imageinfo": [{
+        "width": 3000, "height": 2000, "mime": "image/jpeg", "thumburl": "https://upload.wikimedia.org/x.jpg",
+        "extmetadata": {"LicenseShortName": {"value": "CC BY-NC 2.0"}}}]},
+    "14": {"pageid": 14, "title": "File:Diagram.svg", "index": 4, "imageinfo": [{
+        "width": 500, "height": 500, "mime": "image/svg+xml", "thumburl": "https://upload.wikimedia.org/d.png",
+        "extmetadata": {"LicenseShortName": {"value": "CC0"}}}]},
+    "15": {"pageid": 15, "title": "File:Unlicensed.jpg", "index": 5, "imageinfo": [{
+        "width": 3000, "height": 2000, "mime": "image/jpeg", "thumburl": "https://upload.wikimedia.org/u.jpg",
+        "extmetadata": {}}]},
+}}}
+
+
+def test_commons_keeps_only_freely_licensed_photographs_best_match_first() -> None:
+    from platform_core.website.image_search import parse_commons
+
+    found = parse_commons(COMMONS)
+    assert [c.photo_id for c in found] == ["12", "11"]          # ranked; NC, SVG and unlicensed dropped
+    chicken = found[1]
+    assert chicken.image_url.startswith("https://upload.wikimedia.org/") and "/1280px-" in chicken.image_url
+    assert "/500px-" in chicken.preview_url and chicken.preview_url.split("/500px-")[0] == chicken.image_url.split("/1280px-")[0]
+    assert url_allowed(chicken.preview_url)
+    assert chicken.photographer == "Ada & Co" and chicken.description.startswith("Raw chicken on a board. Chicken on a board")
+    assert chicken.licence == "CC BY-SA 4.0" and url_allowed(chicken.image_url)
+    assert chicken.credit_line() == "Ada & Co via Wikimedia Commons (CC BY-SA 4.0)"
+    assert parse_commons({}) == [] and parse_commons({"query": {}}) == []
+
+
+def test_the_licence_list_is_configurable_and_never_allows_noncommercial(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_core.website.image_search import licence_ok
+
+    assert licence_ok("CC BY 4.0") and licence_ok("CC BY-SA 3.0") and licence_ok("Public domain") and licence_ok("CC0")
+    assert not licence_ok("CC BY-NC 2.0") and not licence_ok("CC BY-ND 4.0") and not licence_ok("") \
+        and not licence_ok("All rights reserved")
+    monkeypatch.setenv("IMAGE_ALLOWED_LICENCES", "public domain,cc0")
+    assert licence_ok("CC0 1.0") and not licence_ok("CC BY 4.0")
+    monkeypatch.setenv("IMAGE_ALLOWED_LICENCES", "public domain,cc0,cc by")
+    assert not licence_ok("CC BY-NC-SA 4.0")
+
+
+@pytest.mark.asyncio
+async def test_commons_search_identifies_itself_and_pages_through_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_core.website.image_search import CommonsSearch, USER_AGENT
+
+    seen: dict[str, Any] = {}
+
+    class _Client:
+        def __init__(self, *a: Any, **k: Any) -> None: ...
+        async def __aenter__(self) -> Any: return self
+        async def __aexit__(self, *e: Any) -> bool: return False
+
+        async def get(self, url: str, params: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+            seen.update(url=url, params=params, headers=headers)
+            return httpx.Response(200, json=COMMONS)
+
+    monkeypatch.setattr("platform_core.website.image_search.httpx.AsyncClient", _Client)
+    found = await CommonsSearch().search("raw chicken", orientation="landscape", per_page=15, page=3)
+    assert [c.photo_id for c in found] == ["12", "11"]
+    assert seen["headers"] == {"User-Agent": USER_AGENT} and seen["url"].endswith("/w/api.php")
+    assert seen["params"]["gsrsearch"] == "raw chicken filetype:bitmap" and seen["params"]["gsroffset"] == 30
+    assert seen["params"]["gsrnamespace"] == 6 and seen["params"]["iiurlwidth"] == 1280
+
+
+def test_the_default_allowed_hosts_cover_pexels_and_wikimedia() -> None:
+    for url in ("https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/F.jpg/1280px-F.jpg",
+                "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/F.jpg/1280px-F.jpg",
+                "https://images.pexels.com/a.jpg"):
+        assert url_allowed(url)
+    assert not url_allowed("https://commons.wikimedia.org/wiki/File:F.jpg")   # a page, not an image host
+
+
+@pytest.mark.asyncio
+async def test_commons_retries_a_query_that_matches_nothing_with_fewer_words(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_core.website.image_search import CommonsSearch
+
+    asked: list[str] = []
+
+    class _Client:
+        def __init__(self, *a: Any, **k: Any) -> None: ...
+        async def __aenter__(self) -> Any: return self
+        async def __aexit__(self, *e: Any) -> bool: return False
+
+        async def get(self, url: str, params: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+            asked.append(params["gsrsearch"])
+            return httpx.Response(200, json=COMMONS if params["gsrsearch"].startswith("raw chicken filetype") else {})
+
+    monkeypatch.setattr("platform_core.website.image_search.httpx.AsyncClient", _Client)
+    found = await CommonsSearch().search("raw chicken meat butcher shop counter", orientation="landscape", per_page=10)
+    assert [c.photo_id for c in found] == ["12", "11"]
+    assert asked == ["raw chicken meat butcher shop counter filetype:bitmap",   # as written
+                     "raw chicken meat filetype:bitmap",                        # three words
+                     "raw chicken filetype:bitmap"]                             # two words: found
+    asked.clear()
+    assert await CommonsSearch().search("zzzz", orientation="landscape", per_page=10) == []
+    assert asked == ["zzzz filetype:bitmap"]                                    # nothing shorter to try
+
+
+@pytest.mark.asyncio
+async def test_the_query_writer_is_told_how_the_search_service_wants_queries_worded() -> None:
+    ai = FakeAI([[good(0)]])
+    await retrieve_for_slot(brief(), provider=ai, search=FakeSearch([candidate(1)]))
+    assert ai.query_prompts[0]["search_service_wording"] == "Two to four plain words."
+
+
+def test_previews_held_in_memory_are_the_default_so_the_model_certainly_sees_the_picture(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IMAGE_VISION_INPUT")
+    assert ir.vision_input_mode() == "thumbnail"
+    monkeypatch.setenv("IMAGE_VISION_INPUT", "auto")
+    assert ir.vision_input_mode() == "auto"
+    monkeypatch.setenv("IMAGE_VISION_INPUT", "nonsense")
+    assert ir.vision_input_mode() == "thumbnail"

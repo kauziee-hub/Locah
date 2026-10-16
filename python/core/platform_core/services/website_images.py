@@ -113,7 +113,7 @@ class WebsiteImageService:
             retrieved: dict[str, Any] = await MediaService.persist_retrieved(
                 session, business_id=business_id, actor_id=actor_id, purpose=purpose,
                 url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type, alt_text=alt_text,
-                credit=f"{photo.photographer} via {photo.provider.title()}",
+                credit=photo.credit or f"{photo.photographer} via {photo.provider.title()}",
                 width=photo.width, height=photo.height,
                 generated_for=generated_for, prompt_version=PROMPT_VERSION,
             )

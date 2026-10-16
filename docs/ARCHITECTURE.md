@@ -125,12 +125,13 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   `website/ai_provider.py`; the Creative Director never names a vendor.
 - **Website pictures are found, not drawn.** For each picture slot the
   MediaDirector plans (hero, categories, items, story), `website/image_retrieval.py`
-  asks the provider for search queries, queries a stock-photo API
-  (`website/image_search.py`), filters candidates without a model, shows the best
+  asks the provider for search queries, queries a photo API
+  (`website/image_search.py`: Pexels when keyed, otherwise keyless Wikimedia Commons
+  limited to freely licensed files), filters candidates without a model, shows the best
   few to a vision-capable model in one call, applies LOCAH's own acceptance rule,
   checks the winner's URL serves an image, and otherwise retries with the rejection
-  reasons (bounded by `IMAGE_MAX_ROUNDS`). Nothing is downloaded: a verified photo
-  is a `media_assets` row whose `public_url` is the stock URL (`source_type
+  reasons (bounded by `IMAGE_MAX_ROUNDS`). Nothing is stored: the vision check sees a small preview held in memory,
+  and a verified photo is a `media_assets` row whose `public_url` is the photo URL (`source_type
   stock_photo`, bucket `external`), referenced by id like any picture. Factual
   slots are never filled, and a slot that finds nothing stays empty — never an
   unchecked picture. Gemini drawing remains only as the explicit

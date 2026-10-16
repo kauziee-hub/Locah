@@ -46,6 +46,8 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("PEXELS_API_KEY", "IMAGE_PROVIDER", "GEMINI_API_KEY", "AI_PROVIDER", "IMAGE_SEARCH_PROVIDER"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    # Most of these tests are about a keyed source; the keyless default has its own test below.
+    monkeypatch.setenv("IMAGE_SEARCH_PROVIDER", "pexels")
 
 
 # ---------------------------------------------------------------- which source a server uses
@@ -60,6 +62,13 @@ def test_with_both_keys_pictures_are_found_not_drawn(monkeypatch: pytest.MonkeyP
 def test_a_gemini_key_alone_never_switches_drawing_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "g-present")  # the voice key
     assert images.picture_source() is None
+
+
+def test_with_no_photo_key_pictures_are_still_found_from_wikimedia_commons(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IMAGE_SEARCH_PROVIDER")                 # auto, and no PEXELS_API_KEY
+    assert images.picture_source() == "stock"
+    monkeypatch.delenv("DEEPSEEK_API_KEY")
+    assert images.picture_source() is None                       # still needs something that can look at them
 
 
 def test_found_pictures_need_a_search_key_and_a_provider_that_can_look(monkeypatch: pytest.MonkeyPatch) -> None:

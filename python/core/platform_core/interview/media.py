@@ -182,7 +182,7 @@ async def _apply_hero_found(
         page_url=found.page_url,
         mime_type=found.mime_type,
         alt_text="Photograph for the top of the website",
-        credit=f"{found.photographer} via {found.provider.title()}",
+        credit=found.credit or f"{found.photographer} via {found.provider.title()}",
         width=found.width,
         height=found.height,
         generated_for="hero",
