@@ -528,25 +528,37 @@ def weighted_score(verdict: Verdict, brief: PhotoBrief) -> int:
     return int(max(0, min(100, round(total) - penalty)))
 
 
-def qualifies(verdict: Verdict, brief: PhotoBrief) -> bool:
-    """LOCAH's own acceptance rule. The model's decision is necessary, not enough."""
-    if verdict.decision != "accepted" or verdict.score < accept_score():
-        return False
-    if not (verdict.subject_match and verdict.style_fit and verdict.composition_fit):
-        return False
+def why_not(verdict: Verdict, brief: PhotoBrief) -> str:
+    """The first of LOCAH's rules a picture fails, or "" when it qualifies."""
+    if verdict.decision != "accepted":
+        return f"judge said {verdict.decision}"
+    if verdict.score < accept_score():
+        return f"judge score {verdict.score} < {accept_score()}"
+    for flag in ("subject_match", "style_fit", "composition_fit"):
+        if not getattr(verdict, flag):
+            return f"not {flag}"
     # Hard gates: never text or watermarks, never a subject the business does
     # not offer, never a picture that looks generated.
-    if verdict.has_text_or_watermark or verdict.shows_unoffered_subject or verdict.looks_ai_generated:
-        return False
+    for flag in ("has_text_or_watermark", "shows_unoffered_subject", "looks_ai_generated"):
+        if getattr(verdict, flag):
+            return flag
     if verdict.has_people and any(rule.startswith("people") for rule in brief.avoid):
-        return False
+        return "people where the brief forbids them"
     if verdict.business_relevance is not None and verdict.business_relevance < 6:
-        return False
+        return f"business_relevance {verdict.business_relevance} < 6"
     if verdict.photo_quality is not None and verdict.photo_quality < 6:
-        return False
+        return f"photo_quality {verdict.photo_quality} < 6"
     if brief.section_role in {"hero", "statement"} and verdict.text_space is not None and verdict.text_space < 5:
-        return False
-    return weighted_score(verdict, brief) >= accept_score()
+        return f"text_space {verdict.text_space} < 5"
+    weighted = weighted_score(verdict, brief)
+    if weighted < accept_score():
+        return f"weighted {weighted} < {accept_score()}"
+    return ""
+
+
+def qualifies(verdict: Verdict, brief: PhotoBrief) -> bool:
+    """LOCAH's own acceptance rule. The model's decision is necessary, not enough."""
+    return not why_not(verdict, brief)
 
 
 # ----------------------------------------------------------------- results
@@ -926,7 +938,7 @@ async def judge(
 # ----------------------------------------------------------------- the pool
 async def gather_pool(
     search: ImageSearchProvider, brief: PhotoBrief, queries: list[str], *, skip: set[str],
-    pages: dict[str, int], fresh: bool = False, log: list[dict[str, Any]] | None = None,
+    pages: dict[str, int], fresh: bool = False, log: list[dict[str, Any]] | None = None, round_number: int = 0,
 ) -> tuple[list[ImageCandidate], dict[str, int]]:
     """Every source's candidates for the round's searches, de-duplicated and
     filtered without a model. Returns (pool, how many searches found each)."""
@@ -939,7 +951,10 @@ async def gather_pool(
         for i, query in enumerate(queries):
             for source in sources:
                 name = source.provider_name
-                minor_cap = editorial_queries_for_minor_slots()
+                # A product slot starts with the tag source's breadth; when that found
+                # nothing usable, the editorial source competes in the next round.
+                minor_cap = editorial_queries_for_minor_slots() if round_number == 0 \
+                    else max(2, editorial_queries_for_minor_slots())
                 if name == "unsplash" and (i >= editorial or (intent.importance == "minor" and i >= minor_cap)):
                     continue  # the hourly quota is spent where editorial pictures matter
                 calls.append((query, source))
@@ -1070,7 +1085,8 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
         errors: list[dict[str, Any]] = []
         try:
             pool, hits = await gather_pool(search, brief, queries, skip=site.used | rejected, pages=pages,
-                                           fresh=fresh and round_number == 0, log=errors)
+                                           fresh=fresh and round_number == 0, log=errors,
+                                           round_number=round_number)
         except ImageSearchError as exc:
             outcome.reason = "search_failed"
             outcome.log.append({"round": round_number + 1, "queries": queries, "error": str(exc)[:120]})
@@ -1161,7 +1177,8 @@ def _audit(candidate: ImageCandidate, verdict: Verdict | None, brief: PhotoBrief
     flags = [name for name in ("has_text_or_watermark", "has_people", "shows_unoffered_subject", "cliche_stock",
                                "looks_ai_generated", "too_busy", "similar_to_site") if getattr(verdict, name)]
     row.update(decision=verdict.decision, score=verdict.score, weighted=weighted_score(verdict, brief),
-               qualifies=qualifies(verdict, brief), flags=flags, reasons=verdict.reasons[:2])
+               qualifies=qualifies(verdict, brief), why_not=why_not(verdict, brief), flags=flags,
+               rubric=_rubric(verdict), reasons=verdict.reasons[:2])
     return row
 
 
