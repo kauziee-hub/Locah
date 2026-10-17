@@ -146,3 +146,61 @@ def merge(personalized: dict[str, Any], live: dict[str, Any], base: dict[str, An
         out["navigation"] = live.get("navigation") or []
         kept.append("navigation")
     return out, kept
+
+
+def _live_section(section: dict[str, Any]) -> dict[str, Any]:
+    """A live section as payload, its module binding kept."""
+    out = _as_payload_section(section)
+    if section.get("module_binding"):
+        out["module_binding"] = section["module_binding"]
+    return out
+
+
+def _live_page(page: dict[str, Any], sections: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"slug": page.get("slug"), "title": page.get("title"), "page_type": page.get("page_type"),
+            "seo_title": page.get("seo_title"), "seo_description": page.get("seo_description"),
+            "sections": sections}
+
+
+def section_key(sections: list[dict[str, Any]], section_id: str) -> str | None:
+    """The merge key ("type" or "type#n") of the section with this id."""
+    return next((key for key, s in _keyed(sections) if str(s.get("id")) == section_id), None)
+
+
+def replace_scope(personalized: dict[str, Any], live: dict[str, Any], scope: dict[str, Any]
+                  ) -> tuple[dict[str, Any] | None, str]:
+    """The live draft, untouched, with only ``scope`` taken from a fresh composition.
+
+    ``scope`` is ``{"page": slug}`` — the whole page regenerated — or
+    ``{"page": slug, "section": "type#n"}`` — one section. Everything else,
+    including every section the owner edited by hand, the theme and the
+    navigation, stays exactly as it is: the owner asked for this part anew,
+    not the site. Returns (None, reason) when the fresh composition has no
+    such page or section (the site's structure moved on since it was built).
+    """
+    slug = str(scope.get("page") or "")
+    key = scope.get("section")
+    live_pages = live.get("pages") or []
+    target = next((p for p in live_pages if str(p.get("slug")) == slug), None)
+    fresh = next((p for p in personalized.get("pages") or [] if str(p.get("slug")) == slug), None)
+    if target is None:
+        return None, f"the site has no page '{slug}'"
+    if fresh is None:
+        return None, f"a fresh composition has no '{slug}' page to take"
+    fresh_by_key = dict(_keyed(fresh.get("sections") or []))
+    if key and key not in fresh_by_key:
+        return None, f"a fresh composition has no '{key}' on '{slug}'"
+    pages: list[dict[str, Any]] = []
+    for page in live_pages:
+        keyed = _keyed(page.get("sections") or [])
+        if page is not target:
+            sections = [_live_section(s) for _, s in keyed]
+        elif key:
+            sections = [dict(fresh_by_key[k]) if k == key else _live_section(s) for k, s in keyed]
+        else:
+            sections = [dict(s) for s in fresh.get("sections") or []]
+        pages.append(_live_page(page, sections))
+    out = {**personalized, "pages": pages, "navigation": live.get("navigation") or [],
+           "theme_hints": {**(live.get("theme") or {}),
+                           "generation": (personalized.get("theme_hints") or {}).get("generation", {})}}
+    return out, ""

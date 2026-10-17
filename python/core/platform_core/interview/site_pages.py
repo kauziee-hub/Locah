@@ -358,24 +358,6 @@ def _page_hero(eyebrow: str, headline: str, sub: str, image: str | None) -> dict
     return _section("hero", "page", content)
 
 
-def _onward(cta: dict[str, Any] | None, here: str, order_link: str, visit_path: str,
-            archetype: str) -> dict[str, Any] | None:
-    """The closing band of an inner page: never a button to the page it is on."""
-    if not cta:
-        return None
-    url = str(cta["content"].get("cta_url") or "")
-    if url not in {here, "#shop", "#contact"}:
-        return cta
-    content = {**cta["content"]}
-    if order_link and archetype in {"menu_commerce", "product_commerce"}:
-        content["cta_label"], content["cta_url"] = "Order on WhatsApp", order_link
-    elif visit_path:
-        content["cta_label"], content["cta_url"] = "Get in touch", visit_path
-    else:
-        return None
-    return {**cta, "content": content}
-
-
 # The order a home page tells its story in, by art direction: a quiet brand
 # leads with its sentence and its story, a market with its range and how to
 # order, a gym with its numbers. Roles a site does not have are skipped.
@@ -482,7 +464,6 @@ def build(
                      and s["content"].get("anchor") == "shop"), None)
     how = first_of("fulfilment_strip")
     contact_section = first_of("contact")
-    cta = first_of("cta_band")
 
     hero_picture = (hero or {}).get("content", {}).get("image_asset_id")
     statement = statement_for(bp, copy, str((story or {}).get("content", {}).get("body", "")))
@@ -592,15 +573,13 @@ def build(
         kind = section["section_type_id"]
         if section is showcase and teaser:
             home_out.append(teaser)
-            if pillars_section:
+            if pillars_section and not about_page:
                 home_out.append(pillars_section)
             continue
         if kind == "fulfilment_strip" and range_page:
-            # The range's page lists how ordering works beside the range; the
-            # home page walks through it as steps.
-            steps = section["content"].get("items") or []
-            home_out.append(_section("fulfilment_strip", "steps" if len(steps) >= 3 else "icons",
-                                     {**section["content"], "anchor": "how"}))
+            # How ordering works lives once, on the range's own page, beside
+            # what is ordered (certification: the menu page replayed home's
+            # steps, FAQ and closing band word for word).
             if numbers_section:
                 home_out.append(numbers_section)
             continue
@@ -614,9 +593,9 @@ def build(
         if kind == "cta_band":
             if not about_page and rows_section:
                 home_out.append(rows_section)
-            # A few questions on home; every one on the visit page.
-            questions = faq_section(faqs[:4] if visit_page else faqs[:6], "split" if dna_seed % 2 else "accordion",
-                                    "Questions, answered")
+            # The questions live once: on the visit page when there is one.
+            questions = None if visit_page else faq_section(
+                faqs[:6], "split" if dna_seed % 2 else "accordion", "Questions, answered")
             if questions:
                 home_out.append(questions)
         home_out.append(section)
@@ -631,7 +610,7 @@ def build(
             after = next((i for i, s in enumerate(home_out) if s["section_type_id"] in {
                 "product_showcase", "category_showcase"}), 0)
         home_out.insert(after + 1, numbers_section)
-    if pillars_section and pillars_section not in home_out:
+    if pillars_section and pillars_section not in home_out and not about_page:
         at = next((i for i, s in enumerate(home_out) if s["section_type_id"] in {"product_showcase",
                                                                                  "category_showcase"}), 0)
         home_out.insert(at + 1, pillars_section)
@@ -676,13 +655,13 @@ def build(
             steps = how["content"].get("items") or []
             range_sections.append(_section("fulfilment_strip", "steps" if len(steps) >= 3 else "icons",
                                            {**how["content"]}))
-        ordering = [f for f in faqs if not f["q"].startswith(("Where", "When"))]
-        ordering_qs = faq_section(ordering[:5], "accordion", "Ordering, answered")
-        if ordering_qs:
-            range_sections.append(ordering_qs)
-        onward = _onward(cta, range_path, order_link, visit_path, archetype)
-        if onward:
-            range_sections.append(onward)
+        if not visit_page:
+            ordering = [f for f in faqs if not f["q"].startswith(("Where", "When"))]
+            ordering_qs = faq_section(ordering[:5], "accordion", "Ordering, answered")
+            if ordering_qs:
+                range_sections.append(ordering_qs)
+        # The page ends on its own last section and the footer: home's closing
+        # band on every page read as one page replayed.
         pages.append({"slug": slug, "title": trade_label, "page_type": page_type, "sections": range_sections,
                       "seo_title": f"{trade_label} — {name}"[:160],
                       "seo_description": str(full["content"].get("subtitle") or "")[:300]})
@@ -701,15 +680,17 @@ def build(
             about_sections.append(_section("media_text", "sticky" if pictured_rows >= 2 else "alternating",
                                            {"items": rows}))
         if pillars_section:
-            # The whole of what the business stands on, as cards this time.
-            cards = {k: v for k, v in pillars_section["content"].items() if k != "image_asset_id"}
-            about_sections.append(_section("pillars", "cards", cards))
+            # What the business stands on lives here, once — numbered beside a
+            # picture or as a ruled strip, never a grid of icon cards.
+            stands_on = deepcopy(pillars_section)
+            if stands_on["layout_variant"] == "cards":
+                stands_on["layout_variant"] = "numbered" if all(
+                    p.get("body") for p in stands_on["content"].get("items") or []) else "strip"
+            about_sections.append(stands_on)
         for kind in ("feature_grid", "highlights"):
             about_sections += [s for s in home if s["section_type_id"] == kind and s not in home_out]
-        if numbers_section:
+        if numbers_section and numbers_section not in home_out:
             about_sections.append(numbers_section)
-        if cta:
-            about_sections.append(cta)
         pages.append({"slug": "about", "title": "About", "page_type": "about", "sections": about_sections,
                       "seo_title": f"About — {name}"[:160],
                       "seo_description": str(content.get("body") or "")[:300]})
@@ -729,9 +710,6 @@ def build(
         everything = faq_section(faqs, "split", "Questions, answered")
         if everything:
             visit_sections.append(everything)
-        onward = _onward(cta, visit_path, order_link, "", archetype)
-        if onward:
-            visit_sections.append(onward)
         pages.append({"slug": "visit", "title": "Visit", "page_type": "contact", "sections": visit_sections,
                       "seo_title": f"Visit — {name}"[:160], "seo_description": sub[:300]})
 

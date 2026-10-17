@@ -584,3 +584,51 @@ async def set_languages(
                                 business_id=business_id, correlation_id=actor.request.correlation_id)
     await session.commit()
     return {"data": {"languages": chosen}, "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+async def _regenerate(business_id: UUID, actor: BusinessActorContext, session: AsyncSession, *,
+                      page_id: UUID | None = None, section_id: UUID | None = None) -> dict[str, Any]:
+    """Queue fresh words for one page or one section; everything else stays as it is."""
+    from platform_core.exceptions import ResourceNotFound
+    from platform_core.services.business_interview import BusinessInterviewService
+
+    aggregate = await WebsiteService.get_aggregate(session, business_id=business_id)
+    pages = (aggregate.get("draft") or {}).get("pages") or []
+    if section_id is not None:
+        page = next((p for p in pages if any(str(s.get("id")) == str(section_id) for s in p.get("sections") or [])),
+                    None)
+    else:
+        page = next((p for p in pages if str(p.get("id")) == str(page_id)), None)
+    if page is None:
+        raise ResourceNotFound("Website section" if section_id is not None else "Website page")
+    business = await BusinessInterviewService.load_business(session, business_id, lock=True)
+    job = await BusinessInterviewService.regenerate(
+        session, business, BusinessInterviewService.read(business), page_slug=str(page["slug"]),
+        section_id=str(section_id) if section_id is not None else None,
+        actor_id=actor.request.identity_id, correlation_id=actor.request.correlation_id,
+    )
+    await session.commit()
+    return {"data": WebsiteGenerationService.serialize_job(job),
+            "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+@router.post("/{business_id}/website/sections/{section_id}/regenerate")
+async def regenerate_section(
+    business_id: UUID,
+    section_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_EDIT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """The owner asks LOCAH to write this one section again, in the site's own direction."""
+    return await _regenerate(business_id, actor, session, section_id=section_id)
+
+
+@router.post("/{business_id}/website/pages/{page_id}/regenerate")
+async def regenerate_page(
+    business_id: UUID,
+    page_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_EDIT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """The owner asks LOCAH to write this one page again; other pages are untouched."""
+    return await _regenerate(business_id, actor, session, page_id=page_id)

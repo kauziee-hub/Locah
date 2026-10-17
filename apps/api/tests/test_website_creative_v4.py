@@ -75,6 +75,55 @@ def test_merge_respects_a_section_the_owner_removed_or_added() -> None:
     assert "fulfilment_strip" not in kinds and "gallery" in kinds and kinds.index("gallery") < kinds.index("contact")
 
 
+def _site(**pages: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"pages": [{"slug": slug, "title": slug.title(), "page_type": "custom", "sections": secs}
+                      for slug, secs in pages.items()],
+            "theme": {"dna": {"display": "Fraunces"}}, "navigation": [{"label": "Menu", "path": "/menu"}]}
+
+
+def test_regenerating_one_section_takes_only_that_section() -> None:
+    from platform_core.interview.draft_merge import replace_scope, section_key
+
+    live = _site(home=[{**_s("hero", headline="Owner's own words"), "id": "h"},
+                       {**_s("statement", text="old"), "id": "s1"},
+                       {**_s("statement", text="old too"), "id": "s2", "module_binding": {"m": 1}},
+                       {**_s("contact"), "id": "c"}],
+                 menu=[{**_s("menu_section", title="Menu, as edited"), "id": "m"}])
+    fresh = {"pages": [{"slug": "home", "sections": [_s("hero", headline="Fresh"), _s("statement", text="new"),
+                                                     _s("statement", text="new too"), _s("contact")]},
+                       {"slug": "menu", "sections": [_s("menu_section", title="Fresh menu")]}],
+             "navigation": [], "theme_hints": {"dna": {"display": "Other"}, "generation": {"stage": "x"}}}
+    key = section_key(live["pages"][0]["sections"], "s2")
+    assert key == "statement#1"
+    merged, why = replace_scope(fresh, live, {"page": "home", "section": key})
+    assert merged is not None and not why
+    home = merged["pages"][0]["sections"]
+    assert [s["content"].get("text") or s["content"].get("headline") for s in home[:3]] == [
+        "Owner's own words", "old", "new too"]  # only the asked-for section is new
+    assert merged["pages"][1]["sections"][0]["content"]["title"] == "Menu, as edited"
+    assert merged["theme_hints"]["dna"]["display"] == "Fraunces"  # the site keeps its look
+    assert merged["navigation"] == live["navigation"]
+    assert home[2].get("module_binding") is None  # the fresh section stands on its own
+
+
+def test_regenerating_a_page_takes_that_page_and_keeps_every_other() -> None:
+    from platform_core.interview.draft_merge import replace_scope
+
+    live = _site(home=[{**_s("hero", headline="Kept"), "id": "h", "module_binding": {"k": 1}}],
+                 menu=[{**_s("menu_section", title="Old menu"), "id": "m"}])
+    fresh = {"pages": [{"slug": "home", "sections": [_s("hero", headline="Fresh")]},
+                       {"slug": "menu", "sections": [_s("menu_section", title="Fresh menu"), _s("cta_band")]}],
+             "navigation": [], "theme_hints": {}}
+    merged, _ = replace_scope(fresh, live, {"page": "menu"})
+    assert merged is not None
+    assert merged["pages"][0]["sections"][0]["content"]["headline"] == "Kept"
+    assert merged["pages"][0]["sections"][0]["module_binding"] == {"k": 1}
+    assert [s["section_type_id"] for s in merged["pages"][1]["sections"]] == ["menu_section", "cta_band"]
+    # A page the fresh composition does not have cannot be regenerated: nothing changes.
+    none, why = replace_scope(fresh, live, {"page": "visit"})
+    assert none is None and "visit" in why
+
+
 def test_a_fingerprint_ignores_ids_and_asset_urls() -> None:
     a = {**_s("hero", headline="x"), "id": "1", "assets": {"image_asset_id": {"url": "u"}}}
     assert section_fingerprint(a) == section_fingerprint(_s("hero", headline="x"))

@@ -1340,6 +1340,94 @@ class BusinessInterviewService:
         )
 
     @staticmethod
+    async def regenerate(
+        session: AsyncSession,
+        business: Business,
+        bp: BusinessBlueprint,
+        *,
+        page_slug: str,
+        section_id: str | None,
+        actor_id: UUID,
+        correlation_id: str,
+    ) -> WebsiteGenerationJob:
+        """Write one page — or one section — of a built site anew, in the site's own direction.
+
+        The same personalization job as Build (a fresh creative call, the
+        site's existing design concept kept), but only the asked-for part is
+        taken from it (draft_merge.replace_scope): every other section — the
+        owner's hand edits included — the theme and the navigation stay as
+        they are. The owner asked for this part again, so a hand edit inside
+        it is the one thing replaced.
+        """
+        from platform_core.interview.draft_merge import section_key
+
+        if bp.completion_state.status != "built":
+            raise ValidationError("Build your website first — then any part of it can be written anew.")
+        if bp.template_preferences.source == "USER_STATEMENT":
+            raise ValidationError("This site follows a design you chose; edit its words in the editor.")
+        busy = (await session.execute(select(WebsiteGenerationJob.id).where(
+            WebsiteGenerationJob.business_id == business.id,
+            WebsiteGenerationJob.status.in_(("pending", "running"))))).scalars().first()
+        if busy:
+            raise ConflictError("LOCAH is already writing part of your website. Try again in a minute.")
+        aggregate = await WebsiteService.get_aggregate(session, business_id=business.id)
+        pages = (aggregate.get("draft") or {}).get("pages") or []
+        page = next((p for p in pages if str(p.get("slug")) == page_slug), None)
+        if page is None:
+            raise ResourceNotFound("Website page")
+        scope: dict[str, Any] = {"page": page_slug}
+        if section_id:
+            key = section_key(page.get("sections") or [], section_id)
+            if key is None:
+                raise ResourceNotFound("Website section")
+            scope["section"] = key
+        draft = (await session.execute(select(WebsiteVersion).where(
+            WebsiteVersion.business_id == business.id, WebsiteVersion.version_type == "draft",
+            WebsiteVersion.superseded_at.is_(None)))).scalars().first()
+        if draft is None:
+            raise ResourceNotFound("Website draft")
+        job = WebsiteGenerationJob(business_id=business.id, status="pending", triggered_by=actor_id,
+                                   prompt_version=GENERATION_PLAN_VERSION)
+        session.add(job)
+        await session.flush()
+        job.intake = {
+            "blueprint": bp.model_dump(mode="json"),
+            "base_version_id": str(draft.id),
+            "base_updated_at": draft.updated_at.isoformat(),
+            "composer": "creative-v2",
+            "scope": scope,
+            "generation_plan_version": GENERATION_PLAN_VERSION,
+        }
+        await AsyncJobService.enqueue(
+            session, job_type="website.generate", business_id=business.id,
+            payload={"generation_job_id": str(job.id), "business_id": str(business.id),
+                     "correlation_id": correlation_id},
+            max_attempts=2,
+        )
+        return job
+
+    @staticmethod
+    async def _live_direction(
+        session: AsyncSession, business_id: UUID, bp: BusinessBlueprint, business: Business,
+        media_expected: bool | None,
+    ) -> Any:
+        """The design direction the live site was composed in, or None when it recorded none."""
+        from platform_core.interview.creative_director import CreativeChoices, direct
+
+        aggregate = await WebsiteService.get_aggregate(session, business_id=business_id)
+        recorded = ((aggregate.get("draft") or {}).get("theme") or {}).get("creative_direction") or {}
+        choices = recorded.get("model_choices") if isinstance(recorded, dict) else None
+        if not isinstance(choices, dict) or not choices:
+            return None
+        try:
+            parsed = CreativeChoices.model_validate(choices)
+        except ValueError:
+            return None
+        kept = direct(bp, business.business_type, parsed, media_expected=media_expected)
+        kept.model_choices = parsed.model_dump()
+        return kept
+
+    @staticmethod
     async def _personalize_creative(
         session: AsyncSession,
         job: WebsiteGenerationJob,
@@ -1392,6 +1480,16 @@ class BusinessInterviewService:
         except Exception as exc:  # noqa: BLE001 — the pictures still improve the site
             fallback = type(exc).__name__
             direction, copy, creative_source = baseline, None, "deterministic"
+        scope = (job.intake or {}).get("scope")
+        if scope:
+            # A page or section written anew stays in the site's own design
+            # concept: the direction is rebuilt from the choices the live theme
+            # recorded; only the words are fresh.
+            live_direction = await BusinessInterviewService._live_direction(
+                session, job.business_id, bp, business, expected)
+            if live_direction is not None:
+                live_direction.source = direction.source
+                direction = live_direction
         trade = _trade(bp, direction.archetype)
         plan_media(bp, direction)
         images_started = time.monotonic()
@@ -1497,6 +1595,24 @@ class BusinessInterviewService:
             job.status = "fallback_used"
             job.fallback_reason = fallback
             job.result_version_id = draft.id
+        elif scope:
+            from platform_core.interview.draft_merge import replace_scope
+
+            aggregate = await WebsiteService.get_aggregate(session, business_id=job.business_id)
+            scoped, why = replace_scope(payload, aggregate["draft"], scope)
+            if scoped is None:
+                job.status = "fallback_used"
+                job.fallback_reason = why[:300]
+                job.result_version_id = draft.id
+            else:
+                website = await WebsiteResolver.resolve_website(session, business_id=job.business_id)
+                generated = await WebsiteService.replace_draft_from_generation(
+                    session, business_id=job.business_id, website=website, payload=scoped,
+                    generated_by="interview_regeneration", generation_job_id=job.id,
+                )
+                job.result_version_id = generated.id
+                job.status = "completed"
+                job.fallback_reason = fallback
         else:
             merged: dict[str, Any] | None = payload
             if draft.updated_at.isoformat() != snapshot["base_updated_at"]:
