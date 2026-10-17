@@ -14,6 +14,7 @@
     "./site-studio.css": "./src/site-studio.css",
     "./site-families.css": "./src/site-families.css",
     "./site-experience.css": "./src/site-experience.css",
+    "./site-covers.css": "./src/site-covers.css",
     "./site-dna.css": "./src/site-dna.css"
   },
   "files": [

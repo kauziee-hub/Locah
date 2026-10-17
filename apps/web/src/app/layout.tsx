@@ -16,6 +16,8 @@ import '@platform/ui/site-studio.css'
 import '@platform/ui/site-families.css'
 // Motion, depth and scroll scenes — the experience layer on top.
 import '@platform/ui/site-experience.css'
+// Covers: first screens composed per business, each with its own movement.
+import '@platform/ui/site-covers.css'
 // The design DNA (type, texture, edges, header, cards) and premium sections.
 import '@platform/ui/site-dna.css'
 import '@/components/website/reviews.css'

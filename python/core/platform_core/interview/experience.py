@@ -39,7 +39,10 @@ from platform_core.interview.models import BusinessBlueprint
 EXPERIENCE_VERSION = "experience-v1"
 
 MOTIONS = ("silk", "snap", "float", "calm")
-HERO_SCENES = ("cinematic_zoom", "orbit", "plane", "kinetic", "depth", "aurora")
+# Covers (apps/web/.../experience/Covers.tsx) are first screens composed like a
+# designer's cover, each with its own movement; scenes are the older set.
+COVERS = ("arch", "window", "gallery", "ledger", "signature", "stage")
+HERO_SCENES = ("cinematic_zoom", "orbit", "plane", "kinetic", "depth", "aurora", *COVERS)
 CATALOGUE_LAYOUTS = ("menu_book", "rail", "bento", "spotlight", "stack")
 STORY_LAYOUTS = ("word_reveal", "sticky_split", "collage")
 
@@ -55,6 +58,13 @@ DESCRIBE: dict[str, str] = {
     "kinetic": "poster-sized type that pulls apart around a growing picture — loud, typographic (poster faces only)",
     "depth": "one photograph with framed pictures floating over it at different depths (homes and project work)",
     "aurora": "a slowly moving gradient in the brand colours behind large type — for sites without photos",
+    "arch": "the words beside a tall arched photograph, a small round picture over its edge — warm, crafted",
+    "window": "the headline set across the page with the photograph seen through a band between its lines"
+              " — editorial, cinematic",
+    "gallery": "an editorial collage: three photographs at three sizes around the words (needs 3+ pictures)",
+    "ledger": "a ruled sheet: headline, photograph and the owner's hours, address and phone in cells — precise",
+    "signature": "the food's photograph beside the dishes worth coming for, with prices (needs 3+ priced)",
+    "stage": "the headline centred and one photograph framed on a mat beneath it — quiet, luxurious",
     "menu_book": "a real menu: chapters by category, a rail that follows the reader, diet marks, prices",
     "rail": "a horizontal run of large picture cards, held in place while it travels",
     "bento": "an asymmetric grid of a curated range, the best thing largest",
@@ -77,6 +87,10 @@ class Experience:
     intro: bool
     grain: bool
     reasons: tuple[str, ...] = field(default_factory=tuple)
+    # Every first screen this content could carry (cover_for ranks them once
+    # the design concept is known), and whether the model chose the hero.
+    hero_options: tuple[str, ...] = field(default_factory=tuple)
+    hero_chosen: bool = False
 
     def theme(self) -> dict[str, Any]:
         """What the renderer reads (theme.experience)."""
@@ -99,6 +113,7 @@ class Content:
     story_chars: int
     story_picture: bool
     pictured_categories: int = 0
+    priced_items: int = 0  # named things with the owner's own price
 
 
 def _stable(seed: str, salt: str) -> int:
@@ -125,7 +140,7 @@ def content_of(sections: list[dict[str, Any]], expected_pictures: int = 0) -> Co
     first build (before drafts exist) already composes for the finished site.
     """
     asset_ids: set[str] = set()
-    items = pictured = categories = pictured_categories = story_chars = 0
+    items = pictured = priced = categories = pictured_categories = story_chars = 0
     hero_picture = story_picture = False
     for section in sections:
         content = section.get("content") or {}
@@ -142,6 +157,7 @@ def content_of(sections: list[dict[str, Any]], expected_pictures: int = 0) -> Co
             rows = [r for r in content.get("items") or [] if isinstance(r, dict)]
             items = len(rows)
             pictured = sum(1 for r in rows if r.get("image_asset_id"))
+            priced = sum(1 for r in rows if r.get("name") and r.get("price"))
             categories = len(content.get("categories") or []) or len({r.get("category") for r in rows if r.get("category")})
         if kind == "category_showcase":
             rows = [r for r in content.get("items") or [] if isinstance(r, dict)]
@@ -153,7 +169,7 @@ def content_of(sections: list[dict[str, Any]], expected_pictures: int = 0) -> Co
     return Content(
         pictures=max(len(asset_ids), expected_pictures), hero_picture=hero_picture or expected_pictures > 0,
         items=items, pictured_items=pictured, categories=categories, story_chars=story_chars,
-        story_picture=story_picture, pictured_categories=pictured_categories,
+        story_picture=story_picture, pictured_categories=pictured_categories, priced_items=priced,
     )
 
 
@@ -175,10 +191,13 @@ def motion_for(dims: dict[str, Any], family: str) -> tuple[str, str]:
 
 
 def hero_options(arche: str, motion: str, c: Content, dims: dict[str, Any]) -> list[str]:
-    """Hero scenes this business can really carry, best-suited first.
+    """Every first screen this business can really carry.
 
-    The opening-picture scene (cinematic_zoom) suits almost anyone, so it is
-    the fallback at the end of each list, not the default at its head.
+    The design concept ranks them once it is chosen (site_composer.cover_for),
+    so two businesses of one trade rarely open on the same composition: a
+    ring or a wall only with the photographs to fill it, poster type only
+    where the energy asks for it, floating frames only for homes and project
+    work, a list of dishes only where the owner priced at least three.
     """
     personality = str(dims.get("personality", ""))
     # A ring or a wall shows every picture at once: with fewer than eight the
@@ -189,36 +208,26 @@ def hero_options(arche: str, motion: str, c: Content, dims: dict[str, Any]) -> l
     layered = c.pictures >= 2 and arche in {"real_estate_projects", "project_portfolio"}
     if not c.hero_picture and not c.pictures:
         return ["aurora", "kinetic"] if motion != "calm" else ["aurora"]
-    if motion == "calm":
-        # Quiet, but never a flat banner: layers that drift, or a picture that
-        # opens — and with hardly a photograph, a slow gradient.
-        if layered:
-            return ["depth", "cinematic_zoom"]
-        return ["cinematic_zoom"] if c.pictures >= 2 else ["cinematic_zoom", "aurora"]
-    options: list[str]
-    if arche in {"menu_commerce", "product_commerce"}:
-        # Food is sold by its picture: the opening photograph before poster type.
-        if motion == "snap":
-            options = (["plane"] if wall else []) + ["cinematic_zoom", "kinetic"]
-        elif motion == "float":
-            options = (["orbit", "plane"] if wall else []) + ["cinematic_zoom"]
-        else:
-            options = (["plane", "orbit"] if wall else []) + ["cinematic_zoom"]
-    elif arche == "membership_fitness":
-        options = ["kinetic", "cinematic_zoom"] if personality != "calm" else ["cinematic_zoom"]
-    elif arche in {"real_estate_projects", "project_portfolio"}:
-        options = (["depth"] if layered else []) + (["plane"] if wall else []) + ["cinematic_zoom"]
-    elif arche == "service_appointment":
-        if motion == "snap":
-            options = ["kinetic", "cinematic_zoom"]
-        elif motion == "float" and wall:
-            options = ["orbit", "cinematic_zoom"]
-        else:
-            options = ["cinematic_zoom"]
-    elif arche == "b2b_rfq":
-        options = ["cinematic_zoom"]
-    else:
-        options = ["kinetic", "cinematic_zoom"] if motion in {"snap", "float"} else ["cinematic_zoom"]
+    options: list[str] = []
+    if layered:
+        options.append("depth")
+    if arche in {"menu_commerce", "product_commerce"} and c.priced_items >= 3:
+        options.append("signature")
+    if c.pictures >= 3:
+        options.append("gallery")
+    if wall and motion != "calm":
+        # Rare and earned: a wall of eight or more of the business's own
+        # photographs, so it stays near the front when it is possible at all.
+        options.append("plane")
+        if motion in {"float", "silk"}:
+            options.append("orbit")
+    options += ["arch", "stage", "window"]
+    if arche in {"b2b_rfq", "service_appointment", "local_service", "project_portfolio",
+                 "real_estate_projects"} or personality == "technical":
+        options.append("ledger")
+    options.append("cinematic_zoom")
+    if motion != "calm" and (motion == "snap" or arche == "membership_fitness"):
+        options.append("kinetic")
     return options
 
 
@@ -308,7 +317,9 @@ def choose_experience(
             reasons.append(f"{role} {picked} — from {', '.join(options)}")
         return picked
 
-    hero = decide("hero", hero_options(archetype, motion, c, dims))
+    heroes = hero_options(archetype, motion, c, dims)
+    hero_chosen = str(choices.get("hero") or "") in heroes
+    hero = decide("hero", heroes)
     catalogue = decide("catalogue", catalogue_options(archetype, offering, c))
     story = decide("story", story_options(motion, c, personality))
 
@@ -325,7 +336,48 @@ def choose_experience(
     intro = motion in {"silk", "snap"} and str(dims.get("positioning", "")) in {"premium", "heritage", "modern"}
     grain = family in {"editorial_warm", "premium_dark", "portfolio_sketchbook"}
     return Experience(motion=motion, hero=hero, catalogue=catalogue, story=story, cta=cta, marquee=marquee,
-                      intro=intro, grain=grain, reasons=tuple(reasons))
+                      intro=intro, grain=grain, reasons=tuple(reasons), hero_options=tuple(heroes),
+                      hero_chosen=hero_chosen)
+
+
+# How each design concept opens a site: only with its own covers (a gym's
+# poster concept never opens on a bakery's arch). When the content can carry
+# none of them, whatever it can carry.
+COVER_AFFINITY: dict[str, tuple[str, ...]] = {
+    "noir_editorial": ("window", "cinematic_zoom", "gallery", "signature", "kinetic", "stage"),
+    "warm_craft": ("arch", "signature", "gallery", "stage", "cinematic_zoom", "window"),
+    "quiet_luxury": ("stage", "window", "arch", "cinematic_zoom", "gallery"),
+    "fresh_market": ("signature", "gallery", "window", "arch", "cinematic_zoom", "stage"),
+    "playful_pop": ("gallery", "arch", "signature", "stage", "kinetic", "cinematic_zoom"),
+    "calm_care": ("arch", "stage", "ledger", "gallery", "cinematic_zoom"),
+    "technical_grid": ("ledger", "window", "cinematic_zoom", "stage", "gallery"),
+    "kinetic_sport": ("kinetic", "window", "cinematic_zoom", "gallery", "ledger"),
+}
+# Weights down the ranked list: the concept's first cover most often, its
+# next ones nearly as often — flat enough that five businesses of one trade
+# and one concept spread across several first screens.
+_COVER_WEIGHTS = (5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1)
+
+
+def cover_for(options: tuple[str, ...] | list[str], concept: str, seed: str) -> tuple[str, list[str]]:
+    """The first screen for this business: its concept's covers ranked first
+    among the ones its content can carry, then a stable draw by business.
+    Returns the hero and the ranked list it was drawn from."""
+    feasible = list(options)
+    named = [o for o in COVER_AFFINITY.get(concept, ()) if o in feasible]
+    # Homes and project work float in layers before anything else.
+    ranked = (["depth"] if "depth" in feasible else []) + [o for o in named if o != "depth"]
+    if not ranked:
+        ranked = feasible
+    if not ranked:
+        return "", []
+    weights = _COVER_WEIGHTS[: len(ranked)]
+    roll = _stable(seed, "cover") % sum(weights)
+    for option, weight in zip(ranked, weights):
+        if roll < weight:
+            return option, ranked
+        roll -= weight
+    return ranked[0], ranked
 
 
 def options_for_model(

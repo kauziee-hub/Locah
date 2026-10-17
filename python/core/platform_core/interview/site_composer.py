@@ -33,7 +33,7 @@ from platform_core.interview import motion_director, site_critic, site_pages
 from platform_core.interview.creative_director import CreativeDirection
 from platform_core.interview.catalogue_capture import item_traits
 from platform_core.interview.design_dna import DesignDna, choose_dna
-from platform_core.interview.experience import Experience, choose_experience, marquee_words
+from platform_core.interview.experience import Experience, choose_experience, cover_for, marquee_words
 from platform_core.interview.media_director import picture_for, slug
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, TargetState
 from platform_core.interview.taxonomy import normalise_name
@@ -69,11 +69,20 @@ _GENERIC_TITLE = re.compile(
 _POSTER_FACES = frozenset({"bigshoulders", "archivo", "anton"})
 
 
-def fit_to_dna(experience: Experience, dna: DesignDna, *, pictured: bool) -> Experience:
+def fit_to_dna(experience: Experience, dna: DesignDna, *, pictured: bool, seed: str = "") -> Experience:
     """The experience, checked against the design language it will be drawn in
-    (chosen after it): a poster scene only in a poster face, and a solid band
-    of words for a poster concept."""
+    (chosen after it): the first screen is the concept's own (cover_for ranks
+    every composition the content can carry) unless the model chose one; a
+    poster scene only in a poster face; a solid band of words for a poster
+    concept."""
     hero, marquee, reasons = experience.hero, experience.marquee, list(experience.reasons)
+    options = [o for o in experience.hero_options
+               if not (o == "kinetic" and pictured and dna.display not in _POSTER_FACES)]
+    if seed and options and not (experience.hero_chosen and hero in options):
+        picked, ranked = cover_for(options, dna.concept, seed)
+        if picked and picked != hero:
+            reasons.append(f"hero {picked} — {dna.concept} opens with {', '.join(ranked[:4])}")
+            hero = picked
     if hero == "kinetic" and pictured and dna.display not in _POSTER_FACES:
         hero = "cinematic_zoom"
         reasons.append(f"hero kinetic → cinematic_zoom: {dna.display} is not a poster face")
@@ -695,7 +704,7 @@ def compose_site(
     seed = str(bp.business_id)
     dna = choose_dna(dims, family=direction.family, archetype=arche, motion=experience.motion, seed=seed,
                      concept=str((direction.model_choices or {}).get("concept") or "") or None)
-    experience = fit_to_dna(experience, dna, pictured=bool(hero_picture) or expected > 0)
+    experience = fit_to_dna(experience, dna, pictured=bool(hero_picture) or expected > 0, seed=seed)
     showcases = [s for s in sections if s["section_type_id"] == "product_showcase"]
     # How the range browses before the experience makes a scene of it: kept
     # for the range's own page.

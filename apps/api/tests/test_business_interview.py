@@ -272,6 +272,8 @@ def plan(bp, template=None):
             "cinematic_zoom", "orbit", "plane", "kinetic", "depth", "aurora",
             # An inner page's opening (20261017120000_website_premium_sections.sql).
             "page",
+            # Covers (20261018120000_website_hero_covers.sql).
+            "arch", "window", "gallery", "ledger", "signature", "stage",
         ],
         "about": ["text_only", "image_left", "image_right", "story_split", "word_reveal", "sticky_split",
                   "collage"],

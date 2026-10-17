@@ -8,11 +8,13 @@ import { ReviewsSection } from './ReviewsSection'
 import { withPreviewToken } from './preview-links'
 import { siteWords, type SiteLang, type Words } from '@/lib/site-words'
 import { HeroScene, sceneFor, type HeroParts, type Pic } from './experience/HeroScenes'
+import { COVERS, Cover, coverFor, type CoverContext } from './experience/Covers'
 import { StorySection } from './experience/Story'
 import { CategoryScene, CtaGiant, Marquee } from './experience/Bands'
 import { FaqSection, MediaText, PageHero, Pillars, Statement } from './experience/Sections'
 
-/** Hero layouts that are scenes (see experience/HeroScenes). */
+/** Hero layouts that are scenes (see experience/HeroScenes); covers are in
+ *  experience/Covers. */
 const SCENES = new Set(['cinematic_zoom', 'orbit', 'plane', 'kinetic', 'depth', 'aurora'])
 /** Story layouts drawn by experience/Story. */
 const STORIES = new Set(['word_reveal', 'sticky_split', 'collage'])
@@ -32,6 +34,13 @@ const STORIES = new Set(['word_reveal', 'sticky_split', 'collage'])
  */
 
 type Asset = { url: string; alt_text?: string | null }
+
+/** What a cover may draw on, gathered once per page (paths unresolved). */
+export type CoverFacts = {
+  place?: CoverContext['place']
+  signatures?: CoverContext['signatures']
+  more?: { label: string; path: string }
+}
 
 /** How a visitor reaches the owner directly — only what the owner published. */
 export type SiteContact = { phone?: string; whatsapp?: string; email?: string }
@@ -361,6 +370,7 @@ export function SectionRenderer({
   previewToken,
   lang = 'en',
   pictures = [],
+  cover,
 }: {
   section: Section
   lang?: SiteLang
@@ -368,6 +378,9 @@ export function SectionRenderer({
   /** Every picture on this page, in order — what a hero scene or a collage
    *  composes with. Only the business's own (or its drafts), never stock. */
   pictures?: Pic[]
+  /** What a cover may draw on besides the hero's own words: the place and
+   *  the range's best priced things (WebsitePageView gathers them). */
+  cover?: CoverFacts
   /** Position on the page — used only to alternate section grounds. */
   index?: number
   /** The business's live capabilities, so a section never offers an action the
@@ -429,7 +442,19 @@ export function SectionRenderer({
         resolvePath(str(c.cta_url || c.cta_path), contact, businessName, t),
         capabilities
       )
-      const scene = SCENES.has(variant) ? sceneFor(variant, pictures, image) : ''
+      // The range's own page, linked the way the range section links it.
+      const coverCtx: CoverContext = {
+        place: cover?.place,
+        signatures: cover?.signatures,
+        more: cover?.more
+          ? { label: cover.more.label, href: withPreviewToken(pathHref(businessSlug, cover.more.path), previewToken) }
+          : undefined,
+      }
+      const scene = SCENES.has(variant)
+        ? sceneFor(variant, pictures, image)
+        : COVERS.has(variant)
+          ? coverFor(variant, pictures, image, coverCtx)
+          : ''
       const onMedia = scene ? ['depth', 'cinematic_zoom'].includes(scene) : !split && Boolean(image)
       const actions =
         (ctaLabel && ctaPath) || contact?.phone || contact?.whatsapp ? (
@@ -494,6 +519,9 @@ export function SectionRenderer({
       // "CONDITIONING" is wider than a phone, and pushed the buttons off-screen.
       const longest = Math.max(4, ...headline.split(/\s+/).map((word) => word.length))
 
+      if (scene && COVERS.has(scene)) {
+        return <Cover variant={scene} parts={parts} image={image} pictures={pictures} ctx={coverCtx} t={t} />
+      }
       if (scene) {
         return <HeroScene variant={scene} parts={parts} image={image} pictures={pictures} longest={longest} />
       }

@@ -139,7 +139,7 @@ def test_a_restrained_brand_gets_one_slow_picture_and_nothing_else_moving() -> N
     page = _page()
     notes = direct_motion(page, "restrained", range_variant="commerce_grid")
     kinds = {s["section_type_id"]: s["layout_variant"] for s in page}
-    assert kinds["hero"] == "cinematic_zoom"
+    assert kinds["hero"] == "stage"  # one photograph, framed, rising slowly
     assert "marquee" not in kinds
     assert kinds["product_showcase"] == "spotlight"
     assert kinds["about"] == "sticky_split"
@@ -150,7 +150,7 @@ def test_a_gentle_brand_gets_one_scroll_moment_after_the_hero() -> None:
     page = _page(hero="kinetic")
     direct_motion(page, "gentle")
     kinds = {s["section_type_id"]: s["layout_variant"] for s in page}
-    assert kinds["hero"] == "cinematic_zoom"  # a poster hero is too loud for it
+    assert kinds["hero"] == "stage"  # a poster hero is too loud for it
     assert kinds["product_showcase"] == "rail"  # the range is what people came for
     assert kinds["about"] == "sticky_split"
 

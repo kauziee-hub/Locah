@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { CommerceCart } from './CommerceCart'
 import { PublicLicences } from './PublicLicences'
-import { SectionRenderer, resolvePath, type SiteContact } from './SectionRenderer'
+import { SectionRenderer, resolvePath, type CoverFacts, type SiteContact } from './SectionRenderer'
 import { siteFontVariables } from './site-fonts'
 import { withPreviewToken } from './preview-links'
 import { LanguageSwitch } from './LanguageSwitch'
@@ -264,6 +264,33 @@ export function WebsitePageView({
       if (credit?.line && !credits.some((c) => c.line === credit.line)) credits.push(credit)
     }
   }
+  // What a cover may draw on besides the hero's words: where and when (the
+  // owner's main location), and the range's best priced things — tagged
+  // ones ("Bestseller") first, then pictured ones — with the range's page.
+  const coverFacts: CoverFacts = { place: place ?? undefined, signatures: [] }
+  for (const section of sections) {
+    if (section.section_type_id !== 'product_showcase') continue
+    const content = (section.content || {}) as Record<string, unknown>
+    const rows = (Array.isArray(content.items) ? content.items : []).filter(
+      (row): row is Record<string, unknown> =>
+        Boolean(row) && typeof row === 'object' && Boolean((row as Record<string, unknown>).name) &&
+        Boolean((row as Record<string, unknown>).price)
+    )
+    const rank = (row: Record<string, unknown>) => (row.tag ? 2 : 0) + (row.image_asset_id ? 1 : 0)
+    for (const row of [...rows].sort((a, b) => rank(b) - rank(a))) {
+      const list = coverFacts.signatures!
+      if (list.length >= 4 || list.some((s) => s.name === String(row.name))) continue
+      list.push({
+        name: String(row.name),
+        price: String(row.price),
+        unit: row.unit ? String(row.unit) : undefined,
+        diet: row.diet ? String(row.diet) : undefined,
+      })
+    }
+    if (!coverFacts.more && content.more_label && content.more_path) {
+      coverFacts.more = { label: String(content.more_label), path: String(content.more_path) }
+    }
+  }
   const capabilities = data.capabilities || {}
   const canOrder = Boolean(capabilities.order)
   const canBook = Boolean(capabilities.book)
@@ -516,6 +543,7 @@ export function WebsitePageView({
               businessName={name}
               previewToken={previewToken}
               pictures={pictures}
+              cover={coverFacts}
             />
           </div>
         ))}

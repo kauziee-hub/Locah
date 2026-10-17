@@ -46,7 +46,7 @@ def direct(sections: list[dict[str, Any]], budget: str, *, range_variant: str = 
         # A quiet opening: one photograph that opens slowly. (The experience
         # layer already gives calm brands its other quiet scene, depth; only a
         # loud scene is replaced here, so quiet sites keep their variety.)
-        quiet = "cinematic_zoom" if has_picture else "aurora"
+        quiet = "stage" if has_picture else "aurora"
         if budget == "restrained" and variant in _LOUD_HEROES:
             hero["layout_variant"] = quiet
             notes.append(f"hero {variant} → {quiet}: one slow moving picture, not a show")

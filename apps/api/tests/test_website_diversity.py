@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from platform_core.interview.experience import COVER_AFFINITY
 from platform_testing.website_fixtures import SiteFixture, build_all, distinctness
 
 
@@ -38,16 +39,19 @@ def _hero(f: SiteFixture) -> dict[str, Any]:
 
 
 def test_the_golden_business_types_get_their_own_hero(sites: dict[str, SiteFixture]) -> None:
-    # Each hero is a scene suited to how the business presents itself: a home
-    # kitchen's dishes turn or open up, a gym is loud type, a developer's
-    # homes float in layers, a precise B2B plant opens one quiet picture.
-    expected = {"home-food": {"orbit", "plane", "cinematic_zoom"},
-                "gym": {"kinetic", "cinematic_zoom"},
-                "real-estate": {"depth", "cinematic_zoom", "plane"},
-                "meat-shop": {"kinetic", "plane", "cinematic_zoom"},
-                "industrial": {"cinematic_zoom"}}
-    for key, heroes in expected.items():
-        assert _hero(sites[key])["layout_variant"] in heroes, key
+    # Each site opens on one of its design concept's own covers (a gym's poster
+    # concept never on a bakery's arch), and the trades between them open on
+    # many different first screens — not one scene doing the same move.
+    heroes = Counter(_hero(f)["layout_variant"] for f in sites.values())
+    for key, f in sites.items():
+        concept = f.payload["theme_hints"]["dna"]["concept"]
+        hero = _hero(f)["layout_variant"]
+        own = set(COVER_AFFINITY[concept]) | {"depth", "aurora"}
+        assert hero in own, (key, concept, hero)
+    assert len(heroes) >= 5, heroes
+    assert heroes.most_common(1)[0][1] <= len(sites) * 0.4, heroes
+    for food in ("home-food", "bakery"):
+        assert _hero(sites[food])["layout_variant"] not in {"ledger", "kinetic", "depth"}, food
 
 
 def test_motion_follows_how_the_business_presents_itself(sites: dict[str, SiteFixture]) -> None:

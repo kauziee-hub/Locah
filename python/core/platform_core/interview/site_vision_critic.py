@@ -158,7 +158,7 @@ _ALTERNATIVE = {
     "fulfilment_strip": ("steps", "icons"),
     "cta_band": ("giant", "centered"),
 }
-_HEROES = ("cinematic_zoom", "depth", "plane", "orbit", "kinetic", "aurora")
+_HEROES = ("arch", "window", "gallery", "stage", "cinematic_zoom", "depth", "plane", "orbit", "kinetic", "aurora")
 
 
 def _pictures(section: dict[str, Any]) -> int:

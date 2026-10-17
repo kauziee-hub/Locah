@@ -77,7 +77,11 @@ def test_a_ring_or_a_wall_only_where_there_are_pictures_for_it() -> None:
 
 def test_food_opens_on_its_picture_and_floating_frames_are_for_homes_and_work() -> None:
     c = content_of(_menu(8, pictured=6), expected_pictures=6)
-    assert hero_options("menu_commerce", "snap", c, WARM_FOOD) == ["cinematic_zoom", "kinetic"]
+    options = hero_options("menu_commerce", "snap", c, WARM_FOOD)
+    # Food is sold by its picture: picture-led covers first, poster type last.
+    assert options[0] in {"signature", "gallery", "arch"}
+    assert options[-1] == "kinetic" and "cinematic_zoom" in options
+    assert "ledger" not in options
     for arche in ("menu_commerce", "product_commerce", "membership_fitness", "service_appointment", "b2b_rfq"):
         for motion in MOTIONS:
             assert "depth" not in hero_options(arche, motion, c, WARM_FOOD), (arche, motion)
@@ -184,3 +188,19 @@ def test_content_counts_planned_pictures_before_they_are_drawn() -> None:
     sections = [{"section_type_id": "hero", "content": {"headline": "x"}}]
     assert content_of(sections, expected_pictures=5).pictures == 5
     assert content_of(sections).pictures == 0
+
+
+def test_five_businesses_of_one_trade_open_on_different_covers() -> None:
+    from platform_core.interview.experience import COVER_AFFINITY, cover_for
+
+    c = content_of(_menu(8, pictured=6), expected_pictures=6)
+    options = hero_options("menu_commerce", "silk", c, WARM_FOOD)
+    for concept, own in COVER_AFFINITY.items():
+        picks = [cover_for(options, concept, f"bakery-{i}")[0] for i in range(5)]
+        # Each one the concept's own, and five owners rarely share one screen.
+        assert set(picks) <= set(own) | set(options), (concept, picks)
+        assert len(set(picks)) >= 2, (concept, picks)
+    bakeries = {cover_for(options, "warm_craft", f"owner-{i}")[0] for i in range(12)}
+    assert len(bakeries) >= 4, bakeries
+    # A poster concept never opens on a bakery's arch.
+    assert all(cover_for(options, "kinetic_sport", f"gym-{i}")[0] != "arch" for i in range(40))
