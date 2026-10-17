@@ -125,3 +125,26 @@ def test_full_chain_serializes_with_secrets_scrubbed() -> None:
     parsed = json.loads(event_dict) if isinstance(event_dict, str) else event_dict
     assert parsed["provider"] == "stripe"
     assert parsed["signature"] == "***redacted***"
+
+
+def test_a_library_log_line_never_carries_a_key_in_its_url(capsys: Any) -> None:
+    # httpx logs each request's full URL; Pixabay and Gemini take their key as
+    # a query parameter, which reached the worker's stdout before this filter.
+    import logging
+
+    from platform_core.logging import _QueryCredentialFilter
+
+    record = logging.LogRecord(
+        "httpx", logging.INFO, __file__, 1, 'HTTP Request: %s %s "%s %d %s"',
+        ("GET", "https://pixabay.com/api/?key=58084833-abc123&q=bread+buns&per_page=30",
+         "HTTP/1.1", 200, "OK"), None,
+    )
+    assert _QueryCredentialFilter().filter(record)
+    line = record.getMessage()
+    assert "58084833-abc123" not in line
+    assert "key=***redacted***&q=bread+buns&per_page=30" in line
+    other = logging.LogRecord("httpx", logging.INFO, __file__, 1, "GET %s", ("https://x.test/a?q=key",), None)
+    _QueryCredentialFilter().filter(other)
+    assert other.getMessage() == "GET https://x.test/a?q=key"
+    assert _run({"event": "x", "PIXABAY_API_KEY": "p", "unsplash_access_key": "u"}) == {
+        "event": "x", "PIXABAY_API_KEY": "***redacted***", "unsplash_access_key": "***redacted***"}

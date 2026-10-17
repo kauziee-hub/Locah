@@ -117,6 +117,9 @@ _SIGNALS: tuple[tuple[str, re.Pattern[str]], ...] = (
         r"builders?|gated communit\w*|residential projects?)\b", re.I)),
     ("sells_products", re.compile(r"\b(we sell|we are selling|we're selling|selling|our shop|our store)\b", re.I)),
 )
+_MADE_TO_ORDER = dict(_SIGNALS)["made_to_order"]
+_MADE_TO_ORDER_PATTERNS = frozenset({"made_to_order", "custom_made", "project_based"})
+_FRESHNESS = re.compile(r"\b(fresh(?:ly)?|daily|every (?:morning|day)|each (?:morning|day))\b", re.I)
 _BUILT = r"(?:projects?|homes?|houses?|flats?|villas?|apartments?|units?|buildings?|sites?|towers?)"
 # "14 projects delivered", "14 delivered projects", "delivered 14 homes".
 _TRACK_RECORD = re.compile(
@@ -177,6 +180,10 @@ def characteristics(
         if item in CHARACTERISTICS:
             found[item] = "profile"
     for evidence in bp.operating_patterns:
+        # "Fresh every morning" is how food is made, not made to order.
+        if evidence.pattern in _MADE_TO_ORDER_PATTERNS and _FRESHNESS.search(evidence.quote) \
+                and not _MADE_TO_ORDER.search(evidence.quote):
+            continue
         for item in CHARACTERISTICS_BY_PATTERN.get(evidence.pattern, ()):
             found[item] = "observed"
     facts = {**bp.known_facts, **bp.unconfirmed_facts}

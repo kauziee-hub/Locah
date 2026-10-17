@@ -526,3 +526,23 @@ def test_the_final_live_details() -> None:
                                               quote="Fresh stock comes every morning. Family run for 8 years.")
     about = sections(compose(bp, WebsiteCopy(about_body="Family run for eight years.")))["about"]["content"]
     assert about["quote"] == "Fresh stock comes every morning."
+
+
+def test_a_bakery_that_keeps_things_aside_on_a_call_leads_with_its_food():
+    # Certification smoke run: the model read "fresh every morning" as made to
+    # order and "keep things aside" as a reservation, and the bakery was built
+    # as a project portfolio.
+    bp = _bp(
+        "Thenkuzhal Bakes",
+        {"description": "a small bakery in Mylapore, Chennai", "offerings": "breads, buns, puffs and cookies",
+         "customer_actions": "People call or WhatsApp to keep things aside, or just walk in.",
+         "operational_characteristics": "fresh every morning", "phone": "9841022334"},
+        [("product_led", "We bake breads, buns, puffs and cookies"), ("made_to_order", "fresh every morning"),
+         ("walk_in", "just walk in"), ("pickup", "keep things aside")],
+        {},
+        [CatalogueGroup(name="Breads"), CatalogueGroup(name="Puffs"), CatalogueGroup(name="Cookies")],
+    )
+    from platform_core.interview.discovery import characteristics
+
+    assert characteristics(bp, "cafe").get("made_to_order") != "observed"
+    assert derive_archetype(bp, "cafe") == "menu_commerce"

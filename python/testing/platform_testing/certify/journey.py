@@ -143,11 +143,10 @@ async def interview(owner: Owner, journey: Journey, business_id: str, script: An
             continue
         data = body.get("data") or {}
         ask = _ask_of(data)
-        journey.turns.append({"said": text, "reply": _last_reply(data), "next_ask": ask,
-                              "ready": bool((data.get("blueprint") or {}).get("completion_state", {}).get("ready_at"))})
-        ready = bool((data.get("blueprint") or {}).get("completion_state", {}).get("ready_at"))
+        ready = _ready(data)
+        journey.turns.append({"said": text, "reply": _last_reply(data), "next_ask": ask, "ready": ready})
         answer = _answer(script, ask, business_name)
-        if ready and (not ask or answer is None or answer in said):
+        if ready and (not ask or ask == "free" or answer is None or answer in said):
             break
         if answer is None or answer in said:
             if script.fallback in said and ready:
@@ -158,9 +157,16 @@ async def interview(owner: Owner, journey: Journey, business_id: str, script: An
     return data
 
 
+def _ready(data: dict[str, Any]) -> bool:
+    """The interview offers Build (or is showing its summary for review)."""
+    state = ((data.get("blueprint") or {}).get("completion_state") or {})
+    return bool(data.get("build_available") or state.get("ready_at") or state.get("status") in {"review", "ready"})
+
+
 # The interview's own question ids are the planner's ask ids, plus "name" for the
 # business's name (asked before anything else when it was not said).
-_ALIASES = {"name": ("name", "identity"), "contact": ("contact", "phone"), "offer": ("offer", "catalogue")}
+_ALIASES = {"name": ("name", "identity"), "contact": ("contact", "phone"), "offer": ("offer", "catalogue"),
+            "structure": ("structure", "catalogue", "offer"), "catalogue": ("catalogue", "structure", "offer")}
 
 
 def _answer(script: Any, ask: str, business_name: str) -> str | None:
@@ -229,6 +235,11 @@ async def choose_tools(owner: Owner, journey: Journey, business_id: str, wanted:
             journey.modules_failed[module] = f"{status} {error.get('code', '')} {str(error.get('message', out))[:160]}"
 
 
+JOB_DONE = frozenset({"completed", "fallback_used", "failed", "cancelled", "superseded"})
+USAGE_KEPT = ("composer", "archetype", "reference_profile", "model", "strategy_source", "media_drawn",
+              "media_failed", "image_latency_ms", "creative_latency_ms", "owner_edits_kept")
+
+
 async def build_and_wait(owner: Owner, journey: Journey, business_id: str) -> dict[str, Any]:
     """'Build my website', then wait for the draft the build job writes."""
     data = (await owner.call("GET", f"/v1/b/{business_id}/interview"))[1].get("data") or {}
@@ -245,18 +256,26 @@ async def build_and_wait(owner: Owner, journey: Journey, business_id: str) -> di
         journey.build["error"] = str(out)[:400]
         return {}
     draft: dict[str, Any] = {}
+    job: dict[str, Any] = {}
+    bp: dict[str, Any] = {}
+    # The build writes an immediate draft, then a worker job personalises it
+    # (AI direction, copy, pictures). The owner's real site is the second one.
     while time.monotonic() - started < BUILD_TIMEOUT:
         await asyncio.sleep(6)
         bp = ((await owner.call("GET", f"/v1/b/{business_id}/interview"))[1].get("data") or {}).get("blueprint") or {}
         state = (bp.get("completion_state") or {}).get("status")
-        status, site = await owner.call("GET", f"/v1/b/{business_id}/website")
-        draft = ((site.get("data") or {}).get("draft") or {}) if status < 400 else {}
-        theme = draft.get("theme") or {}
-        if state == "built" and draft.get("pages") and theme.get("dna"):
+        job = (await owner.call("GET", f"/v1/b/{business_id}/website/generation"))[1].get("data") or {}
+        if state == "built" and job.get("status") in JOB_DONE:
             break
+    status, site = await owner.call("GET", f"/v1/b/{business_id}/website")
+    draft = ((site.get("data") or {}).get("draft") or {}) if status < 400 else {}
+    usage = job.get("provider_usage") or {}
     journey.build.update(status=(bp.get("completion_state") or {}).get("status"),
                          seconds=round(time.monotonic() - started, 1),
-                         generated_by=draft.get("generated_by"))
+                         generated_by=draft.get("generated_by"),
+                         job_status=job.get("status"), fallback_reason=job.get("fallback_reason"),
+                         error=job.get("error_detail"),
+                         **{k: usage.get(k) for k in USAGE_KEPT if usage.get(k) is not None})
     return draft
 
 

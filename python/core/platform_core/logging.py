@@ -15,12 +15,18 @@ them through call signatures.
 name a credential or a raw payment/webhook payload, at any depth. It is the
 first processor after the context merge, so nothing sensitive reaches stdout
 even if a caller logs a whole request or event dict.
+
+Library loggers bypass structlog: httpx logs every request's full URL, and
+some providers (Pixabay, Gemini) take their key as a query parameter.
+`_QueryCredentialFilter` sits on the root handlers and blanks those values
+in the formatted line.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 import structlog
@@ -51,6 +57,8 @@ _REDACT_KEY_SUBSTRINGS: tuple[str, ...] = (
     "gemini",  # GEMINI_API_KEY and anything else named after the provider
     "deepseek",  # DEEPSEEK_API_KEY and anything else named after the provider
     "pexels",  # PEXELS_API_KEY, the stock-photo search key
+    "pixabay",  # PIXABAY_API_KEY
+    "unsplash",  # UNSPLASH_ACCESS_KEY / UNSPLASH_SECRET_KEY
 )
 _REDACTED = "***redacted***"
 
@@ -70,6 +78,27 @@ def _redact(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     return {k: _redact_value(k, v) for k, v in event_dict.items()}
 
 
+# A URL query parameter that carries a credential: ?key=…, &api_key=…, &token=….
+_QUERY_CREDENTIAL = re.compile(
+    r"(?i)([?&](?:key|api_key|apikey|access_key|client_id|client_secret|token|access_token|"
+    r"secret|signature|sig|password)=)[^&#\s\"']+"
+)
+
+
+class _QueryCredentialFilter(logging.Filter):
+    """Blanks credential query parameters in standard-library log lines."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - a malformed record is logged as it is
+            return True
+        cleaned = _QUERY_CREDENTIAL.sub(lambda m: m.group(1) + _REDACTED, message)
+        if cleaned != message:
+            record.msg, record.args = cleaned, None
+        return True
+
+
 _configured = False
 
 
@@ -84,6 +113,9 @@ def configure() -> None:
     json_logs = os.getenv("LOG_FORMAT", "json").lower() != "console"
 
     logging.basicConfig(format="%(message)s", level=level)
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(f, _QueryCredentialFilter) for f in handler.filters):
+            handler.addFilter(_QueryCredentialFilter())
 
     shared: list[Any] = [
         structlog.contextvars.merge_contextvars,

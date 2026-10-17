@@ -258,6 +258,10 @@ def derive_archetype(bp: BusinessBlueprint, business_type: str | None = None) ->
     sells = "sells_products" in seen or ("sells_products" in chars and "accepts_orders" in seen)
     if sells and "accepts_orders" in seen:
         return "menu_commerce" if _PREPARED_FOOD.search(said) else "product_commerce"
+    # A bakery that keeps things aside on a call still leads with its food:
+    # "baked fresh every morning" is how it makes things, not commissions.
+    if "sells_products" in seen and _PREPARED_FOOD.search(said):
+        return "menu_commerce"
     if "made_to_order" in seen:
         return "project_portfolio"
     if "accepts_appointments" in seen:
