@@ -211,6 +211,17 @@ def _seen(bp: BusinessBlueprint, business_type: str | None) -> set[str]:
 # ----------------------------------------------------------------- facts
 
 
+def _affirms(pattern: str, text: str) -> bool:
+    """The owner says it, not that they don't: "pickup only, no delivery" is no delivery."""
+    from platform_core.interview.discovery import _NEGATED
+
+    for match in re.finditer(pattern, text, re.I):
+        clause = re.split(r"[.,;!?]", text[: match.start()])[-1]
+        if not _NEGATED.search(clause[-25:]):
+            return True
+    return False
+
+
 def ordering_facts(bp: BusinessBlueprint, business_type: str | None) -> list[dict[str, str]]:
     """How buying works, from the owner's answers — each item a real fact."""
     seen = _seen(bp, business_type)
@@ -225,8 +236,8 @@ def ordering_facts(bp: BusinessBlueprint, business_type: str | None) -> list[dic
     elif units:
         items.append({"kind": "order", "title": "Choose what you need",
                       "body": (bp.discovery["offerings.units"].summary or "")[:160]})
-    delivers = "delivers" in seen or re.search(r"\bdeliver", mode)
-    pickup = "pickup" in seen or re.search(r"pick ?up|collect|takeaway", mode)
+    delivers = "delivers" in seen or _affirms(r"\bdeliver", mode)
+    pickup = "pickup" in seen or _affirms(r"pick ?up|collect|takeaway", mode)
     area_text = (area_state.quote or area_state.summary) if area_state and area_state.status == "answered" else ""
     courier = re.search(r"\b(courier|ship|shipping|shipped|post|parcel|dispatch)\w*", f"{mode} {area_text}", re.I)
     if delivers or courier:

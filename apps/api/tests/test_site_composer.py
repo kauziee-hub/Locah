@@ -546,3 +546,22 @@ def test_a_bakery_that_keeps_things_aside_on_a_call_leads_with_its_food():
 
     assert characteristics(bp, "cafe").get("made_to_order") != "observed"
     assert derive_archetype(bp, "cafe") == "menu_commerce"
+
+
+def test_pickup_only_no_delivery_never_shows_home_delivery():
+    # Certification smoke run: "Walk-in pickup only, no delivery." put a
+    # "Home delivery" chip on the bakery's hero.
+    from platform_core.interview.site_composer import hero_badges, ordering_facts
+
+    bp = _bp(
+        "Thenkuzhal Bakes",
+        {"description": "a small bakery in Mylapore, Chennai", "offerings": "breads, buns, puffs and cookies",
+         "phone": "9841022334"},
+        [("product_led", "We bake breads, buns, puffs and cookies")],
+        {"fulfilment.mode": ("Pickup only, no delivery", "Walk-in pickup only, no delivery.")},
+        [CatalogueGroup(name="Breads")],
+    )
+    kinds = [item["kind"] for item in ordering_facts(bp, "cafe")]
+    assert "delivery" not in kinds
+    assert "pickup" in kinds
+    assert "Home delivery" not in hero_badges(bp, "cafe")
