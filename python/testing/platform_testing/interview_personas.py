@@ -108,10 +108,15 @@ PERSONAS: list[Persona] = [
                            answered={"contact.phone": "9840012345"}),
             "story": intel("Our recipes are from my grandmother's Karaikudi kitchen.",
                            answered={"brand.story": "Our recipes are from my grandmother's Karaikudi kitchen"}),
+            "hours": intel("Open 11 am to 11 pm, closed on Mondays.",
+                           facts={"opening_hours": "11 am to 11 pm, closed on Mondays"},
+                           answered={"operations.hours": "11 am to 11 pm, closed on Mondays"}),
         },
         core={"business.identity", "offerings.main", "commerce.action", "contact.location"},
         actions={"book_table", "book_call", "call", "visit"}, tools={"bookings"},
-        never_tools={"memberships", "quotes"}, follow_ups=(1, 5),
+        # A restaurant that takes table bookings is asked its hours before the
+        # first version (a table is booked inside them): one question more.
+        never_tools={"memberships", "quotes"}, follow_ups=(1, 6),
     ),
     Persona(
         "home-food", "Nalla Veedu Kitchen", "Home food", ("home_food", "home_kitchen", "Home kitchen"), "restaurant",

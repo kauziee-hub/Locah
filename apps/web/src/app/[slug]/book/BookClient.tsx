@@ -30,7 +30,7 @@ const GROUP: Record<Mode, string> = {
   appointment: 'Appointments', table: 'Tables', class_session: 'Classes', accommodation: 'Stays',
   rental: 'Rentals', site_visit: 'Site visits', event_date: 'Events',
 }
-const field = { display: 'block', width: '100%', marginTop: 4, padding: '0.55rem' } as const
+const field = { display: 'block', width: '100%', marginTop: 4 } as const
 
 function today(): string {
   const d = new Date()
@@ -189,27 +189,32 @@ export default function BookClient({
     }
   }
 
-  const box = { maxWidth: 720, margin: '0 auto', padding: '3rem 1.25rem' } as const
   if (done?.kind === 'waitlist') {
     return (
-      <main style={box}>
-        <h1 style={{ fontSize: '2.2rem', margin: '0 0 0.75rem' }}>{t('You are on the waitlist')}</h1>
-        <p>{t('If a place opens, we will offer it to you with a link. Nothing is booked until you take it.')}</p>
+      <main className="ls-section ls-book">
+        <div className="ls-inner ls-checkout">
+          <h1 className="ls-confirm__title">{t('You are on the waitlist')}</h1>
+          <p className="ls-confirm__lede">{t('If a place opens, we will offer it to you with a link. Nothing is booked until you take it.')}</p>
+        </div>
       </main>
     )
   }
   if (done?.kind === 'booked') {
     return (
-      <main style={box}>
-        <p style={{ letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.65 }}>{options.business.display_name}</p>
-        <h1 style={{ fontSize: '2.4rem', margin: '0.4rem 0 0.75rem' }}>{t('Confirmed')}</h1>
-        <p>
-          {t('Booking {number} is reserved.', { number: done.number })}
-          {done.deposit !== null ? ` ${t('Deposit {amount}', { amount: done.deposit })} · ${done.payment}.` : null}
-        </p>
-        <p style={{ marginTop: '1.25rem' }}>
-          <Link href={`/${slug}/bookings/${done.id}?token=${encodeURIComponent(done.token)}`}>{t('Manage this booking')}</Link>
-        </p>
+      <main className="ls-section ls-book">
+        <div className="ls-inner ls-checkout">
+          <header className="ls-confirm__head">
+            <h1 className="ls-confirm__title">{t('Confirmed')}</h1>
+            <p className="ls-confirm__lede">
+              {t('Booking {number} is reserved.', { number: done.number })}
+              {done.deposit !== null ? ` ${t('Deposit {amount}', { amount: done.deposit })} · ${done.payment}.` : null}
+            </p>
+          </header>
+          <div className="ls-bill__actions">
+            <Link className="ls-btn" href={`/${slug}/bookings/${done.id}?token=${encodeURIComponent(done.token)}`}>{t('Manage this booking')}</Link>
+            <Link className="ls-btn ls-btn--outline" href={`/${slug}`}>{t('Back to {business}', { business: options.business.display_name })}</Link>
+          </div>
+        </div>
       </main>
     )
   }
@@ -219,22 +224,22 @@ export default function BookClient({
   const readyForContact = Boolean(picked)
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: '3rem 1.25rem' }}>
-      <p style={{ letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.65 }}>{options.business.display_name}</p>
-      <h1 style={{ fontSize: '2.6rem', margin: '0.35rem 0 1.25rem' }}>{t('Book')}</h1>
+    <main className="ls-section ls-book">
+      <div className="ls-inner ls-checkout">
+      <h1 className="ls-confirm__title">{t('Book')}</h1>
 
       {choices.length === 0 ? <p>{t('Nothing can be booked online yet.')}</p> : null}
 
       {choices.length > 1 ? (
-        <section aria-labelledby="what-h" style={{ marginBottom: '1.5rem' }}>
-          <h2 id="what-h" style={{ fontSize: '1.2rem' }}>{t('What would you like to book?')}</h2>
+        <section aria-labelledby="what-h" className="ls-bill__card">
+          <h2 id="what-h" className="ls-checkout__h">{t('What would you like to book?')}</h2>
           {grouped.map(([m, cs]) => (
-            <div key={m} style={{ marginTop: '0.75rem' }}>
-              <p style={{ margin: '0 0 0.35rem', opacity: 0.7, fontSize: '0.9rem' }}>{t(GROUP[m])}</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div key={m} className="ls-book__group">
+              <p className="ls-meta">{t(GROUP[m])}</p>
+              <div className="ls-choice">
                 {cs.map((c) => (
                   <button key={c.key} type="button" onClick={() => setChoiceKey(c.key)} aria-pressed={c.key === choiceKey}
-                    className={c.key === choiceKey ? 'ls-btn' : 'ls-btn ls-btn--outline'}>
+                    className={`ls-chip${c.key === choiceKey ? ' is-on' : ''}`}>
                     {c.title}{c.price !== null ? ` · ₹${c.price}` : ''}
                   </button>
                 ))}
@@ -242,10 +247,10 @@ export default function BookClient({
             </div>
           ))}
         </section>
-      ) : choice ? <h2 style={{ fontSize: '1.3rem' }}>{choice.title}</h2> : null}
+      ) : choice ? <h2 className="ls-checkout__h ls-book__one">{choice.title}</h2> : null}
 
       {choice && mode ? (
-        <form onSubmit={submit} style={{ display: 'grid', gap: '0.9rem' }}>
+        <form onSubmit={submit} className="ls-bill__card ls-checkout__fields ls-book__form">
           {options.locations.length > 1 ? (
             <label>{t('Location')}
               <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={field}>
@@ -276,16 +281,16 @@ export default function BookClient({
                 <input type="date" min={today()} value={day} onChange={(e) => setDay(e.target.value)} required style={field} />
               </label>
               {slots && slots.length ? (
-                <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                  <legend style={{ marginBottom: '0.4rem' }}>{t('Time')}</legend>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                <fieldset className="ls-book__times">
+                  <legend>{t('Time')}</legend>
+                  <div className="ls-choice">
                     {slots.map((s) => {
                       const on = picked?.starts_at === s.starts_at
                       const full = Boolean(s.full)
                       if (full && !options.policy.waitlist_enabled) return null
                       return (
                         <button key={s.starts_at} type="button" aria-pressed={on}
-                          className={on ? 'ls-btn' : 'ls-btn ls-btn--outline'}
+                          className={`ls-chip${on ? ' is-on' : ''}`}
                           onClick={() => setPicked({ ...s, resourceId: null })}>
                           {s.label}
                           {full ? ` · ${t('full — join waitlist')}`
@@ -362,13 +367,14 @@ export default function BookClient({
               {options.policy.require_deposit && !picked?.full ? (
                 <p style={{ opacity: 0.85 }}>{t('A deposit of {amount} is required.', { amount: options.policy.deposit_amount ?? '' })}</p>
               ) : null}
-              <button type="submit" className="ls-btn" disabled={busy} style={{ marginTop: '0.5rem' }}>
+              <button type="submit" className="ls-btn ls-checkout__place" disabled={busy}>
                 {busy ? t('Booking…') : picked?.full ? t('Join the waitlist') : t('Confirm booking')}
               </button>
             </>
           ) : null}
         </form>
       ) : null}
+      </div>
     </main>
   )
 }

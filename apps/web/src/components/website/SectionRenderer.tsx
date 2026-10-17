@@ -3,6 +3,7 @@ import { srcSetFor } from './picture'
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { LiveItemsSection } from './LiveItemsSection'
+import { whatsappHref } from './whatsapp'
 import { ProductShowcase } from './ProductShowcase'
 import { ReviewsSection } from './ReviewsSection'
 import { withPreviewToken } from './preview-links'
@@ -84,14 +85,7 @@ export function liveAction(
   return fallbackPath && fallbackLabel && fallbackLive ? [fallbackLabel, fallbackPath] : ['', '']
 }
 
-/** The chat opens with a greeting in the visitor's language — which is also
- *  how the business's WhatsApp knows to answer in it (P1-10E6). */
-export function whatsappHref(number: string, businessName?: string, t?: Words) {
-  const digits = number.replace(/\D/g, '')
-  const hello = t ? t('Hi {business}, ', { business: businessName || '' }) : `Hi ${businessName}, `
-  const text = businessName ? `?text=${encodeURIComponent(hello)}` : ''
-  return `https://wa.me/${digits}${text}`
-}
+export { whatsappHref }
 
 /** Directions only to somewhere specific — "Jaipur" alone is a city, not a door. */
 function findable(address: string) {
@@ -1294,6 +1288,8 @@ export function SectionRenderer({
           variant={v}
           altGround={alt}
           anchor={str(c.anchor) || 'plans'}
+          contact={contact}
+          businessName={businessName}
         />
       )
 

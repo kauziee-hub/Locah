@@ -206,6 +206,51 @@ def public_contact(bp: BusinessBlueprint) -> dict[str, Any]:
     return contact
 
 
+def accepted_build(bp: BusinessBlueprint) -> bool:
+    """Built, and nothing the owner said since is still waiting for their OK.
+
+    Pressing Build on the summary is the confirmation (build() confirms every
+    fact). ``completion_state.confirmed`` also asks whether the interview was
+    *sufficient*, which matters before the first build, not after it: an owner
+    who built early was never offered their own items as drafts (certification:
+    a consultant built after one answer could only retype their services).
+    """
+    return bp.completion_state.status == "built" and not bp.unconfirmed_facts
+
+
+# A playbook's word for what a trade sells, as the catalogue kind it is.
+_CATALOGUE_KIND = {
+    "class": "class_session", "room_type": "accommodation", "plan": "membership_plan",
+    "package": "service", "portfolio_item": "service", "rental_resource": "rental",
+    "weighed_product": "product", "digital_product": "product",
+}
+
+# A trade that sells plans or stays also sells things booked one at a time —
+# a gym's drop-in class and personal training, a hotel's guided walk. A kind
+# is fixed when the item is created, so filing them under the trade's one
+# kind left the owner archiving and retyping them (certification: a gym with
+# Bookings had nothing bookable). Only these two trade kinds are refined, and
+# only on unambiguous words; a pack or pass of classes stays a plan.
+_BOOKED_ONE_AT_A_TIME = re.compile(
+    r"\b(personal training|pt|one[- ]on[- ]one|1:1|drop[- ]in|trial class|courses?|workshops?|"
+    r"walks?|tours?|treks?|safaris?|experiences?|cooking class(es)?|massages?|spa|dinner|lunch|dining)\b",
+    re.I)
+_SOLD_AS_PASS = re.compile(r"\b(packs?|pass(es)?|membership|monthly|quarterly|annual|yearly)\b|\d+\s*sessions",
+                           re.I)
+_CLASS_WORDS = re.compile(r"\b(class(es)?|courses?|workshops?|batch(es)?)\b", re.I)
+
+
+def _row_kind(trade_kind: str, title: str, chapter: str) -> str:
+    """The catalogue kind for one item of a trade whose kind is ``trade_kind``."""
+    if trade_kind not in {"membership_plan", "accommodation"}:
+        return trade_kind
+    text = f"{chapter} {title}"
+    if not _BOOKED_ONE_AT_A_TIME.search(text) or _SOLD_AS_PASS.search(title):
+        return trade_kind
+    # A course or class is a class session; everything else is booked as a service.
+    return "class_session" if _CLASS_WORDS.search(text) else "service"
+
+
 async def _hours_to_location(
     session: AsyncSession, business_id: UUID, bp: BusinessBlueprint, *, actor_id: UUID, correlation_id: str,
 ) -> None:
@@ -527,7 +572,7 @@ class BusinessInterviewService:
             # draft catalogue item yet — offered, never created without asking.
             "setup_pending": [
                 name for name, _, _ in _setup_rows(bp) if name and name.casefold() not in applied
-            ] if bp.completion_state.status == "built" and bp.completion_state.confirmed else [],
+            ] if accepted_build(bp) else [],
             # Build is offered as soon as there is something honest to build —
             # and never taken away once offered.
             "build_available": bp.completion_state.ready_at is not None
@@ -1002,7 +1047,7 @@ class BusinessInterviewService:
         draft. Website descriptions are marketing copy, not operational facts,
         so they are intentionally not copied to the catalogue.
         """
-        if bp.completion_state.status != "built" or not bp.completion_state.confirmed:
+        if not accepted_build(bp):
             raise ValidationError("Build and confirm your business before setting up items")
         if "offerings-catalog" not in bp.approved_modules:
             # Chosen during onboarding, or switched on later in the Workspace —
@@ -1021,9 +1066,13 @@ class BusinessInterviewService:
         applied = {name.casefold() for name in bp.applied_setup_offerings}
         # What this trade sells (a salon's services, a restaurant's menu items),
         # so a draft can be booked or ordered as it should. The owner can change
-        # the kind; a trade whose kind is not a catalogue kind keeps the default.
+        # the kind. A trade's own word maps to the nearest catalogue kind — a
+        # gym's or tiffin's plan, a studio's class, a hotel's room — instead of
+        # falling back to "product", which nothing can book (certification: a
+        # salon's haircuts and a gym's classes were products, so "Book" led to
+        # nothing to book).
         offer_kind = playbook_for(bp).offer_kind
-        typed = {"offering_type": offer_kind} if offer_kind in FIRST_LAUNCH_KINDS else {}
+        kind = offer_kind if offer_kind in FIRST_LAUNCH_KINDS else _CATALOGUE_KIND.get(offer_kind, "")
         from platform_core.services.category import CategoryService
 
         # Read only when a row has a chapter to file under.
@@ -1033,8 +1082,10 @@ class BusinessInterviewService:
             if not name or name.casefold() in applied:
                 continue
             if name.casefold() not in known:
+                row_kind = _row_kind(kind, name, row.get("category", "")) if kind else ""
                 payload: dict[str, Any] = {
-                    "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry", **typed,
+                    "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry",
+                    **({"offering_type": row_kind} if row_kind else {}),
                 }
                 amount = _first_amount(row.get("price", ""))
                 if amount:
@@ -1063,7 +1114,7 @@ class BusinessInterviewService:
                 if offer_kind == "menu_item" and row.get("spice") in _SPICE_WORD:
                     attributes["spice"] = _SPICE_WORD[row["spice"]]
                 minutes = re.search(r"(\d{1,3})\s*min", row.get("unit", ""))
-                if offer_kind in {"service", "class"} and minutes:
+                if (offer_kind in {"service", "class"} or row_kind in {"service", "class_session"}) and minutes:
                     attributes["duration_minutes"] = int(minutes.group(1))
                 if attributes:
                     payload["attributes"] = attributes

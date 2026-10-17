@@ -226,8 +226,14 @@ def red_flags(bp: BusinessBlueprint, asks: list[str], transcript: list[tuple[str
     # where pictures carry the site: knowing what the owner has, or that LOCAH
     # should draw drafts, belongs before the first version there.
     critical_media = playbook_for(bp).media in {"critical", "high"}
+    # Hours are essential for a business that takes bookings: a slot exists
+    # only inside them (coverage.importance says so for this business).
+    from platform_core.interview.coverage import importance, profile
+
+    hours_essential = importance("operations.hours", profile(bp), bp) != "enrichment"
     pre = asks[: (bp.checkpoint_turn or len(asks))]
-    early = [a for a in pre if a in _ENRICHMENT_ASKS and not (a == "photos" and critical_media)]
+    early = [a for a in pre if a in _ENRICHMENT_ASKS and not (a == "photos" and critical_media)
+             and not (a == "hours" and hours_essential)]
     if early and not bp.refining:
         flags.append(f"enrichment before the first version: {', '.join(early)}")
     # 3+ questions in a row without a "so far" line.

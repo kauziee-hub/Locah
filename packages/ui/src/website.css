@@ -2248,3 +2248,29 @@
 [data-locah-site]:has(.ls-basket-bar) .ls-wa-float {
   bottom: calc(clamp(1rem, 0.5rem + 1.5vw, 1.75rem) + 4.5rem);
 }
+
+/* Booking — the checkout's language: cards, chips, the business's own face. */
+[data-locah-site] .ls-book__group + .ls-book__group {
+  margin-top: 0.75rem;
+}
+[data-locah-site] .ls-book__group .ls-meta {
+  margin: 0 0 0.4rem;
+}
+[data-locah-site] .ls-book__times {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+[data-locah-site] .ls-book__times legend {
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  color: var(--site-muted);
+}
+[data-locah-site] .ls-book__form textarea {
+  font: inherit;
+  color: var(--site-ink);
+  background: var(--site-bg);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius);
+}

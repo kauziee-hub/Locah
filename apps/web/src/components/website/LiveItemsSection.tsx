@@ -6,6 +6,7 @@ import { addToBasket, fetchPublicOfferings, fetchPublicPlans } from '@/lib/check
 import { OfferingCard } from './OfferingCard'
 import { StockNote, soldOut, type PublicOffering } from './offering-view'
 import { useWords } from './SiteWords'
+import { whatsappHref } from './whatsapp'
 import type { Words } from '@/lib/site-words'
 
 /**
@@ -83,6 +84,8 @@ export function LiveItemsSection({
   altGround,
   capabilities,
   anchor,
+  contact,
+  businessName,
 }: {
   businessSlug: string
   kind: ItemKind
@@ -96,6 +99,10 @@ export function LiveItemsSection({
   altGround?: boolean
   capabilities?: Record<string, boolean | string | null>
   anchor?: string
+  /** The business's own channels: a plan is asked for there when the site
+   *  does not take enquiries (Leads off) — never a plan with nothing to press. */
+  contact?: { phone?: string; whatsapp?: string }
+  businessName?: string
 }) {
   const t = useWords()
   const [items, setItems] = useState<Offering[]>([])
@@ -190,7 +197,14 @@ export function LiveItemsSection({
             capabilities={capabilities}
           />
         ) : kind === 'plans' ? (
-          <Plans items={filtered} variant={variant} slug={businessSlug} action={action} />
+          <Plans items={filtered} variant={variant} slug={businessSlug} action={action}
+            channel={(plan) =>
+              contact?.whatsapp
+                ? `${whatsappHref(contact.whatsapp, businessName, t)}${encodeURIComponent(plan)}`
+                : contact?.phone
+                  ? `tel:${contact.phone}`
+                  : ''
+            } />
         ) : kind === 'rooms' && variant !== 'cards' ? (
           <RoomRows items={filtered} slug={businessSlug} action={action} />
         ) : kind === 'classes' && variant !== 'cards' ? (
@@ -426,13 +440,32 @@ function Plans({
   variant,
   slug,
   action,
+  channel,
 }: {
   items: Offering[]
   variant?: string
   slug: string
   action: 'cart' | 'book' | 'enquire' | 'none'
+  /** Where to ask for a plan when the site takes no enquiries. */
+  channel?: (plan: string) => string
 }) {
   const t = useWords()
+  /** "Ask to join": the enquiry form, or the business's WhatsApp / phone. */
+  const ask = (p: Offering, label: string, className: string) => {
+    if (action === 'enquire') {
+      return (
+        <Link className={className} href={planHref(slug, p)}>
+          {label}
+        </Link>
+      )
+    }
+    const href = channel ? channel(p.title) : ''
+    return href ? (
+      <a className={className} href={href} {...(href.startsWith('https') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+        {label}
+      </a>
+    ) : null
+  }
   if (variant === 'comparison') {
     return (
       <div className="ls-plans--comparison">
@@ -456,13 +489,7 @@ function Plans({
                   {money(p.price_amount, p.currency) || '—'}
                   {p.period_days ? <span className="ls-meta"> {planPeriod(p.period_days, t)}</span> : null}
                 </td>
-                <td>
-                  {action === 'enquire' ? (
-                    <Link className="ls-btn ls-btn--outline" href={planHref(slug, p)}>
-                      {p.plan ? t('Ask to join') : t('Choose')}
-                    </Link>
-                  ) : null}
-                </td>
+                <td>{ask(p, p.plan ? t('Ask to join') : t('Choose'), 'ls-btn ls-btn--outline')}</td>
               </tr>
             ))}
           </tbody>
@@ -484,13 +511,7 @@ function Plans({
             {p.period_days ? <span className="ls-plan__period">{planPeriod(p.period_days, t)}</span> : null}
           </div>
           {p.description ? <p className="ls-plan__desc">{p.description}</p> : null}
-          <div className="ls-plan__cta">
-            {action === 'enquire' ? (
-              <Link className="ls-btn" href={planHref(slug, p)}>
-                {p.plan ? t('Ask to join') : t('Get started')}
-              </Link>
-            ) : null}
-          </div>
+          <div className="ls-plan__cta">{ask(p, p.plan ? t('Ask to join') : t('Get started'), 'ls-btn')}</div>
         </div>
       ))}
     </div>

@@ -202,7 +202,14 @@ def importance(target_id: str, prof: Profile, bp: BusinessBlueprint) -> Importan
         # knowing what the owner has — photos, a menu or catalogue, or nothing
         # (then LOCAH draws drafts) — comes before the first version.
         return "high_value" if pb.media in {"critical", "high"} else "enrichment"
-    if target_id in {"offerings.pricing", "operations.hours", "offerings.customisation"}:
+    if target_id == "operations.hours":
+        # A booking is made inside opening hours: a business that takes
+        # appointments, classes or tables cannot offer one slot without them
+        # (certification: a reservations restaurant built with no hours had a
+        # Book page with nothing to pick). For everyone else they enrich.
+        takes_bookings = prof.has("accepts_appointments", "runs_classes") or "bookings" in bp.approved_modules
+        return "high_value" if takes_bookings else "enrichment"
+    if target_id in {"offerings.pricing", "offerings.customisation"}:
         return "enrichment"
     return "optional"
 

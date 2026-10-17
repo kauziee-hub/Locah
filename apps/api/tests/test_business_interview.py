@@ -177,6 +177,86 @@ async def test_setup_offerings_creates_private_unpriced_drafts_only_after_approv
 
 
 @pytest.mark.asyncio
+async def test_an_owner_who_built_early_can_still_set_up_their_items(monkeypatch):
+    """Build is the confirmation; an interview that was not yet 'sufficient'
+    does not take the owner's own items away after the site is built."""
+    bp = blueprint()
+    bp.completion_state.status = "built"
+    bp.completion_state.confirmed = False  # built from the floor, before 'sufficient'
+    bp.approved_modules = ["offerings-catalog"]
+    bp.website_draft.offerings = [OfferingDraft(name="Strategy review")]
+    create = AsyncMock()
+    monkeypatch.setattr(OfferingService, "list_for_business", AsyncMock(return_value=[]))
+    monkeypatch.setattr(OfferingService, "create_offering", create)
+
+    await Service.setup_offerings(AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(),
+                                  correlation_id=str(uuid4()))
+    assert [c.kwargs["payload"]["title"] for c in create.await_args_list] == ["Strategy review"]
+
+    # Something said after the build that the owner has not confirmed still waits.
+    bp.unconfirmed_facts["phone"] = Fact(value="+919800000000", source="USER_STATEMENT")
+    with pytest.raises(ValidationError, match="Build and confirm"):
+        await Service.setup_offerings(AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(),
+                                      correlation_id=str(uuid4()))
+
+
+@pytest.mark.asyncio
+async def test_setup_offerings_files_each_trade_under_a_kind_that_can_be_booked_or_sold(monkeypatch):
+    # Certification: a salon read as a makeup artist and a gym had their items
+    # set up as "product" — nothing could be booked, though "Book" showed.
+    from platform_core.interview.models import CategorySeed
+
+    kinds: dict[tuple[str, str], str | None] = {}
+    for category, sub in (("fitness", "gym"), ("beauty", "makeup_artist"), ("fresh_grocery", "meat_shop")):
+        bp = blueprint()
+        bp.category = CategorySeed(category_key=category, subcategory_key=sub)
+        bp.completion_state.status = "built"
+        bp.completion_state.confirmed = True
+        bp.approved_modules = ["offerings-catalog"]
+        bp.website_draft.offerings = [OfferingDraft(name="Monthly")]
+        create = AsyncMock()
+        monkeypatch.setattr(OfferingService, "list_for_business", AsyncMock(return_value=[]))
+        monkeypatch.setattr(OfferingService, "create_offering", create)
+        await Service.setup_offerings(AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(),
+                                      correlation_id=str(uuid4()))
+        kinds[(category, sub)] = create.await_args_list[0].kwargs["payload"].get("offering_type")
+    assert kinds[("fitness", "gym")] == "membership_plan"
+    assert kinds[("beauty", "makeup_artist")] == "service"
+    assert kinds[("fresh_grocery", "meat_shop")] in {"product", None}
+
+
+def test_a_plan_or_stay_trade_files_what_is_booked_one_at_a_time_as_bookable():
+    """A gym's drop-in class and courses, a hotel's walks and dinners can be
+    booked; packs, passes and memberships stay plans; rooms stay rooms."""
+    from platform_core.services.business_interview import _row_kind
+
+    gym = {
+        ("Memberships", "Open gym, monthly"): "membership_plan",
+        ("Memberships", "Annual"): "membership_plan",
+        ("Class packs", "12-class pack"): "membership_plan",
+        ("Class packs", "Drop-in class"): "class_session",
+        ("Personal training", "PT, 12 sessions"): "membership_plan",
+        ("Personal training", "Personal training, single session"): "service",
+        ("Courses", "Beginner barbell course"): "class_session",
+        ("Courses", "Women's strength 101"): "class_session",
+    }
+    for (chapter, title), want in gym.items():
+        assert _row_kind("membership_plan", title, chapter) == want, title
+    hotel = {
+        ("Rooms", "Valley-view cottage"): "accommodation",
+        ("Packages", "Coffee estate weekend (2 nights)"): "accommodation",
+        ("Experiences", "Dawn birding walk"): "service",
+        ("Experiences", "Kodava cooking class"): "class_session",
+        ("Dining", "Kodava dinner"): "service",
+    }
+    for (chapter, title), want in hotel.items():
+        assert _row_kind("accommodation", title, chapter) == want, title
+    # Every other trade keeps its one kind, whatever the words.
+    assert _row_kind("menu_item", "Cooking class thali", "Specials") == "menu_item"
+    assert _row_kind("service", "Spa pedicure", "Nails") == "service"
+
+
+@pytest.mark.asyncio
 async def test_setup_offerings_needs_explicit_module_choice(monkeypatch):
     bp = blueprint()
     bp.completion_state.status = "built"
