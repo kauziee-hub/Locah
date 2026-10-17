@@ -115,13 +115,13 @@ def _placeholder(asset_id: str, theme: dict[str, Any], label: str) -> dict[str, 
 
 
 def _lab_assets(content: dict[str, Any], theme: dict[str, Any],
-                pictures: dict[str, dict[str, str]] | None = None) -> dict[str, dict[str, str]]:
+                pictures: dict[str, dict[str, Any]] | None = None) -> dict[str, dict[str, Any]]:
     """Each picture a section names: a real one from ``pictures`` (asset id →
     {url, alt_text}) where the lab was given one, else a placeholder."""
-    def picture(asset_id: str, label: str) -> dict[str, str]:
+    def picture(asset_id: str, label: str) -> dict[str, Any]:
         return (pictures or {}).get(asset_id) or _placeholder(asset_id, theme, label)
 
-    assets: dict[str, dict[str, str]] = {}
+    assets: dict[str, dict[str, Any]] = {}
     if content.get("image_asset_id"):
         assets["image_asset_id"] = picture(str(content["image_asset_id"]), "picture")
     for key in ("items", "categories"):
@@ -132,7 +132,7 @@ def _lab_assets(content: dict[str, Any], theme: dict[str, Any],
 
 
 def lab_payload(f: SiteFixture, page_index: int = 0,
-                pictures: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
+                pictures: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """The public renderer's input (PublicWebsitePayload) for one page, for the site lab."""
     page = f.payload["pages"][page_index]
     theme = f.payload.get("theme_hints", {})
@@ -160,7 +160,7 @@ def lab_payload(f: SiteFixture, page_index: int = 0,
     }
 
 
-def write_lab(root: Path, f: SiteFixture, pictures: dict[str, dict[str, str]] | None = None) -> list[str]:
+def write_lab(root: Path, f: SiteFixture, pictures: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """Every page of a fixture as site-lab files; returns the page slugs."""
     slugs = []
     for i, page in enumerate(f.payload["pages"]):

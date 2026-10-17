@@ -424,6 +424,7 @@ class MediaService:
         generated_for: str | None = None,
         generation_job_id: uuid.UUID | None = None,
         prompt_version: str | None = None,
+        provenance: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Record a real photograph found online as a ready media asset.
 
@@ -463,6 +464,7 @@ class MediaService:
             generation_job_id=generation_job_id,
             prompt_version=(prompt_version or None),
             approval_state="draft",
+            provenance=provenance or None,
         )
         session.add(asset)
         await session.flush()
@@ -476,6 +478,91 @@ class MediaService:
             resource_id=asset.id,
             action="retrieve",
             after_state={"purpose": purpose, "source": "stock_photo", "slot": generated_for},
+        )
+        return MediaService.serialize(asset)
+
+    @staticmethod
+    async def persist_found(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        purpose: str,
+        found: Any,
+        alt_text: str | None,
+        generated_for: str | None = None,
+        generation_job_id: uuid.UUID | None = None,
+        prompt_version: str | None = None,
+    ) -> dict[str, Any]:
+        """A photograph `website.image_retrieval` chose, recorded the way its source requires.
+
+        Unsplash: shown from Unsplash's own URL (hotlinked, never re-hosted), as
+        `persist_retrieved` does. Pixabay (`found.must_store`): permanent
+        hotlinking is not allowed, so the file is copied into LOCAH's storage and
+        the asset points at that copy. Either way the asset keeps the
+        provenance — source, attribution, why it was chosen, and the brief that
+        can find an alternative.
+        """
+        from platform_core.media.supabase_storage import (
+            EXTENSION_BY_MIME,
+            put_generated_object,
+            public_url,
+        )
+        from platform_core.website.image_retrieval import fetch_full_image
+
+        provenance = found.provenance() if hasattr(found, "provenance") else None
+        credit = str(getattr(found, "credit", "") or "")
+        if not getattr(found, "must_store", False):
+            return await MediaService.persist_retrieved(
+                session, business_id=business_id, actor_id=actor_id, purpose=purpose, url=found.url,
+                page_url=found.page_url, mime_type=found.mime_type, alt_text=alt_text,
+                credit=credit or f"{found.photographer} via {found.provider.title()}",
+                width=found.width, height=found.height, generated_for=generated_for,
+                generation_job_id=generation_job_id, prompt_version=prompt_version, provenance=provenance)
+        MediaService.permission_for(purpose)
+        fetched = await fetch_full_image(found.url)
+        if fetched is None:
+            raise ValidationError("The chosen picture could not be copied into storage")
+        body, mime_type = fetched
+        normalized_mime = mime_type if mime_type in ALLOWED_MIME_TYPES else "image/jpeg"
+        asset_id = uuid.uuid4()
+        storage_key = f"stock/{business_id}/{asset_id}.{EXTENSION_BY_MIME.get(normalized_mime, 'jpg')}"
+        await put_generated_object(bucket="media", storage_key=storage_key, body=body, mime_type=normalized_mime)
+        asset = MediaAsset(
+            id=asset_id,
+            business_id=business_id,
+            uploader_identity_id=actor_id,
+            original_filename=(credit[:200] or None),
+            mime_type=normalized_mime,
+            size_bytes=len(body),
+            width=found.width,
+            height=found.height,
+            bucket="media",
+            storage_key=storage_key,
+            public_url=public_url("media", storage_key),
+            alt_text=alt_text,
+            purpose=purpose,
+            status="ready",
+            source_type="stock_photo",
+            generated_for=(generated_for or None),
+            generation_job_id=generation_job_id,
+            prompt_version=(prompt_version or None),
+            approval_state="draft",
+            provenance=provenance,
+        )
+        session.add(asset)
+        await session.flush()
+        await AuditService.record(
+            session,
+            event_type="media.asset_retrieved",
+            actor_identity_id=actor_id,
+            actor_context="business",
+            business_id=business_id,
+            resource_type="media_asset",
+            resource_id=asset.id,
+            action="retrieve",
+            after_state={"purpose": purpose, "source": "stock_photo", "slot": generated_for,
+                         "provider": found.provider, "stored_copy": True},
         )
         return MediaService.serialize(asset)
 
@@ -495,9 +582,28 @@ class MediaService:
     def _resolved(asset: MediaAsset) -> dict[str, Any]:
         # `draft`: a picture LOCAH drew that the owner has not approved yet —
         # the editor says so, and offers to replace, keep or remove it.
-        return {"url": asset.public_url, "alt_text": asset.alt_text,
-                "draft": getattr(asset, "source_type", None) == "gemini_generated"
-                and getattr(asset, "approval_state", None) == "draft"}
+        resolved: dict[str, Any] = {
+            "url": asset.public_url, "alt_text": asset.alt_text,
+            "draft": getattr(asset, "source_type", None) == "gemini_generated"
+            and getattr(asset, "approval_state", None) == "draft"}
+        credit = MediaService.credit_of(asset)
+        if credit:
+            resolved["credit"] = credit
+        return resolved
+
+    @staticmethod
+    def credit_of(asset: MediaAsset) -> dict[str, str] | None:
+        """How the site credits a stock photograph (photographer and source,
+        with the links the source asks for), or None for any other picture."""
+        if getattr(asset, "source_type", None) != "stock_photo":
+            return None
+        provenance = getattr(asset, "provenance", None)
+        attribution = provenance.get("attribution") if isinstance(provenance, dict) else None
+        if isinstance(attribution, dict) and attribution.get("line"):
+            return {k: str(v)[:300] for k, v in attribution.items()
+                    if k in {"line", "name", "name_url", "source", "source_url", "page_url"} and v}
+        line = str(getattr(asset, "original_filename", "") or "")
+        return {"line": line[:200]} if line else None
 
     @staticmethod
     def serialize(asset: MediaAsset) -> dict[str, Any]:
@@ -516,5 +622,6 @@ class MediaService:
             "source_type": asset.source_type,
             "generated_for": asset.generated_for,
             "approval_state": asset.approval_state,
+            "credit": MediaService.credit_of(asset),
             "created_at": asset.created_at.isoformat() if asset.created_at else None,
         }

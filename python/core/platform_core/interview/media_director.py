@@ -413,10 +413,33 @@ async def retrieve_missing(
     todo = _slots_to_fill(bp, direction)
     if not todo:
         return []
-    briefs = [brief_for_slot(s, direction, trade) for s in todo]
+    concept = site_concept(bp, direction)
+    briefs = [brief_for_slot(s, direction, trade, bp=bp, concept=concept) for s in todo]
     by_key = {s.key: s for s in todo}
     results = await (retriever or retrieve_many)(briefs, concurrency=concurrency)
     return [(by_key[brief.key], outcome) for brief, outcome in results]
+
+
+def site_concept(bp: BusinessBlueprint, direction: CreativeDirection) -> str:
+    """The design DNA concept the site will be composed with (noir editorial,
+    warm craft, fresh market…), so its photographs are art-directed with it.
+
+    The same draw `site_composer` makes, before composition: the experience's
+    motion is not known yet, so a calm experience the composer later chooses
+    can narrow its concept further — the photographs then lean one step bolder
+    than the type, never the other way round.
+    """
+    from platform_core.interview.design_dna import choose_dna
+
+    choices = direction.model_choices or {}
+    experience = choices.get("experience") if isinstance(choices.get("experience"), dict) else {}
+    try:
+        return str(choose_dna(dict(direction.dimensions or {}), family=direction.family,
+                              archetype=direction.archetype,
+                              motion=str((experience or {}).get("motion") or ""), seed=str(bp.business_id),
+                              concept=str(choices.get("concept") or "") or None).concept)
+    except Exception:  # noqa: BLE001 — art direction is a refinement, never a reason to fail
+        return ""
 
 
 def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str = "", *,
@@ -500,7 +523,9 @@ def section_image_brief(theme: dict[str, object], section_type: str, trade: str,
     else:
         slot = Slot("item", subject or trade, "4:3", "offering", "", purpose="item",
                     truth_class="representative", section=section_type)
-    return brief_for_slot(slot, shown, trade)
+    dna = theme.get("dna")
+    concept = str(dna.get("concept") or "") if isinstance(dna, dict) else ""
+    return brief_for_slot(slot, shown, trade, concept=concept)
 
 
 # What the editor may offer for each picture a section can carry — the one

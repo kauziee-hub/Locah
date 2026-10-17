@@ -1270,6 +1270,19 @@
   }
 }
 
+/* Stock photographs, credited the way their sources ask: quiet, in the site's own colours. */
+.ls-foot__credits {
+  color: var(--site-muted);
+  font-size: 0.78em;
+  line-height: 1.5;
+}
+.ls-foot__credits a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
 /* The one place LOCAH may appear on a tenant site: a quiet attribution. */
 .ls-foot__by {
   color: var(--site-muted);

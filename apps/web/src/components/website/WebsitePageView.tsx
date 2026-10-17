@@ -6,7 +6,7 @@ import { siteFontVariables } from './site-fonts'
 import { withPreviewToken } from './preview-links'
 import { LanguageSwitch } from './LanguageSwitch'
 import { SiteWordsProvider } from './SiteWords'
-import type { PublicWebsitePayload } from '@/lib/public-website'
+import type { PublicWebsitePayload, PhotoCredit } from '@/lib/public-website'
 import { LANG_LOCALE, offered, siteWords, type SiteLang } from '@/lib/site-words'
 import { MOTION_BOOT, SiteMotion } from './experience/SiteMotion'
 import { siteDna, siteExperience } from './experience/experience'
@@ -250,10 +250,15 @@ export function WebsitePageView({
   // Every picture on this page, once, in page order: what a hero scene (a
   // ring, a wall, floating cards) and a story collage compose with.
   const pictures: Pic[] = []
+  // Stock photographs are credited once each, in the footer, with the links
+  // their source asks for (Unsplash's API guidelines; Pixabay's request).
+  const credits: PhotoCredit[] = []
   for (const section of sections) {
     for (const [key, asset] of Object.entries(section.assets || {})) {
       if (!asset?.url || key === 'logo_asset_id') continue
       if (!pictures.some((p) => p.url === asset.url)) pictures.push({ url: asset.url, alt_text: asset.alt_text })
+      const credit = asset.credit
+      if (credit?.line && !credits.some((c) => c.line === credit.line)) credits.push(credit)
     }
   }
   const capabilities = data.capabilities || {}
@@ -615,6 +620,35 @@ export function WebsitePageView({
             &copy; {new Date().getFullYear()} {name}
           </span>
           <LanguageSwitch languages={languages} current={lang} place="foot" />
+          {credits.length ? (
+            <span className="ls-foot__credits">
+              {t('Photography')}:{' '}
+              {credits.map((c, i) => (
+                <span key={c.line}>
+                  {i ? ' · ' : null}
+                  {c.name && c.name_url ? (
+                    <a href={c.name_url} target="_blank" rel="noopener noreferrer nofollow">
+                      {c.name}
+                    </a>
+                  ) : (
+                    c.name || c.line
+                  )}
+                  {c.source ? (
+                    <>
+                      {' / '}
+                      {c.source_url ? (
+                        <a href={c.source_url} target="_blank" rel="noopener noreferrer nofollow">
+                          {c.source}
+                        </a>
+                      ) : (
+                        c.source
+                      )}
+                    </>
+                  ) : null}
+                </span>
+              ))}
+            </span>
+          ) : null}
           <Link className="ls-foot__by" href="/">
             {t('Powered by LOCAH')}
           </Link>

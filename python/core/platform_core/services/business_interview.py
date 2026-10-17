@@ -392,14 +392,16 @@ async def place_found_pictures(
         if photo is None:
             record(bp, slot, None, outcome.reason, stock=True)
             continue
-        asset = await MediaService.persist_retrieved(
-            session, business_id=business_id, actor_id=actor_id, purpose="website",
-            url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type,
-            alt_text=f"Photograph: {slot.subject or 'cover'}"[:200],
-            credit=photo.credit or f"{photo.photographer} via {photo.provider.title()}",
-            width=photo.width, height=photo.height,
-            generated_for=slot.key, generation_job_id=generation_job_id, prompt_version=PROMPT_VERSION,
-        )
+        try:
+            asset = await MediaService.persist_found(
+                session, business_id=business_id, actor_id=actor_id, purpose="website", found=photo,
+                alt_text=f"Photograph: {slot.subject or 'cover'}"[:200],
+                generated_for=slot.key, generation_job_id=generation_job_id, prompt_version=PROMPT_VERSION,
+            )
+        except ValidationError as exc:
+            # A picture that could not be copied (Pixabay) leaves the slot empty, never hotlinked.
+            record(bp, slot, None, f"store_failed:{str(exc)[:80]}", stock=True)
+            continue
         record(bp, slot, UUID(asset["id"]), stock=True)
         placed += 1
     return placed

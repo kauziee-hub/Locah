@@ -18,7 +18,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.logging import get_logger
-from platform_core.models import Business, BusinessProfile, Offering, WebsitePage, WebsiteSection, WebsiteVersion
+from platform_core.models import (
+    Business,
+    BusinessProfile,
+    MediaAsset,
+    Offering,
+    WebsitePage,
+    WebsiteSection,
+    WebsiteVersion,
+)
 from platform_core.services.media import MediaService
 from platform_core.interview.media_director import (
     REAL_PHOTO_MESSAGE,
@@ -93,8 +101,14 @@ class WebsiteImageService:
         alt_text: str,
         original_filename: str,
         generated_for: str | None = None,
+        prior_brief: dict[str, Any] | None = None,
+        exclude: set[str] | None = None,
     ) -> dict[str, Any] | None:
         """One picture for one slot, persisted as a media asset — or None.
+
+        Replacing a found photograph ("change this image") reuses the brief it
+        was found with (`prior_brief`) and leaves out every photo in `exclude`
+        (the current one and the rest of the site's), from a fresh search.
 
         By default a real photograph found and verified online; a drawn picture
         only where IMAGE_PROVIDER=gemini. A persist failure raises (the caller
@@ -102,20 +116,19 @@ class WebsiteImageService:
         """
         prompt, aspect = planned
         if picture_source() == "stock":
-            from platform_core.website.image_retrieval import retrieve_for_slot
+            from platform_core.website.image_retrieval import PhotoBrief, regenerate, retrieve_for_slot
 
-            brief = section_image_brief(theme, section_type, trade, subject=subject)
+            brief = PhotoBrief.from_dict(prior_brief) if prior_brief else \
+                section_image_brief(theme, section_type, trade, subject=subject)
             if brief is None:
                 return None
-            photo = (await retrieve_for_slot(brief)).found
+            photo = (await regenerate(brief, exclude=exclude)).found if exclude else \
+                (await retrieve_for_slot(brief)).found
             if photo is None:
                 return None
-            retrieved: dict[str, Any] = await MediaService.persist_retrieved(
-                session, business_id=business_id, actor_id=actor_id, purpose=purpose,
-                url=photo.url, page_url=photo.page_url, mime_type=photo.mime_type, alt_text=alt_text,
-                credit=photo.credit or f"{photo.photographer} via {photo.provider.title()}",
-                width=photo.width, height=photo.height,
-                generated_for=generated_for, prompt_version=PROMPT_VERSION,
+            retrieved: dict[str, Any] = await MediaService.persist_found(
+                session, business_id=business_id, actor_id=actor_id, purpose=purpose, found=photo,
+                alt_text=alt_text, generated_for=generated_for, prompt_version=PROMPT_VERSION,
             )
             return retrieved
         generated = await generate_image_bytes(prompt, aspect_ratio=aspect)
@@ -127,6 +140,32 @@ class WebsiteImageService:
             original_filename=original_filename, generated_for=generated_for, prompt_version=PROMPT_VERSION,
         )
         return drawn
+
+    @staticmethod
+    async def _previous_photo(
+        session: AsyncSession, business_id: uuid.UUID, current_asset_id: Any,
+    ) -> tuple[dict[str, Any] | None, set[str] | None]:
+        """For replacing a found photograph: the brief it was found with, and every
+        stock photo this business already uses (so the replacement is new to the
+        site). (None, None) when the current picture is not a found photograph."""
+        try:
+            current_id = uuid.UUID(str(current_asset_id)) if current_asset_id else None
+        except ValueError:
+            current_id = None
+        if current_id is None:
+            return None, None
+        current = await session.get(MediaAsset, current_id)
+        if current is None or current.business_id != business_id or current.source_type != "stock_photo":
+            return None, None
+        rows = (await session.execute(
+            select(MediaAsset.provenance).where(
+                MediaAsset.business_id == business_id, MediaAsset.source_type == "stock_photo",
+                MediaAsset.deleted_at.is_(None)))).scalars().all()
+        exclude = {f"{p.get('provider')}:{p.get('photo_id')}" for p in rows
+                   if isinstance(p, dict) and p.get("provider") and p.get("photo_id")}
+        provenance = current.provenance if isinstance(current.provenance, dict) else {}
+        brief = provenance.get("brief") if isinstance(provenance.get("brief"), dict) else None
+        return brief or None, exclude
 
     @staticmethod
     async def _theme_of(session: AsyncSession, section: WebsiteSection) -> dict[str, Any]:
@@ -179,12 +218,15 @@ class WebsiteImageService:
         if planned is None:
             return {"ok": False, "reason": "needs_real_photo", "detail": REAL_PHOTO_MESSAGE}
         slot = f"editor:{section.section_type_id}" + (f":{list_key}.{index}" if list_key is not None else "")
+        current = (row if row is not None else content).get("image_asset_id")
+        prior_brief, exclude = await WebsiteImageService._previous_photo(session, business_id, current)
         asset = await WebsiteImageService._obtain(
             session, business_id=business_id, actor_id=actor_id, theme=theme,
             section_type=section.section_type_id, trade=_trade(business), subject=subject, planned=planned,
             purpose="website",
             alt_text=f"Illustrative picture: {subject}"[:200] if subject else "Illustrative picture",
             original_filename="generated-section.png", generated_for=slot,
+            prior_brief=prior_brief, exclude=exclude,
         )
         if asset is None:
             return {

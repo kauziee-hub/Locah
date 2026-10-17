@@ -154,13 +154,14 @@ async def generate_interview_media(
 async def find_hero_photo(bp: BusinessBlueprint) -> FoundImage | None:
     """A verified real photograph for the cover, in the site's own visual world."""
     from platform_core.interview.creative_director import direct
-    from platform_core.interview.media_director import plan_slots
+    from platform_core.interview.media_director import plan_slots, site_concept
     from platform_core.website.image_retrieval import brief_for_slot, retrieve_for_slot
 
     direction = direct(bp, media_expected=True)  # this job is finding the picture
     hero = next(s for s in plan_slots(bp, direction) if s.key == "hero")
     outcome = await retrieve_for_slot(
-        brief_for_slot(hero, direction, classification_seed(bp).replace("_", " ")))
+        brief_for_slot(hero, direction, classification_seed(bp).replace("_", " "), bp=bp,
+                       concept=site_concept(bp, direction)))
     return outcome.found
 
 
@@ -173,18 +174,13 @@ async def _apply_hero_found(
     request: MediaGenerationRequest,
     found: FoundImage,
 ) -> None:
-    asset = await MediaService.persist_retrieved(
+    asset = await MediaService.persist_found(
         session,
         business_id=business_id,
         actor_id=actor_id,
         purpose="website",
-        url=found.url,
-        page_url=found.page_url,
-        mime_type=found.mime_type,
+        found=found,
         alt_text="Photograph for the top of the website",
-        credit=found.credit or f"{found.photographer} via {found.provider.title()}",
-        width=found.width,
-        height=found.height,
         generated_for="hero",
         generation_job_id=generation_job_id,
     )

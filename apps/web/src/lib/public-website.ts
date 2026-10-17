@@ -1,6 +1,17 @@
 import { platformUrl } from '@platform/config'
 const apiUrl = platformUrl('api')
 
+/** How a stock photograph is credited: the photographer and the source, with
+ *  the links the source asks for (Unsplash: referral links; Pixabay: the source). */
+export type PhotoCredit = {
+  line: string
+  name?: string
+  name_url?: string
+  source?: string
+  source_url?: string
+  page_url?: string
+}
+
 export type PublicWebsitePayload = {
   business: {
     id: string
@@ -32,7 +43,7 @@ export type PublicWebsitePayload = {
       content: Record<string, unknown>
       /** Asset ids in `content` resolved to public URLs. Never inside `content`
        *  itself — section content is schema-validated on write. */
-      assets?: Record<string, { url: string; alt_text?: string | null }>
+      assets?: Record<string, { url: string; alt_text?: string | null; credit?: PhotoCredit | null }>
       is_visible: boolean
     }[]
   }
