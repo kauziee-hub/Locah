@@ -61,9 +61,10 @@ def _evening(end: int, start: int | None, near: int | None = None) -> int:
     return end
 
 
-def _span(match: re.Match[str], part: str = "") -> tuple[int, int] | None:
+def _span(match: re.Match[str], part: str = "", after: int | None = None) -> tuple[int, int] | None:
     """`part`: the clause says dinner/evening ("evening": bare hours are pm) or
-    breakfast/morning ("morning": they are am)."""
+    breakfast/morning ("morning": they are am). `after`: where the span said
+    before it in the same breath closed ("8-1 and 5-9": the 5 is 5 pm)."""
     h1, m1, a1, h2, m2, a2 = match.groups()
     if part == "evening" and not a1 and not a2:
         a1 = "pm" if int(h1) < 12 else None
@@ -73,6 +74,8 @@ def _span(match: re.Match[str], part: str = "") -> tuple[int, int] | None:
     start, end = _minutes(h1, m1, a1), _minutes(h2, m2, a2)
     if start is None or end is None:
         return None
+    if after is not None and not a1 and start < after and start < 12 * 60:
+        start += 12 * 60
     if not a2:
         end = _evening(end, start)
     return start, 0 if end == 24 * 60 else end
@@ -109,9 +112,16 @@ def days_named(text: str) -> list[str]:
     return [d for d in DAYS if d in days]
 
 
-# A statement is split where it moves on: "10 am to 9 pm, closed on Sundays".
+# A statement is split where it moves on: "10 am to 9 pm, closed on Sundays",
+# and at the end of a sentence ("Sat Sun lunch. Monday closed.") — not inside
+# "9.30". ("p.m." is already "pm" by then.)
+# Also before a day said right after a time, when it says something of its own
+# ("eve 5-9 sunday morning only"), but not "9 to 6 Monday to Saturday".
 _CLAUSE = re.compile(
-    r"\s*(?:[,;]|\bbut\b|\band\b(?=\s+(?:on\s+)?(?:closed|open|mon|tue|wed|thu|fri|sat|sun|week)))\s*", re.I)
+    r"\s*(?:[,;]|\.(?=\s|$)|\bbut\b|"
+    r"\band\b(?=\s+(?:on\s+)?(?:closed|open|mon|tue|wed|thu|fri|sat|sun|week))|"
+    r"(?<=\d)\s+(?=(?:on\s+)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\s+"
+    r"(?:mornings?|evenings?|nights?|only|half|closed|holiday|leave|off)\b))\s*", re.I)
 # Times are read only in a clause that is about opening: "deliver within 5 to
 # 7 km" has numbers, not hours.
 _CUE = re.compile(
@@ -124,6 +134,9 @@ _CUE = re.compile(
 
 _N = r"(\d{1,2}(?:[:.]\d{2})?)"
 _NAMED_TIMES = (
+    # "8 p.m." is "8 pm"; "8 p.m. Closed on Sundays" also ends a sentence.
+    (re.compile(r"(?i:\b([ap])\.m\.)(?=\s+[A-Z])"), r"\1m."),
+    (re.compile(r"\b([ap])\.m\.?", re.I), r"\1m"),
     (re.compile(r"\bmidnight\b", re.I), "12 am"), (re.compile(r"\bnoon\b", re.I), "12 pm"),
     # Tamil, in English letters and in Tamil script: "kaalai 9 to raathiri 10",
     # "11 varaikum open" (till 11), "weekend la" (on weekends).
@@ -183,7 +196,20 @@ def _clause(flat: str, current: Week, *, add: bool = False) -> Week | None:
             week[d] = []
         return week
     part = "evening" if _EVENING.search(flat) else "morning" if _MORNING.search(flat) else ""
-    spans = [_span(m, part) for m in _SPAN.finditer(flat)]
+    spans: list[tuple[int, int] | None] = []
+    for m in _SPAN.finditer(flat):
+        before = spans[-1] if spans else None
+        spans.append(_span(m, part, before[1] if before else None))
+    if days and part and not spans and not _UNTIL.search(flat) and not _FROM.search(flat):
+        # "Sunday morning only" after "8-1 and 5-9": those days keep the part
+        # of the day they named — when the week already has one.
+        def named(span: list[str]) -> bool:
+            return span[0] < "12:00" if part == "morning" else span[0] >= "16:00"
+        kept = {d: [s for s in week[d] if named(s)] for d in days}
+        if not all(kept.values()):
+            return None
+        week.update(kept)
+        return week
     if spans:
         if None in spans:
             return None

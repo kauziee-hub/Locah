@@ -180,7 +180,13 @@ def importance(target_id: str, prof: Profile, bp: BusinessBlueprint) -> Importan
     if target_id in {"b2b.customers", "b2b.process"}:
         return "high_value" if b2b else "optional"
     if target_id == "memberships.plans":
-        return "high_value" if prof.has("has_memberships") else "optional"
+        # Plans lead the site where they are what is sold (a gym elevates them)
+        # or the owner spoke of them. A trade that only sometimes sells them —
+        # a clinic's health packages — is not asked "monthly or yearly?" ahead
+        # of its hours (certification: a clinic built with no hours could not
+        # offer one appointment).
+        sells_plans = prof.saw("has_memberships") or pb.offer_kind == "plan" or "memberships" in bp.approved_modules
+        return "high_value" if sells_plans else "enrichment" if prof.has("has_memberships") else "optional"
     booked = pb.booking_led and prof.saw("accepts_appointments", "runs_classes")
     if target_id == "bookings.format":
         # What is booked and how shapes a booking-led site; a restaurant that

@@ -168,6 +168,15 @@ async def test_acknowledgements_vary_and_a_summary_comes_mid_way() -> None:
     ("24/7", "Every day open 24 hours"),
     ("kaalai 9 mudhal raathiri 10 varaikum open", "Every day 9 am–10 pm"),
     ("காலை 9 முதல் இரவு 10 வரை திறந்திருக்கும்", "Every day 9 am–10 pm"),
+    # A sentence of its own is a clause of its own: Monday closing does not
+    # close the weekend, and a lunch with no time keeps the dinner it had.
+    ("Tue-Sun dinner 7-11, Sat Sun lunch. Monday closed.", "Mon closed; Tue–Sun 7 pm–11 pm"),
+    ("Open 10 a.m. to 8 p.m. Closed on Sundays.", "Mon–Sat 10 am–8 pm; Sun closed"),
+    # A second span in the same breath comes after the first; a day that
+    # names only a part of the day keeps that part.
+    ("open 8-1 and 5-9, Sunday morning.", "Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm"),
+    ("timing morn 8-1 eve 5-9 sunday morning only","Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm"),
+    ("Open 9 to 6 Monday to Saturday", "Mon–Sat 9 am–6 pm; Sun closed"),
 ])
 def test_hours_are_read_as_a_week(said: str, week: str) -> None:
     found = hours.parse(said)
