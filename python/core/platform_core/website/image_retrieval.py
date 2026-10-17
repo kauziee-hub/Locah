@@ -116,6 +116,11 @@ def editorial_queries_per_slot() -> int:
     return _int_env("IMAGE_EDITORIAL_QUERIES", 3, 0, 8)
 
 
+def editorial_queries_for_minor_slots() -> int:
+    """How many of a minor slot's searches (range, item, detail…) also go to Unsplash."""
+    return _int_env("IMAGE_EDITORIAL_MINOR_QUERIES", 1, 0, 8)
+
+
 def vision_input_mode() -> str:
     """How pictures reach the vision model. `thumbnail` (default): LOCAH fetches a small
     preview and holds it in memory, so the model certainly sees the picture. `url`: the
@@ -380,6 +385,33 @@ def _owner_words(bp: Any) -> tuple[str, str, tuple[str, ...]]:
     return described[:400], locality[:160], tuple(dict.fromkeys(offers))[:24]
 
 
+# Archetypes whose story, process and detail pictures should show the goods the
+# business actually makes or sells — not a generic kitchen or counter.
+_GOODS_ARCHETYPES = frozenset({"product_commerce", "menu_commerce"})
+
+
+def goods_subject(role: str, bp: Any, template: str) -> str:
+    """A story/process/detail subject built from what the owner said they sell.
+
+    The media plan's mood subjects are written per archetype ("the kitchen
+    where everything is made — spices, brass and clay vessels…"), which is
+    wrong for a bakery that sells bread and puffs. With the owner's own
+    categories, the picture is of their goods; without them, the template.
+    """
+    taxonomy = getattr(bp, "taxonomy", None) if bp is not None else None
+    names = [str(getattr(g, "name", "") or "").strip() for g in (getattr(taxonomy, "groups", []) or [])]
+    names = [n for n in names if n][:3]
+    if not names:
+        return template
+    goods = ", ".join(n.casefold() for n in names[:-1]) + (" and " if len(names) > 1 else "") + names[-1].casefold()
+    first = names[0].casefold()
+    if role == "story":
+        return f"the place where {goods} are made and sold — the counter, the tools, real working light"
+    if role == "process":
+        return f"hands at work making or preparing {first}, close and natural"
+    return f"an extreme close-up of the texture of {first}, appetising, shallow depth of field"
+
+
 def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, concept: str = "") -> PhotoBrief:
     """A `PhotoBrief` from a MediaDirector slot, the site's creative direction,
     the business's own words (`bp`) and the site's design DNA concept."""
@@ -407,13 +439,16 @@ def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, con
     else:
         framing = "The subject fills the frame, centred, styled simply."
     business, locality, offers = _owner_words(bp) if bp is not None else ("", "", ())
+    subject = slot.subject
+    if role in {"story", "process", "detail"} and str(get("archetype") or "") in _GOODS_ARCHETYPES:
+        subject = goods_subject(role, bp, slot.subject)
     avoid: tuple[str, ...] = _DEFAULT_AVOID
     if role in {"story", "process"}:
         # The work is done by people: hands may be in the picture, faces stay incidental.
         avoid = tuple(a for a in _DEFAULT_AVOID if not a.startswith("people")) + (
             "faces as the main subject",)
     return PhotoBrief(
-        key=slot.key, subject=slot.subject, purpose=slot.purpose, section=slot.section,
+        key=slot.key, subject=subject, purpose=slot.purpose, section=slot.section,
         truth_class=slot.truth_class, aspect=slot.aspect, trade=trade, world=shoot.world,
         light=art.light or shoot.light, grade=shoot.grade, palette=shoot.palette, framing=framing,
         avoid=avoid + art.avoid, role=role, business=business, locality=locality, offerings=offers,
@@ -904,7 +939,8 @@ async def gather_pool(
         for i, query in enumerate(queries):
             for source in sources:
                 name = source.provider_name
-                if name == "unsplash" and (i >= editorial or (intent.importance == "minor" and i >= 1)):
+                minor_cap = editorial_queries_for_minor_slots()
+                if name == "unsplash" and (i >= editorial or (intent.importance == "minor" and i >= minor_cap)):
                     continue  # the hourly quota is spent where editorial pictures matter
                 calls.append((query, source))
     else:

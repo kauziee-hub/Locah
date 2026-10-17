@@ -51,7 +51,8 @@ os.environ.pop("GEMINI_API_KEY", None)
 # DeepSeek is the default provider and the photo search has a key of its own:
 # neither may be live in the suite. A test that wants one sets it and stubs it.
 os.environ.pop("DEEPSEEK_API_KEY", None)
-os.environ.pop("PEXELS_API_KEY", None)
+for _photo_key in ("UNSPLASH_ACCESS_KEY", "UNSPLASH_SECRET_KEY", "PIXABAY_API_KEY", "PEXELS_API_KEY"):
+    os.environ.pop(_photo_key, None)  # tests never reach a real photo source
 os.environ["IMAGE_PROVIDER"] = "none"
 
 # The suite writes to a database a deployed worker also polls. Every job it

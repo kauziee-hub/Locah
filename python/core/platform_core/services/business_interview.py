@@ -398,9 +398,9 @@ async def place_found_pictures(
                 alt_text=f"Photograph: {slot.subject or 'cover'}"[:200],
                 generated_for=slot.key, generation_job_id=generation_job_id, prompt_version=PROMPT_VERSION,
             )
-        except ValidationError as exc:
+        except ValidationError:
             # A picture that could not be copied (Pixabay) leaves the slot empty, never hotlinked.
-            record(bp, slot, None, f"store_failed:{str(exc)[:80]}", stock=True)
+            record(bp, slot, None, "store_failed:copy_unavailable", stock=True)
             continue
         record(bp, slot, UUID(asset["id"]), stock=True)
         placed += 1

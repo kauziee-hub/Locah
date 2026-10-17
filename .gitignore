@@ -65,3 +65,4 @@ locah-accept-*/
 .next-lab/
 # Site lab fixtures (tools/site-lab/serve.sh)
 .site-lab/
+apps/web/public/site-lab-photos/
