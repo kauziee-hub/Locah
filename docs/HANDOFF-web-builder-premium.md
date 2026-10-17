@@ -42,12 +42,25 @@ Pixabay key appeared in the founder's pasted docs — suggest rotating it.
 | Design v2 spec — three design-director reviews with exact changes | done | `docs/design-v2-panel.md` |
 | Design v2 — the whole panel spec (accent system, editorial type library + optical sizes, typeset eyebrows, button spec, hero CTA discipline, scene policy, zoom cover composition, palette discipline, photo grades, chrome, closing band, footer name, reading text, number/unit glue, Unsplash srcset) | done, committed `1dcd8df`; verified ruff, mypy, tsc, lint, 355 website/media tests | three owners (workflow in session 317efa20) + follow-up fixes from lab shots |
 | Four-lens critique of the design v2 result | never completed (cut by the usage limit) — optional next step | — |
-| Ishant photo rerun with Unsplash + Pixabay | running 2026-10-17 19:05 | `premium_lab photos lab-ishant` |
+| Ishant photo rerun with Unsplash + Pixabay | done: 6/7 slots (was 1-2/7); hero honestly empty after 3 rounds (beef steak, brand marks, hands refused) — the zoom cover borrows the chicken pick | `.site-lab/photo-report.json` |
+| Fixes from that rerun: hero rounds include a wide "place/display" query; thin Unsplash answers widened with subject tags; the tag pre-filter applies to Pixabay only, with trade kin words (it had been dropping ~55 of 60 Unsplash results) | done `0a6f07b`, `6b7338a` | `website/image_retrieval.py` |
+| Final shots with design v2 + real photos | done | `.site-lab/compare/final-2026-10-17/` (before: `.site-lab/compare/design-before/`) |
 
 Commits on this branch (2026-10-17): `b78f7b5` checkpoint, `f25cc9b`
 pipeline, `6d3d1a7` lab/tests/guards, `b2dfe69` + `e5db9b7` + `ca7809b`
 selection fixes from real runs, `118f9cc` hero fixes, `85a3bc3` panel spec,
-`1dcd8df` design v2.
+`1dcd8df` design v2, `0a6f07b` + `6b7338a` hero queries and Unsplash relevance.
+
+## Next (in order)
+
+1. Unsplash production access (5000/h) before real traffic; the demo key
+   allows ~3 lab sites an hour.
+2. Apply migration 20261017140000 (media_assets.provenance) and
+   20261017120000 to hosted Supabase before deploying this branch.
+3. Optional four-lens critique of design v2 (the earlier run was cut off).
+4. Species/cut rubric line (a T-bone passed as "Mutton"); consider judging
+   the final candidates twice to tame judge variance.
+5. Push/merge: ask the founder (branch tracks origin/gowtham).
 
 ## Findings from the real runs (2026-10-17)
 
