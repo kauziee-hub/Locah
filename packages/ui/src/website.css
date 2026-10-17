@@ -42,11 +42,15 @@
   text-wrap: balance;
 }
 
-[data-locah-site] p {
+/* A default, not a rule: at (0,1,1) this reset outranked every component's
+   own paragraph class (0,1,0) — a centred closing line pinned to the left and
+   touching its headline, a footer name wrapping. :where() leaves it (0,0,0),
+   so any class that styles a paragraph wins wherever it is declared. */
+:where([data-locah-site] p) {
   margin: 0 0 1rem;
   text-wrap: pretty;
 }
-[data-locah-site] p:last-child {
+:where([data-locah-site] p:last-child) {
   margin-bottom: 0;
 }
 

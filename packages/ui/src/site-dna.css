@@ -1859,7 +1859,7 @@
 /* A price list's per-line "order" link (it opens WhatsApp with that line's
    name): a quiet link that shows on hover, not a button on every line. A live
    basket's Add button (a <button>) stays a button. */
-[data-locah-site] .fx-menu__item a.ls-order {
+[data-locah-site] :is(.fx-menu__item, .fx-menu__plate) a.ls-order {
   min-height: 0;
   padding: 0.15rem 0;
   border: 0;

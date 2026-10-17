@@ -1004,6 +1004,10 @@ function MenuBook({
           {names.map((name, n) => {
             const info = categoryInfo.get(name)
             const rows = items.filter((it) => (it.category || '').trim() === name)
+            // A dish with its photograph is shown as a plate, large enough to
+            // want; the rest of the chapter reads as a menu's price list.
+            const plates = rows.filter((it) => it.image)
+            const listed = rows.filter((it) => !it.image)
             return (
               <section key={ids[n]} id={ids[n]} className="fx-menu__chapter" aria-label={name || title}>
                 {names.length > 1 || name ? (
@@ -1019,33 +1023,61 @@ function MenuBook({
                     ) : null}
                   </div>
                 ) : null}
-                <ul className="fx-menu__items" data-reveal-group="">
-                  {rows.map((item) => (
-                    <li
-                      key={item.name}
-                      className={`fx-menu__item ${item.image ? '' : 'fx-menu__item--plain'}`}
-                    >
-                      {item.image ? (
-                        <div className="fx-menu__thumb">
+                {plates.length ? (
+                  <ul
+                    className={`fx-menu__plates fx-menu__plates--${Math.min(plates.length, 3)}`}
+                    data-reveal-group=""
+                  >
+                    {plates.map((item, i) => (
+                      <li key={item.name} className={`fx-menu__plate ${i === 0 && plates.length > 2 ? 'fx-menu__plate--lead' : ''}`}>
+                        <figure className="fx-menu__photo">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
+                          <img
+                            src={item.image!.url}
+                            srcSet={srcSetFor(item.image!.url)}
+                            sizes="(min-width: 980px) 460px, (min-width: 600px) 50vw, 100vw"
+                            alt={item.image!.alt_text || item.name}
+                            loading="lazy"
+                          />
+                          {item.tag ? <span className="fx-menu__flag">{item.tag}</span> : null}
+                        </figure>
+                        <div className="fx-menu__plate-copy">
+                          <h4 className="fx-menu__name">
+                            <Diet value={item.diet} t={t} />
+                            {item.name}
+                            <Spice value={item.spice} t={t} />
+                          </h4>
+                          <span className="fx-menu__price">
+                            {item.price || ''}
+                            {item.price && item.unit ? <small>{item.unit}</small> : null}
+                          </span>
+                          {item.description ? <p className="fx-menu__desc">{item.description}</p> : null}
+                          <MenuAction>{action(item)}</MenuAction>
                         </div>
-                      ) : null}
-                      <h4 className="fx-menu__name">
-                        <Diet value={item.diet} t={t} />
-                        {item.name}
-                        <Spice value={item.spice} t={t} />
-                        {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
-                      </h4>
-                      <span className="fx-menu__price">
-                        {item.price || ''}
-                        {item.price && item.unit ? <small>{item.unit}</small> : null}
-                      </span>
-                      {item.description ? <p className="fx-menu__desc">{item.description}</p> : null}
-                      <MenuAction>{action(item)}</MenuAction>
-                    </li>
-                  ))}
-                </ul>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {listed.length ? (
+                  <ul className="fx-menu__items" data-reveal-group="">
+                    {listed.map((item) => (
+                      <li key={item.name} className="fx-menu__item fx-menu__item--plain">
+                        <h4 className="fx-menu__name">
+                          <Diet value={item.diet} t={t} />
+                          {item.name}
+                          <Spice value={item.spice} t={t} />
+                          {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
+                        </h4>
+                        <span className="fx-menu__price">
+                          {item.price || ''}
+                          {item.price && item.unit ? <small>{item.unit}</small> : null}
+                        </span>
+                        {item.description ? <p className="fx-menu__desc">{item.description}</p> : null}
+                        <MenuAction>{action(item)}</MenuAction>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </section>
             )
           })}
