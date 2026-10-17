@@ -936,6 +936,35 @@ function designedFor(title: string, designed: Item[], used: Set<string>): Item |
   return best
 }
 
+/**
+ * Each plate's place in a balanced six-column grid, so a chapter never ends on
+ * an orphan beside a void (certification: three plates left the third alone
+ * with two-thirds of the row empty). Two split the row; three are one tall
+ * lead beside two; more open with a lead at two-thirds beside its partner,
+ * then rows of three, a remainder of two splitting a row and a last single
+ * plate laid wide.
+ */
+export function plateSpans(n: number): string[] {
+  if (n <= 1) return ['solo']
+  if (n === 2) return ['half', 'half']
+  if (n === 3) return ['tall', 'side', 'side']
+  const spans = ['lead', 'pair']
+  let left = n - 2
+  while (left > 0) {
+    if (left === 1) {
+      spans.push('wide')
+      left = 0
+    } else if (left === 2 || left === 4) {
+      spans.push('half', 'half')
+      left -= 2
+    } else {
+      spans.push('third', 'third', 'third')
+      left -= 3
+    }
+  }
+  return spans
+}
+
 function MenuAction({ children }: { children: ReactNode }) {
   return children ? <div className="fx-menu__act">{children}</div> : null
 }
@@ -1061,12 +1090,9 @@ function MenuBook({
                   </div>
                 ) : null}
                 {plates.length ? (
-                  <ul
-                    className={`fx-menu__plates fx-menu__plates--${Math.min(plates.length, 3)}`}
-                    data-reveal-group=""
-                  >
+                  <ul className="fx-menu__plates" data-reveal-group="">
                     {plates.map((item, i) => (
-                      <li key={item.name} className={`fx-menu__plate ${i === 0 && plates.length > 2 ? 'fx-menu__plate--lead' : ''}`}>
+                      <li key={item.name} className="fx-menu__plate" data-span={plateSpans(plates.length)[i]}>
                         <figure className="fx-menu__photo">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img

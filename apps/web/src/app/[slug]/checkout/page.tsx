@@ -24,6 +24,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
  * (Founder §12); `?reorder=` refills the cart from one of their earlier orders
  * at today's catalogue price (§12.3 "Repeat last order").
  */
+/** Where the things to add are: the site's range page ("/menu"), else its home. */
+function rangePath(site: Awaited<ReturnType<typeof fetchPublicWebsite>>): string {
+  const primary = site?.capabilities?.primary_path
+  if (typeof primary === 'string' && primary.startsWith('/') && !primary.startsWith('/checkout')) {
+    return primary.split('#')[0] === '/' ? '' : primary.split('#')[0]
+  }
+  const range = (site?.navigation || []).find((item) => item.path && item.path !== '/' && !item.path.startsWith('/#'))
+  return range ? range.path : ''
+}
+
 export default async function CheckoutPage({ params, searchParams }: { params: { slug: string }; searchParams?: { reorder?: string; lang?: string } }) {
   if (RESERVED_SLUGS.has(params.slug)) notFound()
   let options
@@ -61,7 +71,8 @@ export default async function CheckoutPage({ params, searchParams }: { params: {
   }
   return (
     <SiteFrame site={site} lang={lang}>
-      <CheckoutClient slug={params.slug} options={options} customer={customer} authToken={customer ? token : null} reorder={reorder} unavailable={unavailable} />
+      <CheckoutClient slug={params.slug} options={options} customer={customer} authToken={customer ? token : null} reorder={reorder} unavailable={unavailable}
+        rangePath={rangePath(site)} />
     </SiteFrame>
   )
 }

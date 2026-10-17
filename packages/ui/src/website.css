@@ -461,6 +461,61 @@
 .ls-contact--compact .ls-contact__list {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 }
+/* Where to find the business: the address in the display face over a quiet
+   map-contour texture drawn in the site's own colours. */
+.ls-place {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  align-content: end;
+  justify-items: start;
+  gap: 0.75rem;
+  min-height: clamp(280px, 22vw + 160px, 420px);
+  padding: clamp(1.5rem, 1rem + 2vw, 2.75rem);
+  border-radius: var(--site-radius);
+  background: var(--site-bg-alt);
+  border: 1px solid var(--site-border);
+  color: var(--site-ink);
+}
+.ls-place::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.55;
+  background:
+    repeating-radial-gradient(circle at 72% 30%, transparent 0 22px,
+      color-mix(in srgb, var(--site-primary) 14%, transparent) 22px 23px),
+    linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--site-accent) 10%, transparent) 58% 60%, transparent 60%);
+}
+.ls-place__pin {
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--site-primary);
+}
+.ls-place__label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--site-muted);
+}
+.ls-place__address {
+  margin: 0;
+  font-family: var(--site-display-font);
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  max-width: 18ch;
+  white-space: pre-line;
+}
+.ls-place__hours {
+  margin: 0;
+  color: var(--site-muted);
+  white-space: pre-line;
+}
 .ls-map {
   border-radius: var(--site-radius);
   overflow: hidden;
@@ -2220,6 +2275,70 @@
   text-decoration: underline;
   text-underline-offset: 0.3em;
   text-decoration-thickness: 1px;
+}
+
+/* The site's own pages in the bar; with them there, the back link would be a
+   second exit beside the first. */
+.ls-frame__nav {
+  display: none;
+}
+@media (min-width: 760px) {
+  .ls-frame__nav {
+    display: flex;
+    gap: clamp(1rem, 0.5rem + 1.5vw, 2rem);
+    margin-left: auto;
+  }
+  [data-locah-site] .ls-frame__nav a {
+    font-size: 0.9rem;
+    color: var(--site-muted);
+    text-decoration: none;
+  }
+  [data-locah-site] .ls-frame__nav a:hover {
+    color: var(--site-ink);
+  }
+  [data-locah-site] .ls-frame__nav ~ a.ls-frame__back {
+    display: none;
+  }
+}
+/* An action page ends like the site does: where to find the business, its
+   pages, and the sign-off — never a page that stops mid-build. */
+.ls-frame__foot {
+  margin-top: clamp(3rem, 2rem + 4vw, 6rem);
+  border-top: 1px solid var(--site-border);
+  background: var(--site-bg-alt);
+}
+.ls-frame__foot-inner {
+  display: grid;
+  gap: 2rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(2rem, 1.5rem + 2vw, 3.25rem) clamp(1.25rem, 0.5rem + 3vw, 3rem);
+}
+@media (min-width: 760px) {
+  .ls-frame__foot-inner {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+.ls-frame__foot .ls-foot__bar {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1rem clamp(1.25rem, 0.5rem + 3vw, 3rem) 1.5rem;
+}
+.ls-frame__line {
+  margin: 0.2rem 0 0;
+  color: var(--site-muted);
+}
+/* The checkout is a focused column in the middle of the page, not a block
+   pushed into the top-left corner. */
+[data-locah-site] .ls-checkout {
+  margin-inline: auto;
+}
+[data-locah-site] .ls-checkout__empty {
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+  text-align: center;
+  padding: clamp(2rem, 1.5rem + 3vw, 3.5rem) clamp(1.25rem, 1rem + 2vw, 2.5rem);
 }
 
 /* An order's confirmation: the business's receipt, set in its own face. */

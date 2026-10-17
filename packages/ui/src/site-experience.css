@@ -1370,25 +1370,19 @@ html.lenis.lenis-smooth {
     grid-template-columns: 1fr 1fr;
   }
 }
-/* A dish with its photograph is a plate: the picture large enough to want
-   (4:5, a third of the chapter), its name set in the display face. The first
-   of three or more leads at double width; a lone plate sits beside its words. */
+/* A dish with its photograph is a plate: the picture large enough to want, its
+   name in the display face. Plates sit in a balanced six-column grid (each
+   plate's data-span from plateSpans): a lead at two-thirds beside its partner,
+   rows of three, a remainder of two split, a last single plate laid wide — no
+   orphan beside a void. One column on a phone, where two crushed the names. */
 .fx-menu__plates {
   list-style: none;
   margin: 0 0 clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem) clamp(0.9rem, 0.6rem + 1.4vw, 2rem);
-  align-items: start;
-}
-@media (min-width: 980px) {
-  .fx-menu__plates--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-.fx-menu__plates--1 {
   grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1.75rem, 1rem + 1.5vw, 2.75rem) clamp(0.9rem, 0.6rem + 1.4vw, 2rem);
+  align-items: start;
 }
 .fx-menu__plate {
   display: flex;
@@ -1399,7 +1393,7 @@ html.lenis.lenis-smooth {
 .fx-menu__photo {
   position: relative;
   margin: 0;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: var(--site-radius);
   background: var(--site-bg-alt);
@@ -1441,26 +1435,46 @@ html.lenis.lenis-smooth {
   font-size: clamp(1.2rem, 1rem + 0.7vw, 1.6rem);
   line-height: 1.15;
 }
-.fx-menu__plate--lead {
-  grid-column: span 2;
-}
-.fx-menu__plate--lead .fx-menu__photo {
-  aspect-ratio: 16 / 10;
-}
-[data-locah-site] .fx-menu__plate--lead .fx-menu__name {
-  font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.2rem);
-}
-@media (min-width: 760px) {
-  .fx-menu__plates--1 .fx-menu__plate {
+@media (min-width: 600px) {
+  .fx-menu__plates {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .fx-menu__plate[data-span='lead'] {
+    grid-column: span 4;
+  }
+  .fx-menu__plate[data-span='lead'] .fx-menu__photo {
+    aspect-ratio: 16 / 10;
+  }
+  [data-locah-site] .fx-menu__plate:is([data-span='lead'], [data-span='tall']) .fx-menu__name {
+    font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.2rem);
+  }
+  .fx-menu__plate:is([data-span='pair'], [data-span='third']) {
+    grid-column: span 2;
+  }
+  .fx-menu__plate:is([data-span='pair'], [data-span='third']) .fx-menu__photo {
+    aspect-ratio: 4 / 5;
+  }
+  .fx-menu__plate[data-span='tall'] {
+    grid-column: span 4;
+    grid-row: span 2;
+  }
+  .fx-menu__plate[data-span='tall'] .fx-menu__photo {
+    aspect-ratio: 1 / 1;
+  }
+  .fx-menu__plate[data-span='side'] {
+    grid-column: span 2;
+  }
+  .fx-menu__plate[data-span='half'] {
+    grid-column: span 3;
+  }
+  .fx-menu__plate:is([data-span='wide'], [data-span='solo']) {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     align-items: center;
     gap: clamp(1.5rem, 1rem + 2.5vw, 3.5rem);
   }
-  .fx-menu__plates--1 .fx-menu__photo {
-    aspect-ratio: 4 / 3;
-  }
-  [data-locah-site] .fx-menu__plates--1 .fx-menu__name {
+  [data-locah-site] .fx-menu__plate:is([data-span='wide'], [data-span='solo']) .fx-menu__name {
     font-size: clamp(1.6rem, 1.1rem + 1.6vw, 2.5rem);
   }
 }
@@ -1516,10 +1530,12 @@ html.lenis.lenis-smooth {
 .fx-menu__item--plain .fx-menu__act {
   grid-column: 1 / -1;
 }
+/* A tap target a thumb can hit (44px): the 34px pill was under comfortable size
+   on a page whose whole purpose is adding to a basket. */
 [data-locah-site] .fx-menu__act .ls-btn {
-  min-height: 34px;
-  padding: 0 0.9rem;
-  font-size: 0.8rem;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  font-size: 0.875rem;
   background: transparent;
   color: var(--site-primary);
   border: 1px solid color-mix(in srgb, var(--site-primary) 45%, transparent);

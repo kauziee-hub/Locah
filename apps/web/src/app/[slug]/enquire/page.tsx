@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { actionPageMetadata } from '@/lib/page-meta'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { RESERVED_SLUGS } from '@/lib/reserved-slugs'
 import { fetchPublicWebsite } from '@/lib/public-website'
@@ -41,7 +40,6 @@ export default async function EnquirePage({
     <SiteFrame site={site} lang={lang} style={{ minHeight: undefined }}>
       <main className="ls-section">
         <div className="ls-inner ls-enquire">
-          <p><Link href={`/${params.slug}`}>← {name}</Link></p>
           {offering ? (
             <article className="ls-enquire__item">
               {offering.image_url ? (

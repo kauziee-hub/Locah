@@ -102,9 +102,12 @@ export default function CheckoutClient({
   authToken,
   reorder,
   unavailable,
+  rangePath = '',
 }: {
   slug: string
   options: Options
+  /** The site's range page ("/menu"): where an empty basket sends the visitor. */
+  rangePath?: string
   /** The signed-in LOCAH customer, if any: the order joins their own record. */
   customer?: { name: string; email: string } | null
   authToken?: string | null
@@ -329,17 +332,17 @@ export default function CheckoutClient({
   return (
     <main className="ls-section">
       <div className="ls-inner ls-checkout">
-        <p>
-          <Link href={`/${slug}`}>← {options.business.display_name}</Link>
-        </p>
         <h1 className="ls-title">{t('Your order')}</h1>
         {reorder && reorder.length ? <p className="ls-meta" role="status">{t('Your earlier order, at today’s prices. Change anything before you place it.')}</p> : null}
         {unavailable && unavailable.length ? <p className="ls-meta" role="status">{t('No longer sold: {items}.', { items: unavailable.join(', ') })}</p> : null}
 
         {loaded && items.length === 0 ? (
-          <section className="ls-bill__card">
+          <section className="ls-bill__card ls-checkout__empty">
             <h2 className="ls-checkout__h">{t('Your basket is empty')}</h2>
-            <Link className="ls-btn" href={`/${slug}`}>{t('See what {business} sells', { business: options.business.display_name })}</Link>
+            {/* Straight to where the things to add are, not back to the home page. */}
+            <Link className="ls-btn ls-btn--primary" href={`/${slug}${rangePath}`}>
+              {t('See what {business} sells', { business: options.business.display_name })}
+            </Link>
           </section>
         ) : (
           <form onSubmit={onSubmit} className="ls-checkout__form">

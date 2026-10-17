@@ -696,9 +696,10 @@ export function SectionRenderer({
       // A band with nothing to press is a banner with no point.
       if (!(ctaLabel && ctaPath) && !contact?.phone && !contact?.whatsapp) return null
       if (variant === 'giant') {
-        // A band without its own picture closes on the page's last one — never
-        // the first, which is the hero's.
-        const closing = image || (pictures.length > 1 ? pictures[pictures.length - 1] : undefined)
+        // A band without a picture of its own closes in type alone: borrowing the
+        // page's last picture showed a dish card's photo twice on one page
+        // (certification critic: "the same stock photo appears twice").
+        const closing = image
         return (
           <CtaGiant
             headline={str(c.headline)}
@@ -841,13 +842,22 @@ export function SectionRenderer({
                 ) : null}
               </ul>
               {showMap ? (
-                <div className="ls-map">
-                  <iframe
-                    title={t('Map')}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
-                  />
+                // Where to find the business as a designed card in its own colours:
+                // a raw map embed read as a pasted screenshot beside the site, and
+                // on a phone it stayed a blank rectangle until scrolled into view.
+                <div className="ls-place" data-reveal="">
+                  <svg className="ls-place__pin" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    <circle cx="12" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                  <p className="ls-place__label">{t('Find us')}</p>
+                  <p className="ls-place__address">{address}</p>
+                  {hours ? <p className="ls-place__hours">{hours}</p> : null}
+                  {findable(address) ? (
+                    <a className="ls-btn ls-btn--primary" href={mapsHref(address)} target="_blank" rel="noopener noreferrer">
+                      {t('Get directions')}
+                    </a>
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -416,6 +416,12 @@
   opacity: 0.6;
 }
 
+/* A pattern is a typographic band's texture, never laid over a photograph:
+   over the closing band's picture it read as a muddy screen (certification). */
+[data-locah-site] .fx-cta--pic::after {
+  display: none;
+}
+
 /* --------------------------------------------------- edges between sections */
 
 [data-locah-site][data-divider]:not([data-divider='none']) .ls-section--alt {
