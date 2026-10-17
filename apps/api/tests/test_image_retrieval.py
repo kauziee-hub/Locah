@@ -752,3 +752,25 @@ async def test_a_candidate_whose_own_words_name_nothing_of_the_business_never_re
     outcome = await retrieve_for_slot(brief(), provider=ai, search=search)
     assert outcome.found is not None and outcome.found.photo_id == "3"
     assert [d["source_description"] for d in ai.judge_calls[0][0]["candidates"]] == ["raw chicken on a board"]
+
+
+@pytest.mark.asyncio
+async def test_a_thin_editorial_answer_is_widened_with_the_subject_tags() -> None:
+    class Thin(Source):
+        async def search(self, query: str, **kw: Any) -> list[ImageCandidate]:
+            self.calls.append({"query": query})
+            if len(query.split()) > 4:  # a whole sentence: only one result
+                return [candidate(1, desc="raw chicken wings", query=query)]
+            return [candidate(i, desc="raw chicken wings", query=query) for i in range(2, 12)]
+
+    unsplash = Thin("unsplash", [])
+    ai = FakeAI([[good(0)]])
+
+    async def plan(prompt: str, schema: dict[str, Any], config: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
+        return {"queries": ["raw chicken wings glistening on dark slate dramatic side light"],
+                "tags": ["raw chicken wings"]}
+
+    ai.generate_structured = plan  # type: ignore[method-assign]
+    await retrieve_for_slot(brief(), provider=ai, search=MultiSearch([unsplash]))
+    assert [c["query"] for c in unsplash.calls] == [
+        "raw chicken wings glistening on dark slate dramatic side light", "raw chicken wings"]

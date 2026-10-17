@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -346,13 +347,24 @@ async def photos(key: str, built: dict[str, Any]) -> tuple[dict[str, Any], dict[
     bp, direction = built["bp"], built["direction"]
     trade = _trade(bp, direction.archetype)
     briefs = [brief_for_slot(s, direction, trade, bp=bp, concept=built["concept"]) for s in built["slots"]]
+    only = {k.strip() for k in os.getenv("PREMIUM_LAB_SLOTS", "").split(",") if k.strip()}
+    if only:
+        # Re-run some slots only; the others keep their saved picks and audit.
+        briefs = [b for b in briefs if b.key in only]
     search = get_search_provider()
     if search is None:
         raise SystemExit("No photo source configured: set UNSPLASH_ACCESS_KEY and/or PIXABAY_API_KEY in .env")
     site = SiteMemory()
+    previous_picks = dict((_load(PICKS).get(key) or {})) if only else {}
+    previous = (_load(REPORT).get(key) or {}) if only else {}
+    for kept in previous.get("slots", []):
+        if kept.get("slot") not in only and kept.get("provider") and kept.get("photo_id"):
+            site.used.add(f"{kept['provider']}:{kept['photo_id']}")  # never repeat a photo the site has
     results = await retrieve_many(briefs, search=search, site=site)
-    picks: dict[str, Any] = {}
-    report: dict[str, Any] = {"concept": built["concept"], "trade": trade, "slots": []}
+    picks: dict[str, Any] = {k: v for k, v in previous_picks.items()
+                             if k not in {str(uuid.uuid5(bp.business_id, s)) for s in only}}
+    report: dict[str, Any] = {"concept": built["concept"], "trade": trade,
+                              "slots": [r for r in previous.get("slots", []) if r.get("slot") not in only]}
     by_key = {s.key: s for s in built["slots"]}
     for brief, outcome in results:
         slot = by_key[brief.key]

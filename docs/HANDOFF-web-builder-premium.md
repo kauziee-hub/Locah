@@ -40,11 +40,14 @@ Pixabay key appeared in the founder's pasted docs — suggest rotating it.
 | Real run: bakery 6/10 slots, Cleaver 5/7, gym 2/4, Ishant 1-2/7 (see findings) + before/after shots | done once; Ishant needs a rerun with Unsplash | `.site-lab/photo-report.json`; scratchpad `photos-before/`, `photos-after/` |
 | Hero fixes: no underlined accent, plane scrim kept, kinetic on screen, kinetic pill only the hero's own photo | done (`118f9cc`) | `site-families.css`, `site-experience.css`, `HeroScenes.tsx` |
 | Design v2 spec — three design-director reviews with exact changes | done | `docs/design-v2-panel.md` |
-| Design v2 — the WHOLE panel spec (batch 1 + 2). The first batch-1 agent died with its session and wrote nothing. Re-run 2026-10-17 14:50 as workflow `locah-design-v2-implement` with three file-disjoint owners: **type-dna** (design_dna.py, site-fonts.ts, experience.ts, site-dna.css), **hero-scenes** (site-experience.css, HeroScenes.tsx, experience.py, site_composer.py), **chrome** (website.css, site-studio.css, site-families.css, design_system.py, SectionRenderer.tsx, WebsitePageView.tsx, motion.ts) | in progress — if this session died, `git diff` shows what landed; review per owner before committing | all three reviews |
-| Ishant photo rerun with Unsplash | waiting for the Unsplash hour to reset (quota was 1/50 at 14:48) | `premium_lab photos lab-ishant` |
+| Design v2 — the whole panel spec (accent system, editorial type library + optical sizes, typeset eyebrows, button spec, hero CTA discipline, scene policy, zoom cover composition, palette discipline, photo grades, chrome, closing band, footer name, reading text, number/unit glue, Unsplash srcset) | done, committed `1dcd8df`; verified ruff, mypy, tsc, lint, 355 website/media tests | three owners (workflow in session 317efa20) + follow-up fixes from lab shots |
+| Four-lens critique of the design v2 result | never completed (cut by the usage limit) — optional next step | — |
+| Ishant photo rerun with Unsplash + Pixabay | running 2026-10-17 19:05 | `premium_lab photos lab-ishant` |
 
-Commits on this branch this session: `b78f7b5` (checkpoint), `f25cc9b`
-(pipeline), `6d3d1a7` (lab, tests, guards).
+Commits on this branch (2026-10-17): `b78f7b5` checkpoint, `f25cc9b`
+pipeline, `6d3d1a7` lab/tests/guards, `b2dfe69` + `e5db9b7` + `ca7809b`
+selection fixes from real runs, `118f9cc` hero fixes, `85a3bc3` panel spec,
+`1dcd8df` design v2.
 
 ## Findings from the real runs (2026-10-17)
 
