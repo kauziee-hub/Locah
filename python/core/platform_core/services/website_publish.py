@@ -114,6 +114,14 @@ class WebsitePublishService:
         business = await BusinessService.get_by_id(session, business_id)
         if not business.display_name or not business.display_name.strip():
             raise ValidationError("Business display name is required before publish")
+        # Found by the owner-journey certification: a business that never said its
+        # name (the placeholder "New business") and was never built could be
+        # published as that placeholder. A website goes live under its real name.
+        if (business.metadata_ or {}).get("name_pending"):
+            raise ValidationError(
+                "Tell Locah your business's name before publishing — it is what your website shows.",
+                details={"reason": "name_pending"},
+            )
         if profile is None:
             raise ValidationError("Business profile is required before publish")
 

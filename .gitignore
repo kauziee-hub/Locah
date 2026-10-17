@@ -57,12 +57,14 @@ infra/supabase/email-templates/dist/
 
 # Local browser-acceptance output (screenshots, transcripts)
 acceptance-out/
+certify-out/
 
 # Chrome profiles from local acceptance runs (tools/acceptance/cdp.mjs)
 locah-accept-*/
 .next-verify/
 .next-otp-verify/
 .next-lab/
+.next-certify/
 # Site lab fixtures (tools/site-lab/serve.sh)
 .site-lab/
 apps/web/public/site-lab-photos/

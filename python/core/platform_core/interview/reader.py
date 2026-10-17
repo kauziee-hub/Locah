@@ -691,7 +691,8 @@ _NAME_SAID = re.compile(
     r"\b(?:called|named|name is|name's|naming it)\s+[\"“']?(?P<name>[^\"”.,;!?\n]{2,70})", re.I)
 # "Grit Barbell Club is a strength gym…", "We are Ishant Proteins, a meat shop".
 _NAME_LEADS = re.compile(
-    r"^\s*(?:(?i:we are|we're|this is|i run|we run|i own|we own|i'm from|we're from)\s+)?"
+    r"^\s*(?:(?i:we are|we're|this is|i run|we run|i own|we own|i'm from|we're from|naanga|nanga|naangal|"
+    r"hum|hamara)\s+)?"
     r"(?P<name>(?:[A-Z0-9][\w&'’.-]*)(?:\s+(?:&\s+|of\s+|and\s+)?[A-Z0-9][\w&'’.-]*){0,5})"
     r"(?=\s*(?:,|\s+is\s+an?\b|\s+is\s+the\b|\s+are\s+an?\b|\s+—|\s+-\s|"
     r"\s+(?:builds|makes|sells|runs|serves|offers|supplies|designs|bakes|cooks)\b))")
@@ -715,19 +716,51 @@ _NOT_A_NAME = re.compile(
     r"chicken|mutton|fish|monthly|daily)$", re.I)
 
 
+# Owners open with a greeting or by introducing themselves before the
+# business: "Hi, we are Thenkuzhal Bakes, …", "Hello! This is Saffron Table, …",
+# "Hi im Ravi, we run Ravi Meat Stall in Adyar". The name is looked for at the
+# start of what follows, never inside the greeting or the person's own name.
+_GREETING = re.compile(
+    r"^\s*(?:hi+|hello+|hey+|hai|hii+|vanakkam|namaste|namaskar(?:am)?|greetings|good\s+(?:morning|"
+    r"afternoon|evening)|sir|madam)\b[\s,!.:;-]*", re.I)
+_SELF_INTRO = re.compile(
+    r"^\s*(?:i\s*'?\s*m|im|i am|my name is|myself)\s+[A-Za-z][\w.]*(?:\s+[A-Za-z][\w.]*)?\s*(?:here\s*)?"
+    r"[,.;!-]+\s*", re.I)
+
+
+def _name_starts(raw: str) -> list[str]:
+    """Where a name may start: the message, after a greeting, after the owner's own
+    introduction, and at each later sentence."""
+    starts = [raw]
+    rest = raw
+    for pattern in (_GREETING, _SELF_INTRO, _GREETING):
+        cut = pattern.match(rest)
+        if cut and cut.end() < len(rest):
+            rest = rest[cut.end():]
+            starts.append(rest)
+    starts += [part for part in re.split(r"(?<=[.!?])\s+", raw)[1:4] if part]
+    return list(dict.fromkeys(starts))
+
+
 def business_name(text: str) -> str:
     """The business's own name, only when the owner plainly says it."""
     raw = " ".join((text or "").split())
     found = _NAME_SAID.search(raw)
     name = _NAME_END.sub("", found.group("name")) if found else ""
-    # "This is Kavya, I make cakes" introduces a person, not the business.
-    if not name and not re.match(r"^\s*(?:this is|i'?m|i am)\s+\S+\s*,\s*i\b", raw, re.I):
-        lead = _NAME_LEADS.match(raw) or _NAME_RUNS.match(raw) or _NAME_TA.match(raw) or _NAME_TA_SAID.search(raw)
-        name = lead.group("name") if lead else ""
+    for start in ([] if name else _name_starts(raw)):
+        # "This is Kavya, I make cakes" introduces a person, not the business.
+        if re.match(r"^\s*(?:this is|i'?m|i am)\s+\S+\s*,\s*i\b", start, re.I):
+            continue
+        lead = _NAME_LEADS.match(start) or _NAME_RUNS.match(start) or _NAME_TA.match(start) \
+            or _NAME_TA_SAID.search(start)
+        candidate = lead.group("name") if lead else ""
         # "Haircut, facial and bridal makeup iruku" starts a list, not a name.
         if lead is not None and lead.re is _NAME_LEADS and re.match(
-                r"\s*,\s*[a-z][\w' -]{0,30}?(?:,|\s+and\s+)", raw[lead.end():]):
-            name = ""
+                r"\s*,\s*(?!(?:a|an|the|one|our)\b)[a-z][\w' -]{0,30}?(?:,|\s+and\s+)", start[lead.end():]):
+            candidate = ""
+        if candidate.strip() and not _NOT_A_NAME.match(candidate.split()[0]):
+            name = candidate
+            break
     name = name.strip(" .,'\"“”")
     words = name.split()
     if not words or len(words) > 6 or len(name) > 60 or _NOT_A_NAME.match(words[0]):

@@ -112,6 +112,38 @@
         "tools/site-lab/serve.sh"
       ],
       "port": 3005
+    },
+    {
+      "name": "certify-supabase",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/certify/stack/supabase.sh"
+      ],
+      "port": 54331
+    },
+    {
+      "name": "certify-api",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/certify/stack/api.sh"
+      ],
+      "port": 8020
+    },
+    {
+      "name": "certify-worker",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/certify/stack/worker.sh"
+      ],
+      "port": 8098
+    },
+    {
+      "name": "certify-web",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/certify/stack/web.sh"
+      ],
+      "port": 3200
     }
   ]
 }

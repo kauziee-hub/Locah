@@ -230,3 +230,21 @@ async def test_replay_voice_session_hands_out_utterances_and_no_credential(tmp_p
     session = await voice.create_voice_session(unnamed())
     assert session == {"provider": "replay", "utterances": ["We sell chicken and mutton."], "expires_at": None}
     assert not blocked_calls()
+
+
+@pytest.mark.parametrize(("said", "name"), [
+    ("Hi, we are Thenkuzhal Bakes, a small bakery in Mylapore, Chennai. We bake breads.", "Thenkuzhal Bakes"),
+    ("Hello! This is Saffron Table, a restaurant in Kochi", "Saffron Table"),
+    ("Hi im ravi, we run Ravi Meat Stall in Adyar", "Ravi Meat Stall"),
+    ("Vanakkam, naanga Grit Barbell Club, Velachery la gym", "Grit Barbell Club"),
+    ("Good morning! Lotus Dental Care is a family dental clinic in Anna Nagar.", "Lotus Dental Care"),
+    ("This is Kavya, I make cakes at home", ""),
+    ("Hi, chicken mutton fish all available", ""),
+    ("Biryani, parotta and meals available, call us", ""),
+])
+def test_the_name_is_heard_after_a_greeting_or_an_introduction(said: str, name: str) -> None:
+    # Found by the owner-journey certification: "Hi, we are Thenkuzhal Bakes, …"
+    # was asked "What's the bakery called?" eleven times.
+    from platform_core.interview.reader import business_name
+
+    assert business_name(said) == name

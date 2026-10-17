@@ -306,3 +306,19 @@ def test_the_contact_section_states_todays_address_and_hours(owner: tuple[dict[s
     assert content["address"] == "12, 2nd Avenue, Anna Nagar, Chennai, 600040"
     assert content["hours_summary"].startswith("Mon") and "Sun closed" in content["hours_summary"]
     assert content["phone"] == "+91 98400 12345"
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_a_business_that_never_said_its_name_cannot_publish_its_placeholder(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """Found by the owner-journey certification: "Create Business by talking" starts a
+    nameless draft ("New business"); publishing it put that placeholder live."""
+    headers, _ = owner
+    client = TestClient(app)
+    started = client.post("/v1/platform/businesses/start", json={}, headers=headers)
+    assert started.status_code == 200, started.text
+    business_id = started.json()["data"]["business"]["id"]
+    refused = client.post(f"/v1/b/{business_id}/website/publish", headers=headers)
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error"]["details"]["reason"] == "name_pending"
