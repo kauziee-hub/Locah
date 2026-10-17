@@ -269,8 +269,12 @@ LAB["lab-crumb"] = {
 
 
 
-async def build(key: str) -> dict[str, Any]:
-    """Compose one lab business; returns its fixture, payload, slots, Blueprint and direction."""
+async def build(key: str, pictured: set[str] | None = None) -> dict[str, Any]:
+    """Compose one lab business; returns its fixture, payload, slots, Blueprint and direction.
+
+    `pictured`: the slot keys that really have a photograph. As in a real build, a slot
+    that found none is not placed at all (no placeholder), so the page is composed
+    the way it would be without it."""
     spec = LAB[key]
     persona = next(p for p in FIXTURE_PERSONAS if p.key == spec["persona"])
     run = await run_persona(persona, "model")
@@ -300,7 +304,10 @@ async def build(key: str) -> dict[str, Any]:
     plan_media(bp, direction)
     slots = [s for s in plan_slots(bp, direction) if s.truth_class != "factual"]
     for slot in slots:
-        record(bp, slot, uuid.uuid5(bp.business_id, slot.key), stock=True)
+        if pictured is None or slot.key in pictured:
+            record(bp, slot, uuid.uuid5(bp.business_id, slot.key), stock=True)
+        else:
+            record(bp, slot, None, "none_qualified", stock=True)
     copy = govern_copy(WebsiteCopy(**spec["copy"]), bp)
     payload = dict(compose_site(bp, direction, copy, business_type=persona.business_type, contact=contact_for(bp),
                                 active_modules=active, meta={"stage": "lab"}))
@@ -382,6 +389,9 @@ async def main(argv: list[str]) -> None:
             PICKS.write_text(json.dumps(all_picks, ensure_ascii=False, indent=1), encoding="utf-8")
             REPORT.write_text(json.dumps(all_reports, ensure_ascii=False, indent=1), encoding="utf-8")
         if mode in {"photos", "write"}:
+            found = {r["slot"] for r in (all_reports.get(key) or {}).get("slots", []) if r.get("reason") == "ok"}
+            if all_reports.get(key):
+                built = await build(key, pictured=found)  # composed as a real build would be
             pages = write_lab(LAB_DIR, built["fixture"], all_picks.get(key) or {})
             print(key, built["concept"], pages)
         if mode == "slots" or mode == "photos":
