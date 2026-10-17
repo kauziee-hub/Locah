@@ -53,10 +53,15 @@ CORE_SECTION_SCHEMAS: dict[str, dict[str, Any]] = {
     "product_showcase": {
         "type": "object",
         "properties": {
+            # The trade's word for its range ("Shop", "Menu"), above the title.
+            "eyebrow": {"type": "string", "maxLength": 40},
             "title": {"type": "string", "maxLength": 120},
             "subtitle": {"type": "string", "maxLength": 300},
             "anchor": {"type": "string", "maxLength": 30},
             "order_label": {"type": "string", "maxLength": 40},
+            # A teaser on the home page links to the full range on its own page.
+            "more_label": {"type": "string", "maxLength": 40},
+            "more_path": {"type": "string", "maxLength": 80},
             "filters": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 40}},
             "categories": {
                 "type": "array",
@@ -104,6 +109,86 @@ CORE_SECTION_SCHEMAS: dict[str, dict[str, Any]] = {
         "properties": {
             "label": {"type": "string", "maxLength": 80},
             "items": {"type": "array", "maxItems": 12, "items": {"type": "string", "maxLength": 40}},
+        },
+    },
+    # One sentence as the page's centrepiece: the owner's own line, or governed
+    # copy; `highlight` is a phrase inside it set apart.
+    "statement": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+            "eyebrow": {"type": "string", "maxLength": 40},
+            "text": {"type": "string", "maxLength": 280},
+            "highlight": {"type": "string", "maxLength": 60},
+            "image_asset_id": {"type": "string", "format": "uuid"},
+        },
+    },
+    # What the business stands on — each pillar from the owner's own words or
+    # a fact they gave (delivery, pickup, how it is made).
+    "pillars": {
+        "type": "object",
+        "properties": {
+            "image_asset_id": {"type": "string", "format": "uuid"},
+            "eyebrow": {"type": "string", "maxLength": 40},
+            "title": {"type": "string", "maxLength": 120},
+            "subtitle": {"type": "string", "maxLength": 300},
+            "items": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {
+                    "type": "object",
+                    "required": ["title"],
+                    "properties": {
+                        "title": {"type": "string", "maxLength": 60},
+                        "body": {"type": "string", "maxLength": 200},
+                        "icon": {"type": "string", "maxLength": 20},
+                    },
+                },
+            },
+        },
+    },
+    # Questions a visitor asks, answered only from what the owner told LOCAH.
+    "faq": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "maxLength": 120},
+            "subtitle": {"type": "string", "maxLength": 300},
+            "items": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {
+                    "type": "object",
+                    "required": ["q", "a"],
+                    "properties": {
+                        "q": {"type": "string", "maxLength": 140},
+                        "a": {"type": "string", "maxLength": 500},
+                    },
+                },
+            },
+        },
+    },
+    # Passages about the business, each beside its own picture.
+    "media_text": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "maxLength": 120},
+            # A home page's story teaser links on to the story's own page.
+            "more_label": {"type": "string", "maxLength": 40},
+            "more_path": {"type": "string", "maxLength": 80},
+            "items": {
+                "type": "array",
+                "maxItems": 4,
+                "items": {
+                    "type": "object",
+                    "required": ["title"],
+                    "properties": {
+                        "eyebrow": {"type": "string", "maxLength": 40},
+                        "title": {"type": "string", "maxLength": 80},
+                        "body": {"type": "string", "maxLength": 360},
+                        "image_asset_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
         },
     },
     # How buying works — delivery, pickup, weight, payment — from the owner's answers.
@@ -522,6 +607,14 @@ section types or content fields.
     layout_variant: cards | list
 - marquee: items (array of short strings — the business's own categories or facts)
     layout_variant: band | outline
+- statement: text (REQUIRED), eyebrow, highlight (a phrase inside text)
+    layout_variant: giant | split
+- pillars: title, subtitle, items (title, body, icon)
+    layout_variant: cards | numbered | strip
+- faq: title, subtitle, items (q, a) — answers only from facts the owner gave
+    layout_variant: accordion | split
+- media_text: title, items (eyebrow, title, body)
+    layout_variant: alternating | sticky
 
 The list sections (offerings_list, menu_section, plans_section, rooms_section,
 classes_section, location_list) render the business's own live records — write

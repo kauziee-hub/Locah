@@ -133,7 +133,13 @@ def compose(
 
 
 def sections(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {s["section_type_id"]: s for s in payload["pages"][0]["sections"]}
+    """Each section type's first appearance on the site — the home page first,
+    then its inner pages (the story on /about, the ordering strip on /shop)."""
+    found: dict[str, dict[str, Any]] = {}
+    for page in payload["pages"]:
+        for section in page["sections"]:
+            found.setdefault(section["section_type_id"], section)
+    return found
 
 
 def test_four_businesses_get_four_different_websites():
@@ -172,7 +178,8 @@ def test_the_meat_shop_is_a_shop():
     assert payload["theme_hints"]["experience"]["motion"] == "snap"
     assert hero["content"]["eyebrow"] == "Nookampalayam Road"
     assert hero["content"]["badges"] == ["Sold by the kg", "Home delivery", "Store pickup"]
-    assert hero["content"]["cta_url"] == "#shop"
+    # A range this size has its own page; the hero's button goes there.
+    assert hero["content"]["cta_url"] == "/shop"
     shop = found["product_showcase"]
     # Cuts by the kg read like a price list: chapters, or a board per meat.
     assert shop["layout_variant"] in {"menu_book", "category_boards"}
@@ -185,7 +192,10 @@ def test_the_meat_shop_is_a_shop():
     strip = found["fulfilment_strip"]["content"]["items"]
     assert [i["kind"] for i in strip] == ["weight", "delivery", "pickup", "payment"]
     assert strip[1]["body"] == "Delivered around Nookampalayam and Perumbakkam."
-    assert [n["path"] for n in payload["navigation"]] == ["/", "/#shop", "/#contact"]
+    slugs = [p["slug"] for p in payload["pages"]]
+    assert slugs[:2] == ["home", "shop"] and "visit" in slugs
+    assert [n["path"] for n in payload["navigation"]] == ["/", "/shop"] + (
+        ["/about"] if "about" in slugs else []) + ["/visit"]
     text = json.dumps(payload).lower()
     assert "what we do" not in text and "add to cart" not in text and "cart" not in text
 
@@ -254,7 +264,7 @@ async def test_draft_visuals_are_on_by_default_off_for_a_text_led_site_and_drawn
     bp.visual_consent = "unknown"  # an owner with no photos gets pictures by default
     drawn = await draw_missing(bp, direction, "a meat shop", draw=draw)
     assert [s.key for s, _, _ in drawn] == ["hero", "category:chicken", "category:mutton",
-                                           "category:fish-seafood", "story"]
+                                           "category:fish-seafood", "story", "process", "detail"]
     assert all("One continuous photograph" in p for p in calls)
     assert all("No text" in p and "people" in p for p in calls)
     assert all("farm" not in p.lower() and "240" not in p for p in calls)
@@ -279,7 +289,9 @@ def test_media_budget_follows_the_archetype():
     # Media truth policy: a kitchen's featured dishes are drawn as representative
     # drafts; a developer's projects are factual — listed, never drawn — while its
     # hero and story (architecture, a courtyard) are mood and may be.
-    for build, count in ((meat, 5), (home_food, 6), (gym, 2), (real_estate, 2)):
+    # (+2 where the site has passages beside pictures: how it is made, a close
+    # detail — mood only; never for an evidence-led developer.)
+    for build, count in ((meat, 7), (home_food, 8), (gym, 4), (real_estate, 2)):
         bp = build()
         drawable = [s for s in plan_slots(bp, direct(bp, "other")) if s.truth_class != "factual"]
         assert len(drawable) == count, build.__name__

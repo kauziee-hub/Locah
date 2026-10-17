@@ -13,6 +13,15 @@ import {
   Noto_Sans_Tamil,
   Outfit,
   Playfair_Display,
+  Syne,
+  Unbounded,
+  DM_Serif_Display,
+  Bodoni_Moda,
+  Young_Serif,
+  Big_Shoulders_Display,
+  Space_Grotesk,
+  Italiana,
+  Caveat,
 } from 'next/font/google'
 
 /**
@@ -143,6 +152,61 @@ export const notoDevanagari = Noto_Sans_Devanagari({
   variable: '--font-site-devanagari',
 })
 
+/* Design DNA faces (platform_core/interview/design_dna.py): the display type
+   a site may be given beyond its family's own. Not preloaded — a page only
+   downloads the one its design uses. */
+export const syne = Syne({ subsets: ['latin'], display: 'swap', preload: false, variable: '--font-site-syne' })
+export const unbounded = Unbounded({ subsets: ['latin'], display: 'swap', preload: false, variable: '--font-site-unbounded' })
+export const dmSerif = DM_Serif_Display({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-dmserif',
+})
+export const bodoni = Bodoni_Moda({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-bodoni',
+})
+export const youngSerif = Young_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-youngserif',
+})
+export const bigShoulders = Big_Shoulders_Display({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-bigshoulders',
+})
+export const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-spacegrotesk',
+})
+export const italiana = Italiana({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-italiana',
+})
+// A handwritten accent (data-headline='script'): one painted word in a headline.
+export const caveat = Caveat({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-caveat',
+})
+
 export const siteFontVariables = [
   fraunces,
   anton,
@@ -156,6 +220,15 @@ export const siteFontVariables = [
   bricolage,
   newsreader,
   plexMono,
+  syne,
+  unbounded,
+  dmSerif,
+  bodoni,
+  youngSerif,
+  bigShoulders,
+  spaceGrotesk,
+  italiana,
+  caveat,
   notoTamil,
   notoDevanagari,
 ]

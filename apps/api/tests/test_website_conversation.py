@@ -52,8 +52,14 @@ def sections(draft: dict[str, Any]) -> list[dict[str, Any]]:
     return list(home["sections"])
 
 
+def every_section(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    """The home page's sections, then each inner page's (the story lives on /about)."""
+    pages = sorted(draft["pages"], key=lambda p: p["slug"] != "home")
+    return [s for p in pages for s in p["sections"]]
+
+
 def of(draft: dict[str, Any], section_type: str) -> dict[str, Any]:
-    return next(s for s in sections(draft) if s["section_type_id"] == section_type)
+    return next(s for s in every_section(draft) if s["section_type_id"] == section_type)
 
 
 def test_talking_after_the_website_exists_changes_it(owner) -> None:  # noqa: F811

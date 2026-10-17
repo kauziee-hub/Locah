@@ -706,7 +706,11 @@ html.lenis.lenis-smooth {
   color: var(--site-ink);
 }
 [data-locah-site] .fx-plane .ls-hero__sub {
-  color: var(--site-muted);
+  /* Clear of the headline's descenders, and readable where the wall of
+     pictures runs behind it. */
+  margin-top: 1.1rem;
+  color: color-mix(in srgb, var(--site-ink) 78%, var(--site-bg));
+  text-shadow: 0 1px 14px var(--site-bg), 0 0 2px color-mix(in srgb, var(--site-bg) 70%, transparent);
 }
 [data-locah-site] .fx-plane .ls-btn--ghost-onmedia {
   color: var(--site-ink);

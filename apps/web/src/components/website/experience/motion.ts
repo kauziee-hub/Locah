@@ -74,6 +74,7 @@ export function splitWords(el: HTMLElement): number {
 
 /** "1,200+" → [1200, "", "+", 0]; null when the text is not a single number. */
 function parseCount(text: string): [number, string, string, number] | null {
+  if (/^(19|20)\d{2}$/.test(text.trim())) return null
   const m = /^(\D{0,3})(\d[\d,]*)(\.\d+)?(\D{0,6})$/.exec(text.trim())
   if (!m) return null
   const whole = Number(m[2].replace(/,/g, ''))
@@ -94,6 +95,9 @@ function formatCount(value: number, decimals: number, grouped: boolean) {
 
 export function start(root: HTMLElement): MotionHandle {
   const lang = (root.dataset.motionLang as Lang) || 'silk'
+  // The motion director's budget (design DNA): a restrained brand's cards
+  // neither lean nor stagger in; a gentle one's lean half as far.
+  const budget = root.dataset.budget || ''
   const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches
   const wide = window.matchMedia('(min-width: 900px)').matches
   const cleanups: Array<() => void> = []
@@ -151,7 +155,7 @@ export function start(root: HTMLElement): MotionHandle {
     scope.querySelectorAll<HTMLElement>('[data-reveal-group]').forEach((group) => {
       let i = 0
       for (const child of Array.from(group.children) as HTMLElement[]) {
-        child.style.setProperty('--ri', String(Math.min(i++, 12)))
+        child.style.setProperty('--ri', String(budget === 'restrained' ? 0 : Math.min(i++, 12)))
       }
     })
     scope.querySelectorAll<HTMLElement>(REVEAL).forEach((el) => {
@@ -303,7 +307,7 @@ export function start(root: HTMLElement): MotionHandle {
   /* -------------------------------------------------------------- pointer */
   if (finePointer) {
     // One delegated listener: cards and buttons added later lean too.
-    const lean = lang === 'calm' ? 3 : lang === 'snap' ? 9 : 7
+    const lean = (lang === 'calm' ? 3 : lang === 'snap' ? 9 : 7) * (budget === 'gentle' ? 0.5 : 1)
     const kinds = [
       {
         selector: '[data-pointer]',
@@ -317,7 +321,7 @@ export function start(root: HTMLElement): MotionHandle {
         },
       },
       {
-        selector: '[data-tilt]',
+        selector: budget === 'restrained' ? '[data-tilt-never]' : '[data-tilt]',
         set: (el: HTMLElement, x: number, y: number) => {
           el.style.setProperty('--rx', `${(-y * lean).toFixed(2)}deg`)
           el.style.setProperty('--ry', `${(x * lean).toFixed(2)}deg`)
@@ -364,6 +368,58 @@ export function start(root: HTMLElement): MotionHandle {
     cleanups.push(
       () => root.removeEventListener('pointermove', onMove),
       () => root.removeEventListener('pointerleave', onLeave)
+    )
+
+    // A list whose lines carry a picture (data-hover-src): the picture follows
+    // the pointer over its line, easing behind it.
+    const follower = document.createElement('img')
+    follower.className = 'fx-follow'
+    follower.alt = ''
+    follower.setAttribute('aria-hidden', 'true')
+    root.appendChild(follower)
+    // A dot that trails the pointer and grows over anything pressable — only
+    // where the design asked for it.
+    const dot = root.dataset.cursor === 'dot' ? document.createElement('span') : null
+    if (dot) {
+      dot.className = 'fx-cursor'
+      dot.setAttribute('aria-hidden', 'true')
+      root.appendChild(dot)
+      root.setAttribute('data-cursor-live', '')
+    }
+    let fx = 0
+    let fy = 0
+    let tx = 0
+    let ty = 0
+    let chase = 0
+    const ease = () => {
+      chase = 0
+      fx += (tx - fx) * 0.18
+      fy += (ty - fy) * 0.18
+      follower.style.transform = `translate3d(${fx.toFixed(1)}px, ${fy.toFixed(1)}px, 0) translate(-50%, -50%)`
+      if (dot) dot.style.transform = `translate3d(${fx.toFixed(1)}px, ${fy.toFixed(1)}px, 0) translate(-50%, -50%)`
+      if (Math.abs(tx - fx) + Math.abs(ty - fy) > 0.5) chase = window.requestAnimationFrame(ease)
+    }
+    const onTrack = (event: PointerEvent) => {
+      tx = event.clientX
+      ty = event.clientY
+      const target = event.target as Element | null
+      const row = target?.closest<HTMLElement>('[data-hover-src]')
+      if (row?.dataset.hoverSrc) {
+        if (follower.getAttribute('src') !== row.dataset.hoverSrc) follower.src = row.dataset.hoverSrc
+        follower.classList.add('is-on')
+      } else {
+        follower.classList.remove('is-on')
+      }
+      if (dot) dot.classList.toggle('is-big', Boolean(target?.closest('a, button, summary, [data-tilt]')))
+      if (!chase) chase = window.requestAnimationFrame(ease)
+    }
+    window.addEventListener('pointermove', onTrack, { passive: true })
+    cleanups.push(
+      () => window.removeEventListener('pointermove', onTrack),
+      () => chase && window.cancelAnimationFrame(chase),
+      () => follower.remove(),
+      () => dot?.remove(),
+      () => root.removeAttribute('data-cursor-live')
     )
   }
 

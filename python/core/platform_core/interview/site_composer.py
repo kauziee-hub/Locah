@@ -12,6 +12,11 @@ business is (the archetype) and what is actually known about it:
   section with that line as a pull quote;
 * contact comes last, with Call / WhatsApp / directions from what they gave.
 
+Where there is enough to fill them, the site then grows inner pages
+(site_pages.py): the whole range on its own page, the story, how to visit —
+and a design DNA (design_dna.py) sets this one brand's type, edges, buttons,
+cards, picture shapes and ground.
+
 Nothing is added that was not said: no ratings, counts, awards, prices or
 promises; a section with nothing true to show is left out. Headings and short
 lines are editorial and may be the model's, after governance.
@@ -19,11 +24,14 @@ lines are editorial and may be the model's, after governance.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
+from platform_core.interview import motion_director, site_critic, site_pages
 from platform_core.interview.creative_director import CreativeDirection
 from platform_core.interview.catalogue_capture import item_traits
+from platform_core.interview.design_dna import choose_dna
 from platform_core.interview.experience import choose_experience, marquee_words
 from platform_core.interview.media_director import picture_for, slug
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, TargetState
@@ -31,7 +39,7 @@ from platform_core.interview.taxonomy import normalise_name
 from platform_core.interview.website_copy import WebsiteCopy
 from platform_core.validation.website import validate_generation_payload
 
-COMPOSER_VERSION = "creative-composer-v4"
+COMPOSER_VERSION = "creative-composer-v5"
 
 # What the browse section is called, by archetype. "What we do" is for services
 # only — for a shop it hides the fact that there are things to buy.
@@ -47,6 +55,7 @@ NAV_BROWSE = {
     "project_portfolio": "Work", "local_service": "Services",
 }
 _COMMERCE = {"product_commerce", "menu_commerce"}
+_PLAN_GROUP = re.compile(r"\b(plans?|memberships?|packages?|pass(es)?|fees|pricing)\b", re.I)
 # Headings that could sit on any site. "Available options" came back from a
 # live gym build; the section is its programmes and plans.
 _GENERIC_TITLE = re.compile(
@@ -57,8 +66,10 @@ _GENERIC_TITLE = re.compile(
 def _expected_pictures(bp: BusinessBlueprint) -> int:
     """Pictures this site will have once its media plan is done: the ready
     ones, and the drafts still to be drawn where drawing is possible."""
-    ready = sum(1 for p in bp.media_plan if p.status == "ready")
-    planned = sum(1 for p in bp.media_plan
+    # The passages' own pictures (process, detail) never feed a hero scene.
+    plan = [p for p in bp.media_plan if p.key not in {"process", "detail"}]
+    ready = sum(1 for p in plan if p.status == "ready")
+    planned = sum(1 for p in plan
                   if p.status == "planned" and p.source in {"gemini_generated", "stock_retrieved"})
     if planned:
         from platform_core.website.image_generation import pictures_available
@@ -338,9 +349,13 @@ def browse_sections(
 ) -> list[dict[str, Any]]:
     """Categories and items, presented the way this kind of site browses."""
     groups = [g for g in bp.taxonomy.groups if g.name]
+    arche = direction.archetype
+    if arche == "membership_fitness" and plans_from_answer(bp):
+        # The plans have their own cards (compose_site); browsing shows what
+        # is trained here, not the same plans a second time.
+        groups = [g for g in groups if not _PLAN_GROUP.search(g.name)] or groups
     if not groups:
         return []
-    arche = direction.archetype
     # The trade's own heading first ("Our menu", "Treatments", "Classes & timings");
     # the archetype's only when the trade is unknown.
     default = _trade_heading(bp, arche)
@@ -632,6 +647,9 @@ def compose_site(
         choices=(direction.model_choices or {}).get("experience") or None,
     )
     showcases = [s for s in sections if s["section_type_id"] == "product_showcase"]
+    # How the range browses before the experience makes a scene of it: kept
+    # for the range's own page.
+    range_variant = str(showcases[0]["layout_variant"]) if showcases else ""
     for section in sections:
         kind = section["section_type_id"]
         if kind == "hero" and experience.hero:
@@ -663,14 +681,28 @@ def compose_site(
     for section in sections:
         section["is_visible"] = True
 
-    anchors = {s["content"].get("anchor") for s in sections}
-    navigation = [{"label": "Home", "path": "/"}]
-    if "shop" in anchors:
-        navigation.append({"label": _trade_nav(bp, arche), "path": "/#shop"})
-    if "story" in anchors:
-        navigation.append({"label": "About", "path": "/#story"})
-    if any(s["section_type_id"] == "contact" for s in sections):
-        navigation.append({"label": "Contact", "path": "/#contact"})
+    # This brand's design language, and the site's pages: home and, where
+    # there is enough to fill them, the range, the story and the visit.
+    seed = str(bp.business_id)
+    dna = choose_dna(dims, family=direction.family, archetype=arche, motion=experience.motion, seed=seed,
+                     concept=str((direction.model_choices or {}).get("concept") or "") or None)
+    # How much of it moves, and where: the concept's budget, spent deliberately.
+    motion_notes = motion_director.direct(sections, dna.budget, range_variant=range_variant)
+    first_group = bp.taxonomy.groups[0].name if bp.taxonomy.groups else ""
+    site = site_pages.build(
+        bp, copy=copy, archetype=arche, name=name, home=sections, trade_label=_trade_nav(bp, arche),
+        ordering=ordering, visiting=visit_facts(bp), badges=list(hero.get("badges") or []), contact=contact,
+        address=_address(bp), booking=booking,
+        pictures={"range": picture_for(bp, "category:" + slug(first_group)) if first_group else None,
+                  "process": picture_for(bp, "process"), "detail": picture_for(bp, "detail"),
+                  "story": story_picture},
+        dna_seed=int(hashlib.sha256(f"{seed}:pages".encode()).hexdigest()[:8], 16), range_variant=range_variant,
+        order_link=wa_link, concept=dna.concept,
+        # A page order the creative director (the model) chose stands.
+        keep_order=bool(direction.page_order) and direction.source == "ai",
+        lead=bp.website_prefs.lead_section or "",
+    )
+    navigation = site.navigation
 
     palette = direction.palette
     theme: dict[str, Any] = {
@@ -710,11 +742,14 @@ def compose_site(
         "composer_version": COMPOSER_VERSION,
         "generation": meta or {},
     }
+    theme["dna"] = dna.theme()
+    theme["motion_direction"] = {"budget": dna.budget, "notes": motion_notes}
     if arche in _COMMERCE and wa_link and primary[1] == "#shop":
         # The one button always in view is the one that orders.
         theme["nav_cta"] = {"label": "Order on WhatsApp", "href": wa_link}
     elif primary[0] and primary[1]:
-        theme["nav_cta"] = {"label": primary[0][:40], "href": primary[1][:500]}
+        href = site.range_path if primary[1] == "#shop" and site.range_path else primary[1]
+        theme["nav_cta"] = {"label": primary[0][:40], "href": href[:500]}
     utility: list[str] = []
     for item in ordering:
         if item["kind"] == "delivery":
@@ -724,22 +759,32 @@ def compose_site(
     if utility and direction.nav == "commerce":
         theme["utility_bar"] = utility[:2]
 
-    home = {
-        "slug": "home", "title": "Home", "page_type": "home", "sections": sections,
-        "seo_title": name[:160],
-        "seo_description": (hero.get("subheadline") or facts.get("description", ""))[:300],
-    }
+    pages = site.pages
+    pages[0]["seo_description"] = (hero.get("subheadline") or facts.get("description", ""))[:300]
     from platform_core.interview.semantic_design import validate as validate_semantics
 
     checked, findings = validate_semantics(
-        {"pages": [home], "navigation": navigation, "theme_hints": theme}, bp, direction)
+        {"pages": pages, "navigation": navigation, "theme_hints": theme}, bp, direction)
+    for page in checked["pages"][1:]:
+        # An inner page opens on its range's own title, as repaired above; the
+        # range below it then does not say it a second time.
+        opening, body = (page["sections"] + [None, None])[:2]
+        if opening and body and opening["layout_variant"] == "page" and body["content"].get("anchor") == "shop":
+            opening["content"]["headline"] = str(body["content"].get("title") or opening["content"]["headline"])
+            body["content"]["title"] = ""
+            if body["content"].get("subtitle") and not opening["content"].get("subheadline"):
+                opening["content"]["subheadline"] = body["content"]["subtitle"]
+            body["content"].pop("subtitle", None)
     payload: dict[str, Any] = validate_generation_payload(checked)
+    # Locah's own "make it better" rounds, before the owner sees anything.
+    critic = site_critic.review(payload)
     issues = quality_issues(payload, arche)
     payload["theme_hints"]["quality"] = {
         "valid": not issues, "issues": issues,
         "repair_count": sum(1 for f in findings if f.severity == "fail"),
         # Business semantics vs navigation, calls to action, titles and media.
         "semantic": [f.as_dict() for f in findings],
+        "critic": critic,
     }
     return payload
 
@@ -971,6 +1016,11 @@ def _plain_text(text: str) -> str:
 
 
 def _unshown_picture(bp: BusinessBlueprint, shown: set[str | None]) -> str | None:
+    # A close detail first: the range shows its category pictures already.
+    for key in ("detail", "process"):
+        picture = picture_for(bp, key)
+        if picture and picture not in shown:
+            return str(picture)
     for group in bp.taxonomy.groups:
         picture = picture_for(bp, "category:" + slug(group.name))
         if picture and picture not in shown:
@@ -1002,10 +1052,11 @@ def _closing(arche: str, name: str) -> str:
 def quality_issues(payload: dict[str, Any], archetype: str) -> list[dict[str, str]]:
     """What a reviewer would reject: generic headings, vague items, dead anchors."""
     issues: list[dict[str, str]] = []
-    page = payload["pages"][0]
-    anchors = {str(s["content"].get("anchor")) for s in page["sections"] if s["content"].get("anchor")}
+    home = payload["pages"][0]
+    anchors = {str(s["content"].get("anchor")) for s in home["sections"] if s["content"].get("anchor")}
     anchors.add("contact")
-    for section in page["sections"]:
+    slugs = {str(p["slug"]) for p in payload["pages"]}
+    for section in [s for page in payload["pages"] for s in page["sections"]]:
         content = section["content"]
         title = str(content.get("title") or "")
         if archetype in _COMMERCE and _GENERIC_TITLE.match(title):
@@ -1018,4 +1069,6 @@ def quality_issues(payload: dict[str, Any], archetype: str) -> list[dict[str, st
         path = str(item.get("path") or "")
         if path.startswith("/#") and path[2:] not in anchors:
             issues.append({"code": "dead_anchor", "path": path})
+        elif path.startswith("/") and not path.startswith("/#") and path != "/" and path[1:] not in slugs | {"book"}:
+            issues.append({"code": "dead_page_link", "path": path})
     return issues

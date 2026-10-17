@@ -303,6 +303,8 @@ class CreativeChoices(BaseModel):
     page_order: list[str] = Field(default_factory=list, max_length=8)
     # v5: the experience — motion language and scenes, from `experiences`.
     experience: ExperienceChoices = Field(default_factory=ExperienceChoices)
+    # v6: the art direction (design_dna concept), from `art_directions`.
+    concept: str = Field(default="", max_length=30)
 
 
 class CreativeDirection(BaseModel):
@@ -588,6 +590,18 @@ def _experience_context(
                                   story_chars=len(owner_story(bp))))
 
 
+def _concept_context(bp: BusinessBlueprint, business_type: str | None, media_expected: bool | None,
+                     ) -> list[dict[str, str]]:
+    from platform_core.interview.design_dna import BY_KEY, concept_weights
+    from platform_core.interview.design_system import choose, read_dimensions
+
+    dims = read_dimensions(bp, business_type, media_expected=media_expected)
+    weights = concept_weights(dims.as_dict(), choose(bp, dims).family.key)
+    best = max(weights.values())
+    return [{"id": key, "is": BY_KEY[key].describe}
+            for key, weight in sorted(weights.items(), key=lambda kw: -kw[1]) if weight >= best * 0.45]
+
+
 def profile_context(
     bp: BusinessBlueprint, business_type: str | None = None, *, media_expected: bool | None = None,
 ) -> list[dict[str, Any]]:
@@ -732,6 +746,8 @@ async def generate_creative_plan(
         # How the site may move and which scenes it may use: only those this
         # business's pictures, range and story can carry.
         "experiences": _experience_context(bp, business_type, archetype, media_expected),
+        # The art directions that suit this business: one coherent idea for the whole site.
+        "art_directions": _concept_context(bp, business_type, media_expected),
         "facts": {k: v.value[:400] for k, v in facts.items()},
         "owner_said": [m.text[:600] for m in bp.messages if m.role == "user"][-10:],
         "brief": build_brief(bp, business_type).model_dump(exclude_defaults=True),
@@ -755,7 +771,10 @@ async def generate_creative_plan(
             "leave out a part that would be weak for it; leave empty to keep the default. "
             "experience: choose motion, hero, catalogue and story ids from `experiences` — how THIS "
             "business's site should feel to move through (a calm clinic does not spin; a bakery may "
-            "float; a gym may snap); leave any empty to let LOCAH decide.\n\n"
+            "float; a gym may snap); leave any empty to let LOCAH decide. concept: choose ONE id from "
+            "`art_directions` — the single art direction the whole site follows (two shops of one "
+            "trade should not look alike; pick what fits THIS owner's words); leave empty to let "
+            "LOCAH decide.\n\n"
             + COPY_PROMPT
             + "\nOutput only schema-valid JSON."
         ),

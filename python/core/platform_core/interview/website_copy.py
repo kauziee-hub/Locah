@@ -46,6 +46,16 @@ class StepCopy(_Model):
     quote: str = Field(min_length=1, max_length=300)
 
 
+class PillarCopy(_Model):
+    """One thing the business stands on, drawn from one owner sentence."""
+
+    title: str = Field(min_length=1, max_length=48)
+    body: str = Field(default="", max_length=160)
+    # The owner's sentence it came from. Required: a pillar with no source is
+    # a value Locah invented.
+    quote: str = Field(min_length=1, max_length=300)
+
+
 class NamedLine(_Model):
     """One short line about one thing the owner named — a category or an item."""
 
@@ -72,6 +82,15 @@ class WebsiteCopy(_Model):
     products_title: str = Field(default="", max_length=60)
     category_lines: list[NamedLine] = Field(default_factory=list, max_length=8)
     item_lines: list[NamedLine] = Field(default_factory=list, max_length=24)
+    # The premium site (site_pages): one sentence as a centrepiece, what the
+    # business stands on, and the opening lines of its inner pages.
+    statement: str = Field(default="", max_length=200)
+    statement_highlight: str = Field(default="", max_length=50)
+    pillars_title: str = Field(default="", max_length=60)
+    pillars: list[PillarCopy] = Field(default_factory=list, max_length=4)
+    catalogue_intro: str = Field(default="", max_length=200)
+    about_intro: str = Field(default="", max_length=200)
+    visit_intro: str = Field(default="", max_length=200)
 
 
 # Claims that need the owner's own evidence. Allowed only when the owner used
@@ -152,11 +171,22 @@ def govern_copy(copy: WebsiteCopy, bp: BusinessBlueprint) -> WebsiteCopy:
     for field in (
         "headline", "subheadline", "about_title", "about_body", "offerings_title",
         "offerings_subtitle", "steps_title", "closing_headline", "closing_body", "contact_title",
-        "categories_title", "products_title",
+        "categories_title", "products_title", "statement", "pillars_title", "catalogue_intro",
+        "about_intro", "visit_intro",
     ):
         text = _clean(getattr(copy, field))
         if text and _grounded(text, corpus):
             data[field] = text
+    mark = _clean(copy.statement_highlight)
+    if mark and data.get("statement") and mark in data["statement"] and mark != data["statement"]:
+        data["statement_highlight"] = mark
+    pillars: list[PillarCopy] = []
+    for pillar in copy.pillars:
+        quote, title, body = _clean(pillar.quote), _clean(pillar.title), _clean(pillar.body)
+        if not quote or quote.casefold() not in corpus.casefold() or not title or not _grounded(title, corpus):
+            continue
+        pillars.append(PillarCopy(title=title, body=body if body and _grounded(body, corpus) else "", quote=quote))
+    data["pillars"] = pillars if len(pillars) >= 2 else []
     accent = _clean(copy.headline_accent)
     if accent and data.get("headline") and accent in data["headline"] and accent != data["headline"]:
         data["headline_accent"] = accent
@@ -209,6 +239,14 @@ COPY_PROMPT = (
     "- products_title / categories_title: the heading over what can be bought or chosen, in the "
     "voice of this kind of site ('Shop by category', 'Our menu', 'Featured projects') — never "
     "'What we do' for things people buy.\n"
+    "- statement: ONE sentence (10-28 words) that says what this business is about, in the "
+    "owner's spirit and from their words — the line a visitor remembers. statement_highlight: "
+    "2-4 consecutive words from it to set apart.\n"
+    "- pillars_title and pillars: 3-4 things this business stands on (how it makes, sells or "
+    "serves), each with a short title (2-5 words), one sentence body, and `quote` = the exact "
+    "owner sentence it came from. Leave empty if the owner did not say enough.\n"
+    "- catalogue_intro, about_intro, visit_intro: one short opening sentence for the menu/shop, "
+    "story and visit pages, from what the owner said.\n"
     "- category_lines / item_lines: for each group and item in brief.catalogue, one short "
     "appetising line (at most 14 words) about what it is or what it is good for, naming it "
     "exactly as given; never a price, weight, origin or quality claim the owner did not make.\n"

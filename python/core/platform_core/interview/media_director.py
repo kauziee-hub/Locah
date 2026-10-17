@@ -97,6 +97,26 @@ _HERO_MOOD = {
 # Trades whose catalogue IS the evidence: their project/work cards are never drawn.
 _EVIDENCE_LED_ARCHETYPES = frozenset({"real_estate_projects", "project_portfolio"})
 
+# The premium site's passages (site_pages.media_rows): how the work is done,
+# and a close detail of it. Mood and representative only — never this
+# business's own premises, people or work.
+_PROCESS = {
+    "product_commerce": "hands at work preparing fresh produce on a clean wooden counter, close and natural",
+    "menu_commerce": "hands at work in a home kitchen — spices being ground, a pot over a flame, warm light",
+    "membership_fitness": "chalked hands gripping a barbell, close-up, dramatic side light",
+    "service_appointment": "a professional's hands at work with their tools, calm and precise, soft light",
+    "local_service": "a craftsperson's hands at work with their tools, warm workshop light",
+    "b2b_rfq": "precise machining in progress on an industrial workbench, close-up",
+}
+_DETAIL = {
+    "product_commerce": "an extreme close-up texture of the product, fresh and appetising, shallow depth of field",
+    "menu_commerce": "an extreme close-up of the food's texture and spices, shallow depth of field",
+    "membership_fitness": "an extreme close-up of iron plates and knurled steel, moody light",
+    "service_appointment": "a close-up still life of the trade's tools and materials, soft natural light",
+    "local_service": "a close-up still life of the trade's tools and materials",
+    "b2b_rfq": "a close-up of finished machined parts arranged neatly, studio light",
+}
+
 
 @dataclass(frozen=True)
 class Slot:
@@ -205,6 +225,19 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
     if story and direction.story_variant == "story_split":
         slots.append(Slot("story", story, "4:5", "gallery", "Draft visual · where it is made",
                           purpose="story", truth_class="mood", section="about"))
+    # Pictures for the premium site's passages and inner-page openings.
+    if not evidence:
+        trade = ", ".join(names[:3])
+        process = _PROCESS.get(arche)
+        if process:
+            slots.append(Slot("process", f"{process}{f' ({trade})' if trade else ''}", "5:4", "gallery",
+                              "Draft visual · how it is made", purpose="story", truth_class="mood",
+                              section="media_text"))
+        detail = _DETAIL.get(arche)
+        if detail:
+            slots.append(Slot("detail", f"{detail}{f' ({trade})' if trade else ''}", "5:4", "gallery",
+                              "Draft visual · close detail", purpose="story", truth_class="mood",
+                              section="media_text"))
     return slots
 
 
@@ -268,6 +301,14 @@ def owner_photo(bp: BusinessBlueprint, slot: Slot) -> UUID | None:
         # A photo of their own place tells the story better than any draft.
         place = next((m for m in uploads if m.role == "business"), None)
         return place.asset_id if place else None
+    if slot.key in {"process", "detail"}:
+        # The owner's own photos beyond their first place picture tell how
+        # they work better than any found one: the 2nd and 3rd, in order.
+        own = [m for m in uploads if m.role in {"business", "gallery"}]
+        at = 1 if slot.key == "process" else 2
+        return own[at].asset_id if len(own) > at else None
+    if ":" not in slot.key:
+        return None
     name = slot.key.split(":", 1)[1]
     for media in uploads:
         if media.role in {"offering", "gallery", "business"} and slug(media.label).startswith(name[:12]):
@@ -285,11 +326,18 @@ def picture_for(bp: BusinessBlueprint, key: str) -> str | None:
     for media in owner_photos(bp):
         if own and media.role == own:
             return str(media.asset_id)
+    if key in {"process", "detail"}:
+        mine = [m for m in owner_photos(bp) if m.role in {"business", "gallery"}]
+        at = 1 if key == "process" else 2
+        if len(mine) > at:
+            return str(mine[at].asset_id)
     if _removed(bp, key):
         return None
     found = cached(bp, key)
     if found:
         return str(found)
+    if key in {"process", "detail"}:
+        return None
     if key == "hero":
         hero = next((m for m in bp.media_assets if m.role == "hero"), None)
         return str(hero.asset_id) if hero else None

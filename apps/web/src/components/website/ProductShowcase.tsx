@@ -167,6 +167,8 @@ export function ProductShowcase({
   contact,
   capabilities,
   alt,
+  more,
+  eyebrow,
 }: {
   title: string
   subtitle?: string
@@ -181,6 +183,10 @@ export function ProductShowcase({
   contact?: SiteContact
   capabilities?: Record<string, boolean | string | null>
   alt?: boolean
+  /** A home page's teaser of the range: the way to its own page. */
+  more?: { label: string; href: string }
+  /** The trade's word for its range ("Shop", "Menu") above a menu-book title. */
+  eyebrow?: string
 }) {
   const t = useWords()
   const [active, setActive] = useState('All')
@@ -293,12 +299,14 @@ export function ProductShowcase({
     )
   }
 
-  const head = (
-    <div className="ls-head ls-head--showcase">
-      <h2 className="ls-title">{title}</h2>
-      {subtitle ? <p className="ls-sub">{subtitle}</p> : null}
-    </div>
-  )
+  // On the range's own page the page's opening carries the title.
+  const head =
+    title || subtitle ? (
+      <div className="ls-head ls-head--showcase">
+        {title ? <h2 className="ls-title">{title}</h2> : null}
+        {subtitle ? <p className="ls-sub">{subtitle}</p> : null}
+      </div>
+    ) : null
 
   const basket = added ? (
     <div className="ls-basket-bar" role="status">
@@ -358,6 +366,66 @@ export function ProductShowcase({
     ) : null
 
   const ground = alt ? 'ls-section--alt' : ''
+  const moreLink = more ? (
+    <div className="fx-more" data-reveal="fade">
+      <Link className="fx-more__link" href={more.href}>
+        <span>{more.label}</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </Link>
+    </div>
+  ) : null
+
+  /* ----------------------------------------------------------- hover_list */
+  if (variant === 'hover_list') {
+    // Large type, one line each; on a desktop the item's picture follows the
+    // pointer over its line (motion runtime: data-hover-src). On a phone the
+    // picture sits in the line itself.
+    const groups = chapters(shownItems, categories, liveFilters)
+    return (
+      <section id={anchor} className={`ls-section fx-hlist ${ground}`}>
+        <div className="ls-inner">
+          {head}
+          {groups.map((group) => (
+            <div key={group || 'all'} className="fx-hlist__group">
+              {group && groups.length > 1 ? <h3 className="fx-hlist__chapter">{group}</h3> : null}
+              <ul className="fx-hlist__list" data-reveal-group="">
+                {shownItems
+                  .filter((item) => (item.category || '').trim() === group)
+                  .map((item) => (
+                    <li
+                      key={item.name}
+                      className="fx-hlist__row"
+                      data-hover-src={item.image ? item.image.url : undefined}
+                    >
+                      {item.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="fx-hlist__thumb" src={item.image.url} alt="" loading="lazy" />
+                      ) : null}
+                      <span className="fx-hlist__name">
+                        <Diet value={item.diet} t={t} /> {item.name}
+                        {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
+                        <Spice value={item.spice} t={t} />
+                      </span>
+                      {item.description ? <span className="fx-hlist__desc">{item.description}</span> : null}
+                      <span className="fx-hlist__price">
+                        {item.price || ''}
+                        {item.price && item.unit ? <small>{item.unit}</small> : null}
+                      </span>
+                      <span className="fx-hlist__act">{action(item)}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+          {basket}
+        </div>
+        {chooser}
+        {moreLink}
+      </section>
+    )
+  }
 
   /* ------------------------------------------------------------ menu_book */
   if (variant === 'menu_book') {
@@ -372,7 +440,9 @@ export function ProductShowcase({
         filters={liveFilters}
         action={action}
         t={t}
+        eyebrow={eyebrow}
       >
+        {moreLink}
         {basket}
         {chooser}
       </MenuBook>
@@ -428,11 +498,94 @@ export function ProductShowcase({
           </div>
         ) : null}
         {chooser}
+        {moreLink}
       </section>
     )
   }
 
   /* ---------------------------------------------------------------- bento */
+  /* ------------------------------------------------------------- chapters */
+  if (variant === 'chapters') {
+    // The range as an editorial menu: each kind its own chapter — a large
+    // picture, its name set large, where its prices start, its lines set like
+    // a printed menu — alternating sides, not a list dumped on the page.
+    const names = chapters(shownItems, categories, liveFilters)
+    const info = new Map(categories.map((c) => [c.name.trim(), c]))
+    const prefix = slugify(anchor || 'range')
+    return (
+      <section id={anchor} className={`ls-section fx-chapters ${ground}`}>
+        <div className="ls-inner">
+          {head}
+          {names.length > 1 ? (
+            <nav className="fx-chapters__index" aria-label={t('Categories')}>
+              {names.map((name, n) => (
+                <a key={`${prefix}-${name}`} href={`#${prefix}-${slugify(name)}`}>
+                  <span>{String(n + 1).padStart(2, '0')}</span>
+                  {name || t('More')}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+          {names.map((name, n) => {
+            const category = info.get(name)
+            const rows = shownItems.filter((it) => (it.category || '').trim() === name)
+            const live = rows.some((r) => r.live)
+            return (
+              <article
+                key={`${prefix}-${name}`}
+                id={`${prefix}-${slugify(name)}`}
+                className={`fx-chapter ${n % 2 ? 'fx-chapter--flip' : ''}`}
+              >
+                <figure className="fx-chapter__media fx-shape" data-reveal="mask">
+                  <div className="fx-chapter__frame" data-parallax="">
+                    {category?.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={category.image.url} alt={category.image.alt_text || name} loading="lazy" />
+                    ) : (
+                      <span className="ls-picture__plate" aria-hidden="true">
+                        <span>{name || title}</span>
+                      </span>
+                    )}
+                  </div>
+                </figure>
+                <div className="fx-chapter__body">
+                  <span className="fx-chapter__num">{String(n + 1).padStart(2, '0')}</span>
+                  <h3 className="fx-chapter__title" data-split="">
+                    {name || t('More')}
+                  </h3>
+                  {category?.description ? <p className="fx-chapter__lede">{category.description}</p> : null}
+                  {category?.meta ? <p className="fx-chapter__meta">{category.meta}</p> : null}
+                  <ul className="fx-chapter__items" data-reveal-group="">
+                    {rows.map((item) => (
+                      <li key={item.name} className="fx-chapter__item">
+                        <div className="fx-chapter__line">
+                          <span className="fx-chapter__name">
+                            <Diet value={item.diet} t={t} />
+                            {item.name}
+                            <Spice value={item.spice} t={t} />
+                            {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
+                          </span>
+                          <span className="fx-chapter__dots" aria-hidden="true" />
+                          <Price item={item} className="fx-chapter__price" />
+                        </div>
+                        {item.description ? <p className="fx-chapter__desc">{item.description}</p> : null}
+                        {live ? action(item) : null}
+                      </li>
+                    ))}
+                  </ul>
+                  {live ? null : <div className="fx-chapter__act">{action({ name: name || title }, false)}</div>}
+                </div>
+              </article>
+            )
+          })}
+          {basket}
+        </div>
+        {chooser}
+        {moreLink}
+      </section>
+    )
+  }
+
   if (variant === 'bento') {
     // The largest cell is always a picture when there is one to give it.
     const ordered = [...shown.filter((item) => item.image), ...shown.filter((item) => !item.image)]
@@ -472,6 +625,7 @@ export function ProductShowcase({
           {basket}
         </div>
         {chooser}
+        {moreLink}
       </section>
     )
   }
@@ -519,6 +673,7 @@ export function ProductShowcase({
           {basket}
         </div>
         {chooser}
+        {moreLink}
       </section>
     )
   }
@@ -565,6 +720,7 @@ export function ProductShowcase({
           {basket}
         </div>
         {chooser}
+        {moreLink}
       </section>
     )
   }
@@ -619,6 +775,7 @@ export function ProductShowcase({
           {basket}
         </div>
         {chooser}
+        {moreLink}
       </section>
     )
   }
@@ -654,6 +811,7 @@ export function ProductShowcase({
           {basket}
         </div>
         {chooser}
+        {moreLink}
       </section>
     )
   }
@@ -702,6 +860,7 @@ export function ProductShowcase({
         {basket}
       </div>
       {chooser}
+      {moreLink}
     </section>
   )
 }
@@ -760,6 +919,7 @@ function MenuBook({
   action,
   t,
   children,
+  eyebrow,
 }: {
   anchor?: string
   ground: string
@@ -771,6 +931,7 @@ function MenuBook({
   action: (item: Item) => ReactNode
   t: Words
   children: ReactNode
+  eyebrow?: string
 }) {
   const names = chapters(items, categories, filters)
   const prefix = slugify(anchor || 'menu')
@@ -803,9 +964,9 @@ function MenuBook({
         <header className="fx-menu__head">
           <div>
             <p className="ls-eyebrow" data-reveal="fade">
-              {t('Menu')}
+              {eyebrow || t('Menu')}
             </p>
-            <h2 className="ls-title">{title}</h2>
+            {title ? <h2 className="ls-title">{title}</h2> : null}
             {subtitle ? <p className="ls-sub">{subtitle}</p> : null}
           </div>
           {diets.size ? (

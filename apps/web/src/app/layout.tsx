@@ -16,6 +16,8 @@ import '@platform/ui/site-studio.css'
 import '@platform/ui/site-families.css'
 // Motion, depth and scroll scenes — the experience layer on top.
 import '@platform/ui/site-experience.css'
+// The design DNA (type, texture, edges, header, cards) and premium sections.
+import '@platform/ui/site-dna.css'
 import '@/components/website/reviews.css'
 
 const sans = Plus_Jakarta_Sans({

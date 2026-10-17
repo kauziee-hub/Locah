@@ -54,6 +54,12 @@ _SECTION_MODULES: dict[str, str | None] = {
     "fulfilment_strip": None,
     # The business's own short words, moving (experience layer); no module.
     "marquee": None,
+    # The premium site's words and passages (site_pages): the owner's facts
+    # and governed copy only; no module.
+    "statement": None,
+    "pillars": None,
+    "faq": None,
+    "media_text": None,
 }
 
 

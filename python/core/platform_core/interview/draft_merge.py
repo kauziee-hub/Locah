@@ -15,13 +15,18 @@ personalization finishes, each section is compared with that fingerprint:
 * removed by the owner → stays removed;
 * added by the owner → kept.
 
-Theme and navigation follow the same rule. Pure functions over plain dicts.
+Theme and navigation follow the same rule, and so does every page of a
+multi-page site: a page the owner deleted stays deleted, a page the
+personalization adds that the build did not have is added. A page the owner
+added themselves means they restructured the site: personalization then
+does not apply. Pure functions over plain dicts.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from typing import Any
 
 _SECTION_KEYS = ("content", "layout_variant", "is_visible")
@@ -39,15 +44,27 @@ def _home(pages: list[dict[str, Any]]) -> dict[str, Any] | None:
     return next((p for p in pages if p.get("slug") == "home"), pages[0] if pages else None)
 
 
+def _keyed(sections: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
+    """Each section with a key: its type, and "type#n" for the n-th repeat."""
+    seen: Counter[str] = Counter()
+    out = []
+    for section in sections:
+        kind = str(section["section_type_id"])
+        out.append((kind if not seen[kind] else f"{kind}#{seen[kind]}", section))
+        seen[kind] += 1
+    return out
+
+
 def base_fingerprints(draft: dict[str, Any]) -> dict[str, Any]:
     """What the build wrote, as fingerprints: from a draft aggregate's "draft"."""
-    home = _home(draft.get("pages") or [])
-    sections: dict[str, str] = {}
-    for section in (home or {}).get("sections") or []:
-        sections.setdefault(str(section["section_type_id"]), section_fingerprint(section))
-    return {"sections": sections, "theme": _digest(draft.get("theme") or {}),
+    pages = draft.get("pages") or []
+    home = _home(pages)
+    by_page = {str(page.get("slug")): {key: section_fingerprint(s) for key, s in _keyed(page.get("sections") or [])}
+               for page in pages}
+    return {"sections": by_page.get(str((home or {}).get("slug")), {}), "page_sections": by_page,
+            "theme": _digest(draft.get("theme") or {}),
             "navigation": _digest(draft.get("navigation") or []),
-            "pages": len(draft.get("pages") or [])}
+            "pages": len(pages)}
 
 
 def _as_payload_section(section: dict[str, Any]) -> dict[str, Any]:
@@ -58,48 +75,69 @@ def _as_payload_section(section: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def merge(personalized: dict[str, Any], live: dict[str, Any], base: dict[str, Any]
-          ) -> tuple[dict[str, Any] | None, list[str]]:
-    """The personalized payload with every owner change since the build kept.
-
-    Returns (payload, kept) — ``kept`` names the section types (and "theme",
-    "navigation") the owner had changed. Returns (None, []) when the owner
-    restructured the site (added pages): then personalization does not apply.
-    """
-    live_pages = live.get("pages") or []
-    if len(live_pages) > max(1, int(base.get("pages") or 1)):
-        return None, []
-    live_home = _home(live_pages) or {"sections": []}
-    live_by_type: dict[str, dict[str, Any]] = {}
-    for section in live_home.get("sections") or []:
-        live_by_type.setdefault(str(section["section_type_id"]), section)
-    base_sections: dict[str, str] = base.get("sections") or {}
-    page = dict(personalized["pages"][0])
+def _merge_page(page: dict[str, Any], live_page: dict[str, Any], base_sections: dict[str, str]
+                ) -> tuple[dict[str, Any], list[str]]:
+    live_by_key = dict(_keyed(live_page.get("sections") or []))
     kept: list[str] = []
     merged: list[dict[str, Any]] = []
-    for section in page["sections"]:
+    composed = _keyed(page["sections"])
+    for key, section in composed:
         kind = str(section["section_type_id"])
-        mine = live_by_type.get(kind)
+        mine = live_by_key.get(key)
         if mine is None:
-            if kind in base_sections:
+            if key in base_sections:
                 kept.append(kind)  # the owner removed it: it stays removed
                 continue
             merged.append(section)
-        elif section_fingerprint(mine) == base_sections.get(kind):
+        elif section_fingerprint(mine) == base_sections.get(key):
             merged.append(section)
         else:
             kept.append(kind)
             merged.append(_as_payload_section(mine))
-    composed = {str(s["section_type_id"]) for s in page["sections"]}
-    extras = [s for s in live_home.get("sections") or []
-              if str(s["section_type_id"]) not in composed
-              and section_fingerprint(s) != base_sections.get(str(s["section_type_id"]))]
+    composed_keys = {key for key, _ in composed}
+    extras = [s for key, s in _keyed(live_page.get("sections") or [])
+              if key not in composed_keys and section_fingerprint(s) != base_sections.get(key)]
     if extras:
         kept += [str(s["section_type_id"]) for s in extras]
         at = next((i for i, s in enumerate(merged) if s["section_type_id"] == "contact"), len(merged))
         merged[at:at] = [_as_payload_section(s) for s in extras]
-    page["sections"] = merged
-    out = {**personalized, "pages": [page]}
+    return {**page, "sections": merged}, kept
+
+
+def merge(personalized: dict[str, Any], live: dict[str, Any], base: dict[str, Any]
+          ) -> tuple[dict[str, Any] | None, list[str]]:
+    """The personalized payload with every owner change since the build kept.
+
+    Returns (payload, kept) — ``kept`` names the section types (prefixed by the
+    page slug off the home page; and "theme", "navigation") the owner had
+    changed. Returns (None, []) when the owner restructured the site (added
+    pages): then personalization does not apply.
+    """
+    live_pages = live.get("pages") or []
+    by_page: dict[str, dict[str, str]] | None = base.get("page_sections")
+    if by_page is None:
+        # A build recorded before sites had inner pages: its home only.
+        if len(live_pages) > max(1, int(base.get("pages") or 1)):
+            return None, []
+        by_page = {str((_home(live_pages) or {}).get("slug") or "home"): base.get("sections") or {}}
+    if {str(p.get("slug")) for p in live_pages} - set(by_page):
+        return None, []
+    home_slug = str((_home(personalized["pages"]) or {}).get("slug") or "home")
+    kept: list[str] = []
+    pages: list[dict[str, Any]] = []
+    for page in personalized["pages"]:
+        slug = str(page.get("slug"))
+        live_page = next((p for p in live_pages if str(p.get("slug")) == slug), None)
+        if live_page is None:
+            if slug in by_page:
+                kept.append(f"page:{slug}")  # the owner deleted it: it stays deleted
+            else:
+                pages.append(page)
+            continue
+        merged_page, page_kept = _merge_page(page, live_page, by_page.get(slug, {}))
+        pages.append(merged_page)
+        kept += page_kept if slug == home_slug else [f"{slug}:{k}" for k in page_kept]
+    out = {**personalized, "pages": pages}
     if _digest(live.get("theme") or {}) != base.get("theme"):
         out["theme_hints"] = {**(live.get("theme") or {}),
                               "generation": (personalized.get("theme_hints") or {}).get("generation", {})}

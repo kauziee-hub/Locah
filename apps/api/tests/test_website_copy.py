@@ -34,6 +34,9 @@ VARIANTS = {
     "product_showcase": ["category_boards", "commerce_grid", "menu_grid", "compact_list"],
     "fulfilment_strip": ["icons", "steps"],
     "marquee": ["band", "outline"],
+    # The premium site (site_pages): words and pictures only, no module.
+    "statement": ["giant", "split", "image"], "pillars": ["cards", "numbered", "strip"],
+    "faq": ["accordion", "split"], "media_text": ["alternating", "sticky"],
 }
 
 

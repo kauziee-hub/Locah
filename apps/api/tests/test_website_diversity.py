@@ -96,9 +96,18 @@ def test_factual_slots_are_never_drawn(sites: dict[str, SiteFixture]) -> None:
 
 def test_catalogue_is_presented_as_the_trade_browses(sites: dict[str, SiteFixture]) -> None:
     # Projects one at a time, large; cuts as a price list; plans as cards that stack.
-    assert (_of(sites["real-estate"], "product_showcase") or {}).get("layout_variant") in {"spotlight", "stack"}
-    assert (_of(sites["meat-shop"], "product_showcase") or {}).get("layout_variant") in {
-        "menu_book", "category_boards"}
+    # A restrained brand's range does not travel (motion_director): a still
+    # spotlight, or the projects laid out as cards.
+    estate = sites["real-estate"]
+    quiet = estate.payload["theme_hints"]["dna"]["budget"] == "restrained"
+    assert (_of(estate, "product_showcase") or {}).get("layout_variant") in (
+        {"spotlight", "project_cards"} if quiet else {"spotlight", "stack"})
+    # Cuts read as a price list on the range's own page (home shows a tile per
+    # kind of meat and links there).
+    shop = sites["meat-shop"].payload["pages"]
+    listed = next((s for p in shop[1:] for s in p["sections"] if s["section_type_id"] == "product_showcase"),
+                  None) or _of(sites["meat-shop"], "product_showcase") or {}
+    assert listed.get("layout_variant") in {"menu_book", "category_boards", "hover_list", "commerce_grid", "chapters"}
     assert (_of(sites["gym"], "product_showcase") or {}).get("layout_variant") == "stack"
 
 

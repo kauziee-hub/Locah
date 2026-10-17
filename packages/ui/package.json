@@ -13,7 +13,8 @@
     "./website.css": "./src/website.css",
     "./site-studio.css": "./src/site-studio.css",
     "./site-families.css": "./src/site-families.css",
-    "./site-experience.css": "./src/site-experience.css"
+    "./site-experience.css": "./src/site-experience.css",
+    "./site-dna.css": "./src/site-dna.css"
   },
   "files": [
     "dist",

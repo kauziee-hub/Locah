@@ -8,7 +8,8 @@ semantic validation — with no model and no image generation. What comes out:
 * the payload (what would be stored as the draft),
 * its design signature (distinctness),
 * its semantic findings,
-* a site-lab file (the public renderer's input) for screenshots.
+* a site-lab file per page (the public renderer's input) for screenshots:
+  ``<key>.json`` is the home page, ``<key>~<slug>.json`` each inner page.
 
     uv run python -m platform_testing.website_fixtures <out_dir> [--images]
 
@@ -113,20 +114,27 @@ def _placeholder(asset_id: str, theme: dict[str, Any], label: str) -> dict[str, 
     return {"url": "data:image/svg+xml;utf8," + quote(svg), "alt_text": f"Placeholder · {label}"}
 
 
-def _lab_assets(content: dict[str, Any], theme: dict[str, Any]) -> dict[str, dict[str, str]]:
+def _lab_assets(content: dict[str, Any], theme: dict[str, Any],
+                pictures: dict[str, dict[str, str]] | None = None) -> dict[str, dict[str, str]]:
+    """Each picture a section names: a real one from ``pictures`` (asset id →
+    {url, alt_text}) where the lab was given one, else a placeholder."""
+    def picture(asset_id: str, label: str) -> dict[str, str]:
+        return (pictures or {}).get(asset_id) or _placeholder(asset_id, theme, label)
+
     assets: dict[str, dict[str, str]] = {}
     if content.get("image_asset_id"):
-        assets["image_asset_id"] = _placeholder(str(content["image_asset_id"]), theme, "picture")
+        assets["image_asset_id"] = picture(str(content["image_asset_id"]), "picture")
     for key in ("items", "categories"):
         for i, row in enumerate(content.get(key) or []):
             if isinstance(row, dict) and row.get("image_asset_id"):
-                assets[f"{key}.{i}"] = _placeholder(str(row["image_asset_id"]), theme, str(row.get("name", "")))
+                assets[f"{key}.{i}"] = picture(str(row["image_asset_id"]), str(row.get("name") or row.get("title", "")))
     return assets
 
 
-def lab_payload(f: SiteFixture) -> dict[str, Any]:
-    """The public renderer's input (PublicWebsitePayload), for the site lab."""
-    page = f.payload["pages"][0]
+def lab_payload(f: SiteFixture, page_index: int = 0,
+                pictures: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
+    """The public renderer's input (PublicWebsitePayload) for one page, for the site lab."""
+    page = f.payload["pages"][page_index]
     theme = f.payload.get("theme_hints", {})
     contact = contact_for(f.bp)
     return {
@@ -135,11 +143,11 @@ def lab_payload(f: SiteFixture) -> dict[str, Any]:
         "capabilities": {},
         "website": {"status": "draft"},
         "page": {
-            "title": page.get("title", "Home"), "slug": "home", "seo_title": page.get("seo_title"),
+            "title": page.get("title", "Home"), "slug": page.get("slug", "home"), "seo_title": page.get("seo_title"),
             "seo_description": page.get("seo_description"),
-            "sections": [{"id": f"{f.key}-{i}", "section_type_id": s["section_type_id"],
+            "sections": [{"id": f"{f.key}-{page_index}-{i}", "section_type_id": s["section_type_id"],
                           "layout_variant": s.get("layout_variant"), "content": s.get("content", {}),
-                          "assets": _lab_assets(s.get("content", {}), theme),
+                          "assets": _lab_assets(s.get("content", {}), theme, pictures),
                           "is_visible": s.get("is_visible", True)}
                          for i, s in enumerate(page["sections"])],
         },
@@ -152,15 +160,25 @@ def lab_payload(f: SiteFixture) -> dict[str, Any]:
     }
 
 
+def write_lab(root: Path, f: SiteFixture, pictures: dict[str, dict[str, str]] | None = None) -> list[str]:
+    """Every page of a fixture as site-lab files; returns the page slugs."""
+    slugs = []
+    for i, page in enumerate(f.payload["pages"]):
+        name = f.key if i == 0 else f"{f.key}~{page['slug']}"
+        (root / f"{name}.json").write_text(json.dumps(lab_payload(f, i, pictures), ensure_ascii=False, indent=1),
+                                           encoding="utf-8")
+        slugs.append(str(page["slug"]))
+    return slugs
+
+
 def main(out: str, images: bool = False) -> None:  # pragma: no cover — a tool
     root = Path(out)
     root.mkdir(parents=True, exist_ok=True)
     fixtures = asyncio.run(build_all(images=images))
     index = []
     for f in fixtures:
-        (root / f"{f.key}.json").write_text(json.dumps(lab_payload(f), ensure_ascii=False, indent=1),
-                                            encoding="utf-8")
-        index.append({"key": f.key, "name": f.name, "business": f.business, **f.signature})
+        pages = write_lab(root, f)
+        index.append({"key": f.key, "name": f.name, "business": f.business, "pages": pages, **f.signature})
     rep = distinctness(fixtures)
     (root / "index.json").write_text(json.dumps({"sites": index, "distinctness": {
         "ok": rep.ok, "families": rep.families, "palettes": rep.palettes, "clusters": rep.clusters,

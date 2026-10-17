@@ -89,6 +89,34 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   builders) feeds CSS a scroll-progress variable; every scene has a complete still
   state for reduced motion or no JavaScript. `tools/site-lab/serve.sh` renders
   fixtures through the real renderer with no API or database.
+- **A site, not a page.** `compose_site` runs a small design pipeline after the
+  creative direction: `design_dna.py` picks one art-direction *concept* (noir
+  editorial, warm craft, quiet luxury, fresh market, playful, calm care, technical,
+  kinetic) that fits the family and the business, then draws the type, headline
+  accent, ground, edges, buttons, header, cards and picture shapes inside it
+  (`theme.dna`, stable per business; the model's creative director may name the
+  concept from a fitting shortlist). `motion_director.py` spends the concept's
+  motion budget (restrained / gentle / signature / expressive) — one moving moment
+  for a quiet brand, never every card. `site_pages.py` then grows inner pages where
+  there is enough to fill them — the range on its own page (`/menu`, `/shop`,
+  `/services`…, home keeps a teaser — a picture tile per category with its items and
+  starting price — that links to it), `/about`, `/visit` — with a statement,
+  pillars beside a picture, how ordering works as steps, a band of numbers that are
+  facts or counts of what the owner listed (the year they started, items on the
+  counter, areas served, when they open), passages beside pictures and questions
+  answered only from the owner's facts. `site_critic.py` reviews the result like an art director (same
+  picture twice, box after box, walls of text, too much motion, thin pages) and
+  polishes what it can by moving, re-laying or removing — never by writing — for up
+  to three rounds; what it cannot fix stays in `theme_hints.quality.critic`. Each
+  art direction tells the home page in its own order (`site_pages.arrange`; a page
+  order the model chose stands), and a range with pictured categories gets its own
+  page as editorial chapters. `site_vision_critic.py` adds a critic that *sees* the
+  rendered site: screenshots go to the configured provider's image call with an art
+  director's rubric, and its findings map onto the same safe revisions (layouts,
+  order, pictures — never words). `platform_testing/site_vision_loop.py` runs
+  render → screenshot → critique → revise over the site lab with headless Chrome
+  (reduced motion; phones through `/site-lab-frame`); `--dry-run` costs nothing.
+  Personalization merges per page (`draft_merge.py`): owner edits win on every page.
 - **The catalogue is captured, not summarised.** For trades whose website is their
   catalogue, the interview asks for the real list early (`offerings.catalogue`:
   a photo/PDF of the menu or price list, or typed out) and then what a visitor

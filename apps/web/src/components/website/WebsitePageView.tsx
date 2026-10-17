@@ -9,7 +9,7 @@ import { SiteWordsProvider } from './SiteWords'
 import type { PublicWebsitePayload } from '@/lib/public-website'
 import { LANG_LOCALE, offered, siteWords, type SiteLang } from '@/lib/site-words'
 import { MOTION_BOOT, SiteMotion } from './experience/SiteMotion'
-import { siteExperience } from './experience/experience'
+import { siteDna, siteExperience } from './experience/experience'
 import type { Pic } from './experience/HeroScenes'
 
 /**
@@ -246,6 +246,7 @@ export function WebsitePageView({
   const nav = data.navigation || []
   const sections = data.page.sections.filter((s) => s.is_visible !== false)
   const experience = siteExperience(theme)
+  const dna = siteDna(theme)
   // Every picture on this page, once, in page order: what a hero scene (a
   // ring, a wall, floating cards) and a story collage compose with.
   const pictures: Pic[] = []
@@ -340,6 +341,22 @@ export function WebsitePageView({
       data-footer={family ? footerStyle : undefined}
       data-mobile-hero-focus={heroFocus}
       data-motion-lang={experience.motion}
+      data-display={dna.display}
+      data-body={dna.body}
+      data-headline={dna.headline}
+      data-texture={dna.texture}
+      data-pattern={dna.pattern}
+      data-divider={dna.divider}
+      data-button={dna.button}
+      data-navstyle={dna.navstyle}
+      data-cardstyle={dna.cardstyle}
+      data-shape={dna.shape}
+      data-cursor={dna.cursor}
+      data-invert={dna.invert}
+      data-concept={dna.concept}
+      data-space={dna.space}
+      data-photo={dna.photo}
+      data-budget={dna.budget}
       data-scroll={experience.scroll}
       data-grain={experience.grain ? '' : undefined}
       style={styleVars}
@@ -432,6 +449,40 @@ export function WebsitePageView({
               >
                 {ctaLabel}
               </a>
+            ) : null}
+            {nav.length > 1 ? (
+              // The full-screen menu: the header style that hides its links,
+              // and every phone. <details> opens without JavaScript.
+              <details className="ls-nav__menu">
+                <summary className="ls-nav__burger" aria-label={t('Menu')}>
+                  <span />
+                  <span />
+                </summary>
+                <div className="ls-nav__sheet">
+                  <nav className="ls-nav__sheet-links" aria-label={name}>
+                    {nav.map((item, i) => {
+                      const path = typeof item.path === 'string' ? item.path : ''
+                      if (!path) return null
+                      return (
+                        <Link
+                          key={`sheet-${item.label}-${path}`}
+                          href={withPreviewToken(navHref(path), previewToken)}
+                          style={{ '--i': i } as React.CSSProperties}
+                        >
+                          <small>{String(i + 1).padStart(2, '0')}</small>
+                          {t(item.label)}
+                        </Link>
+                      )
+                    })}
+                  </nav>
+                  {place.address || place.phone ? (
+                    <p className="ls-nav__sheet-foot">
+                      {place.address ? <span>{place.address}</span> : null}
+                      {place.phone ? <a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{place.phone}</a> : null}
+                    </p>
+                  ) : null}
+                </div>
+              </details>
             ) : null}
           </div>
         </div>

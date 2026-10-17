@@ -270,6 +270,8 @@ def plan(bp, template=None):
             "commerce_split", "editorial_overlay", "cinematic", "airy_split", "editorial_split",
             # Mirrors 20261009120000_website_experience_layer.sql.
             "cinematic_zoom", "orbit", "plane", "kinetic", "depth", "aurora",
+            # An inner page's opening (20261017120000_website_premium_sections.sql).
+            "page",
         ],
         "about": ["text_only", "image_left", "image_right", "story_split", "word_reveal", "sticky_split",
                   "collage"],
@@ -278,7 +280,7 @@ def plan(bp, template=None):
         "location_list": ["cards", "list"],
         "offerings_list": ["cards", "list", "grid"],
         "cta_band": ["centered", "left_aligned", "image_banner", "giant"],
-        "gallery": ["grid", "masonry", "carousel"],
+        "gallery": ["grid", "masonry", "carousel", "rail"],
         "enquiry_form": ["default", "compact"],
         "menu_section": ["categorized", "simple"],
         "rooms_section": ["cards", "list"],
@@ -293,10 +295,15 @@ def plan(bp, template=None):
         "product_showcase": [
             "category_boards", "commerce_grid", "menu_grid", "compact_list",
             "project_cards", "plan_cards", "service_cards",
-            "menu_book", "rail", "bento", "spotlight", "stack",
+            "menu_book", "rail", "bento", "spotlight", "stack", "hover_list", "chapters",
         ],
         "fulfilment_strip": ["icons", "steps"],
         "marquee": ["band", "outline"],
+        # Mirrors 20261017120000_website_premium_sections.sql.
+        "statement": ["giant", "split", "image"],
+        "pillars": ["cards", "numbered", "strip"],
+        "faq": ["accordion", "split"],
+        "media_text": ["alternating", "sticky"],
     }
     rows = [
         {"id": sid, "available": True, "allowed_variants": variants[sid],

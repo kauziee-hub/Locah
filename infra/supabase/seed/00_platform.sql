@@ -46,7 +46,7 @@ INSERT INTO website_section_types (id, label, description, content_schema, allow
 -- Core sections (available to all businesses)
 ('hero', 'Hero / Banner', 'Main header section with headline, subheadline, and call-to-action',
  '{"type":"object","required":["headline"],"properties":{"headline":{"type":"string","maxLength":120},"headline_accent":{"type":"string","maxLength":60},"eyebrow":{"type":"string","maxLength":60},"subheadline":{"type":"string","maxLength":300},"cta_label":{"type":"string","maxLength":60},"cta_url":{"type":"string","maxLength":500},"image_asset_id":{"type":"string","format":"uuid"},"badges":{"type":"array","maxItems":4,"items":{"type":"string","maxLength":40}}}}',
- ARRAY['centered', 'left_aligned', 'image_left', 'image_right', 'full_width', 'commerce_split', 'editorial_overlay', 'cinematic', 'airy_split', 'editorial_split', 'cinematic_zoom', 'orbit', 'plane', 'kinetic', 'depth', 'aurora'],
+ ARRAY['centered', 'left_aligned', 'image_left', 'image_right', 'full_width', 'commerce_split', 'editorial_overlay', 'cinematic', 'airy_split', 'editorial_split', 'cinematic_zoom', 'orbit', 'plane', 'kinetic', 'depth', 'aurora', 'page'],
  NULL, 10),
 
 ('about', 'About / Story', 'Business description, history, and mission',
@@ -81,7 +81,7 @@ INSERT INTO website_section_types (id, label, description, content_schema, allow
 
 ('gallery', 'Photo Gallery', 'Collection of images showcasing the business',
  '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"image_asset_ids":{"type":"array","items":{"type":"string","format":"uuid"},"maxItems":20}}}',
- ARRAY['grid', 'masonry', 'carousel'],
+ ARRAY['grid', 'masonry', 'carousel', 'rail'],
  NULL, 60),
 
 -- Module-contributed sections (offerings-catalog)

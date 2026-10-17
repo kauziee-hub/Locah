@@ -125,7 +125,11 @@ def validate(
     k = _kind(bp, direction)
     pb = k["pb"]
     findings: list[Finding] = []
-    page = payload["pages"][0]
+    # Every page of the site, not only its home.
+    every_section = [s for page in payload["pages"] for s in page["sections"]]
+    # Where "talk to us" lives: its own page on a multi-page site.
+    contact_href = next((str(n.get("path")) for n in payload.get("navigation", [])
+                         if str(n.get("path")) in {"/visit", "/contact"}), "#contact")
 
     def check(where: str, text: str, replacement: str | None) -> str | None:
         """The text to keep: itself, a replacement, or None to remove."""
@@ -160,11 +164,11 @@ def validate(
         if label:
             nav_cta["label"] = label
             if label != before and nav_cta.get("href") == "#shop":
-                nav_cta["href"] = "#contact"
+                nav_cta["href"] = contact_href
         else:
             theme.pop("nav_cta", None)
 
-    for section in page["sections"]:
+    for section in every_section:
         content = section.get("content") or {}
         sid = section["section_type_id"]
         for key in ("title", "headline"):
@@ -183,7 +187,7 @@ def validate(
                     content[key] = label
                     if label != before and key == "cta_label" and content.get("cta_url") == "#shop":
                         # A button that now says what customers do goes to where they do it.
-                        content["cta_url"] = "#contact"
+                        content["cta_url"] = contact_href
                 else:
                     content.pop(key, None)
                     if key == "cta_label":
@@ -196,7 +200,7 @@ def validate(
 
     drawn = {str(m.asset_id) for m in bp.media_assets if m.source == "AI_GENERATED"}
     if drawn and evidence_led(bp, direction):
-        for section in page["sections"]:
+        for section in every_section:
             if section["section_type_id"] not in {"product_showcase", "category_showcase", "gallery"}:
                 continue
             content = section.get("content") or {}
@@ -210,7 +214,7 @@ def validate(
     # A portfolio-led trade must present its work.
     if k["portfolio"] == "heavy":
         shows_work = any(s["section_type_id"] in {"gallery", "product_showcase", "category_showcase"}
-                         for s in page["sections"])
+                         for s in every_section)
         if not shows_work:
             findings.append(Finding("portfolio_without_work", "flag", "page",
                                     "no section presents the work yet — owner photos needed"))

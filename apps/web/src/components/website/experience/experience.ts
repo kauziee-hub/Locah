@@ -43,6 +43,52 @@ const BY_PROFILE: Record<string, MotionLang> = {
   friendly_local: 'float',
 }
 
+/**
+ * The site's design DNA (platform_core/interview/design_dna.py): the choices
+ * that make two businesses of the same trade look like two brands — type,
+ * how headlines carry their accent, texture, section edges, buttons, the
+ * header, cards, picture shapes, the pointer. Each value maps to rules in
+ * site-dna.css; anything unknown is dropped, so an old site keeps its look.
+ */
+const DNA_VALUES: Record<string, readonly string[]> = {
+  display: [
+    'syne', 'unbounded', 'dmserif', 'bodoni', 'youngserif', 'bigshoulders', 'spacegrotesk', 'italiana',
+    'fraunces', 'playfair', 'cormorant', 'anton', 'archivo', 'bricolage', 'outfit', 'newsreader', 'plex', 'manrope',
+  ],
+  body: ['dm', 'manrope', 'outfit', 'plex', 'spacegrotesk', 'bricolage'],
+  headline: ['plain', 'italic', 'outline', 'marker', 'gradient', 'caps', 'script'],
+  texture: ['none', 'grain', 'paper', 'dots', 'grid', 'pattern'],
+  pattern: ['kolam', 'waves', 'rays', 'checks', 'arcs'],
+  divider: ['none', 'curve', 'slant', 'wave', 'ticket'],
+  button: ['pill', 'sharp', 'outline', 'underline', 'soft'],
+  navstyle: ['bar', 'floating', 'centered', 'overlay'],
+  cardstyle: ['flat', 'bordered', 'elevated', 'glass', 'offset'],
+  shape: ['rect', 'rounded', 'arch', 'blob', 'slant'],
+  cursor: ['none', 'dot'],
+  invert: ['calm', 'bands', 'bold'],
+  // The art direction the traits above were drawn inside, and its brief.
+  concept: [
+    'noir_editorial', 'warm_craft', 'quiet_luxury', 'fresh_market', 'playful_pop', 'calm_care', 'technical_grid',
+    'kinetic_sport',
+  ],
+  space: ['airy', 'regular', 'dense'],
+  photo: ['macro', 'warm', 'full', 'clean'],
+  // The motion director's budget: how much may move (motion.ts reads it too).
+  budget: ['restrained', 'gentle', 'signature', 'expressive'],
+}
+
+export type SiteDna = Partial<Record<keyof typeof DNA_VALUES, string>>
+
+export function siteDna(theme: Record<string, unknown>): SiteDna {
+  const raw = theme.dna && typeof theme.dna === 'object' ? (theme.dna as Record<string, unknown>) : {}
+  const out: SiteDna = {}
+  for (const [key, allowed] of Object.entries(DNA_VALUES)) {
+    const value = String(raw[key] ?? '')
+    if (allowed.includes(value)) out[key as keyof typeof DNA_VALUES] = value
+  }
+  return out
+}
+
 export function siteExperience(theme: Record<string, unknown>): SiteExperience {
   const raw =
     theme.experience && typeof theme.experience === 'object'

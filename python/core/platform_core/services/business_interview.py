@@ -861,15 +861,43 @@ class BusinessInterviewService:
         current: dict[str, dict[str, Any]] = {}
         for section in page["sections"]:
             current.setdefault(section["section_type_id"], section)
-        new: dict[str, dict[str, Any]] = {}
-        for section in fresh["pages"][0]["sections"]:
-            new.setdefault(section["section_type_id"], section)
+        # A site has inner pages (site_pages): the story on /about, the whole range
+        # on its own page beside a teaser on home, contact on /visit. An edit
+        # reaches each section where it is, from the fresh section of that page.
+        placed: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        for draft_page in pages:
+            for section in draft_page["sections"]:
+                placed.setdefault(section["section_type_id"], []).append((str(draft_page.get("slug")), section))
+        fresh_by_slug: dict[str, dict[str, dict[str, Any]]] = {}
+        anywhere: dict[str, dict[str, Any]] = {}
+        for fresh_page in fresh["pages"]:
+            by_type = fresh_by_slug.setdefault(str(fresh_page["slug"]), {})
+            for section in fresh_page["sections"]:
+                by_type.setdefault(section["section_type_id"], section)
+                anywhere.setdefault(section["section_type_id"], section)
+        new: dict[str, dict[str, Any]] = {**anywhere, **fresh_by_slug.get("home", {})}
+
+        def fresh_for(slug: str, section_type: str) -> dict[str, Any] | None:
+            if slug in fresh_by_slug:
+                return fresh_by_slug[slug].get(section_type)
+            # A page the fresh composition no longer has: its sections still take
+            # fresh words — but never the home page's opening.
+            return None if section_type == "hero" else anywhere.get(section_type)
+
+        async def patch_one(section: dict[str, Any], payload: dict[str, Any]) -> None:
+            if payload:
+                await SectionService.patch_section(session, business_id=business.id,
+                                                   section_id=UUID(str(section["id"])),
+                                                   actor_id=actor_id, payload=payload)
 
         async def patch(section_type: str, payload: dict[str, Any]) -> None:
-            if section_type in current and payload:
-                await SectionService.patch_section(session, business_id=business.id,
-                                                   section_id=UUID(str(current[section_type]["id"])),
-                                                   actor_id=actor_id, payload=payload)
+            if section_type in current:
+                await patch_one(current[section_type], payload)
+
+        def teasers() -> list[dict[str, Any]]:
+            """The home page's story teaser: passages that link on to /about."""
+            return [s for _, s in placed.get("media_text", [])
+                    if str((s.get("content") or {}).get("more_path") or "") == "/about"]
 
         if "feel" in kinds:
             design_keys = {"primary_color", "accent_color", "background_color", "text_color", "surface_alt_color",
@@ -882,14 +910,18 @@ class BusinessInterviewService:
             await WebsiteVersionService.update_draft_chrome(session, business_id=business.id, actor_id=actor_id,
                                                             theme=theme)
             for section_type in ("hero", "product_showcase", "category_showcase"):
-                if section_type in current and section_type in new and \
-                        current[section_type].get("layout_variant") != new[section_type].get("layout_variant"):
-                    await patch(section_type, {"layout_variant": new[section_type].get("layout_variant")})
+                for slug, section in placed.get(section_type, []):
+                    fresh_section = fresh_for(slug, section_type)
+                    if fresh_section and section.get("layout_variant") != fresh_section.get("layout_variant"):
+                        await patch_one(section, {"layout_variant": fresh_section.get("layout_variant")})
         if kinds & {"prices", "add", "facts"}:
             for section_type in ("product_showcase", "category_showcase", "fulfilment_strip", "contact"):
-                if section_type in current and section_type in new:
-                    kept = dict(current[section_type].get("content") or {})
-                    fresh_content = dict(new[section_type].get("content") or {})
+                for slug, section in placed.get(section_type, []):
+                    fresh_section = fresh_for(slug, section_type)
+                    if not fresh_section:
+                        continue
+                    kept = dict(section.get("content") or {})
+                    fresh_content = dict(fresh_section.get("content") or {})
                     written = {str(i.get("name")): i for i in kept.get("items") or [] if isinstance(i, dict)}
                     for key in ("items", "categories"):
                         if key in fresh_content:
@@ -902,19 +934,30 @@ class BusinessInterviewService:
                     for key in ("title", "subtitle"):
                         if kept.get(key):
                             fresh_content[key] = kept[key]
-                    await patch(section_type, {"content": fresh_content})
-                elif section_type in new and section_type not in current and "add" in kinds:
+                    await patch_one(section, {"content": fresh_content})
+                if section_type in new and section_type not in placed and "add" in kinds:
                     await WebsiteCompositionService.add_section(
                         session, business_id=business.id, page_id=UUID(str(page["id"])), actor_id=actor_id,
                         section_type_id=section_type, content=new[section_type]["content"],
                         layout_variant=new[section_type].get("layout_variant"), position=1)
         if "story" in kinds:
-            if "story:reset" in done and "about" in current:
-                await patch("about", {"is_visible": False})
+            if "story:reset" in done:
+                # The story is taken off wherever it is told: its page and the
+                # home page's teaser of it.
+                for section in [s for _, s in placed.get("about", [])] + teasers():
+                    await patch_one(section, {"is_visible": False})
             if "story:set" in done and "about" in new:
-                if "about" in current:
-                    await patch("about", {"content": new["about"]["content"], "is_visible": True,
-                                          "layout_variant": new["about"].get("layout_variant")})
+                if "about" in placed:
+                    for slug, section in placed["about"]:
+                        told = fresh_for(slug, "about") or new["about"]
+                        await patch_one(section, {"content": told["content"], "is_visible": True,
+                                                  "layout_variant": told.get("layout_variant")})
+                    fresh_teaser = next((s for s in fresh_by_slug.get("home", {}).values()
+                                         if s["section_type_id"] == "media_text"
+                                         and (s.get("content") or {}).get("more_path") == "/about"), None)
+                    for section in teasers():
+                        await patch_one(section, {"content": fresh_teaser["content"], "is_visible": True}
+                                        if fresh_teaser else {"is_visible": True})
                 else:
                     await WebsiteCompositionService.add_section(
                         session, business_id=business.id, page_id=UUID(str(page["id"])), actor_id=actor_id,

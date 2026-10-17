@@ -9,6 +9,7 @@ import { siteWords, type SiteLang, type Words } from '@/lib/site-words'
 import { HeroScene, sceneFor, type HeroParts, type Pic } from './experience/HeroScenes'
 import { StorySection } from './experience/Story'
 import { CategoryScene, CtaGiant, Marquee } from './experience/Bands'
+import { FaqSection, MediaText, PageHero, Pillars, Statement } from './experience/Sections'
 
 /** Hero layouts that are scenes (see experience/HeroScenes). */
 const SCENES = new Set(['cinematic_zoom', 'orbit', 'plane', 'kinetic', 'depth', 'aurora'])
@@ -479,6 +480,11 @@ export function SectionRenderer({
 
       if (scene) {
         return <HeroScene variant={scene} parts={parts} image={image} pictures={pictures} longest={longest} />
+      }
+      if (variant === 'page') {
+        // An inner page's opening: its title as large as the home page's,
+        // with the page's own picture as a band beneath.
+        return <PageHero eyebrow={parts.eyebrow} title={parts.title} sub={parts.sub} actions={parts.actions} image={image} />
       }
 
       const copy = (
@@ -993,6 +999,15 @@ export function SectionRenderer({
           contact={contact}
           capabilities={capabilities}
           alt={alt}
+          eyebrow={str(c.eyebrow) || undefined}
+          more={
+            str(c.more_label) && str(c.more_path)
+              ? {
+                  label: str(c.more_label),
+                  href: withPreviewToken(pathHref(businessSlug, str(c.more_path)), previewToken),
+                }
+              : undefined
+          }
         />
       )
     }
@@ -1056,12 +1071,42 @@ export function SectionRenderer({
         .filter(([key]) => key.startsWith('image_asset_id'))
         .map(([, a]) => a)
       if (images.length === 0) return null
+      if (variant === 'rail') {
+        // A run of the owner's pictures, held in place while it travels.
+        return (
+          <section className={`ls-section fx-rail fx-gallery-rail ${alt ? 'ls-section--alt' : ''}`} data-rail="">
+            <div className="fx-rail__stage">
+              {c.title ? (
+                <div className="fx-rail__head">
+                  <div className="ls-head">
+                    <h2 className="ls-title" data-split="">
+                      {str(c.title)}
+                    </h2>
+                  </div>
+                </div>
+              ) : null}
+              <div className="fx-rail__track" data-rail-track="">
+                <ul className="fx-rail__list">
+                  {images.map((img, i) => (
+                    <li key={i} className="fx-gallery-rail__item">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt={img.alt_text || ''} loading="lazy" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        )
+      }
       return (
         <section className={`ls-section ${alt ? 'ls-section--alt' : ''}`}>
           <div className="ls-inner">
             {c.title ? (
               <div className="ls-head ls-head--center">
-                <h2 className="ls-title">{str(c.title)}</h2>
+                <h2 className="ls-title" data-split="">
+                  {str(c.title)}
+                </h2>
               </div>
             ) : null}
             <div className={`ls-gallery ls-gallery--${variant}`} data-reveal-group="">
@@ -1076,6 +1121,85 @@ export function SectionRenderer({
         </section>
       )
     }
+
+    /* ------------------------------------------------------- statement */
+    case 'statement':
+      return (
+        <Statement
+          variant={v || 'giant'}
+          eyebrow={str(c.eyebrow)}
+          text={str(c.text)}
+          highlight={str(c.highlight)}
+          image={image}
+          pictures={pictures}
+          alt={alt}
+        />
+      )
+
+    /* --------------------------------------------------------- pillars */
+    case 'pillars':
+      return (
+        <Pillars
+          variant={v || 'cards'}
+          eyebrow={str(c.eyebrow)}
+          title={str(c.title)}
+          subtitle={str(c.subtitle)}
+          items={listOf(c.items)
+            .map((row) => ({ title: str(row.title), body: str(row.body), icon: str(row.icon) }))
+            .filter((row) => row.title)}
+          alt={alt}
+          image={image}
+        />
+      )
+
+    /* ------------------------------------------------------------- faq */
+    case 'faq': {
+      const faqs = listOf(c.items)
+        .map((row) => ({ q: str(row.q), a: str(row.a) }))
+        .filter((row) => row.q && row.a)
+      return (
+        <FaqSection
+          variant={v || 'accordion'}
+          title={str(c.title) || t('Good to know')}
+          subtitle={str(c.subtitle)}
+          items={faqs}
+          aside={
+            v === 'split' ? (
+              <div className="ls-hero__cta">
+                <ContactActions t={t} contact={contact} businessName={businessName} />
+              </div>
+            ) : undefined
+          }
+          alt={alt}
+        />
+      )
+    }
+
+    /* ------------------------------------------------------ media_text */
+    case 'media_text':
+      return (
+        <MediaText
+          variant={v || 'alternating'}
+          title={str(c.title)}
+          rows={listOf(c.items)
+            .map((row, i) => ({
+              eyebrow: str(row.eyebrow),
+              title: str(row.title),
+              body: str(row.body),
+              image: assets[`items.${i}`],
+            }))
+            .filter((row) => row.title)}
+          alt={alt}
+          more={
+            str(c.more_label) && str(c.more_path)
+              ? {
+                  label: str(c.more_label),
+                  href: withPreviewToken(pathHref(businessSlug, str(c.more_path)), previewToken),
+                }
+              : undefined
+          }
+        />
+      )
 
     /* -------------------------------------- live record list sections */
     case 'offerings_list':

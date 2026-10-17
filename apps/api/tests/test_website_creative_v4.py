@@ -30,7 +30,7 @@ from platform_core.interview.draft_merge import base_fingerprints, merge, sectio
 from platform_core.website.image_generation import GeneratedImage
 from platform_testing.phase_b import db_url, sql
 from test_start_conversation import owner  # noqa: F401 — the signed-in owner fixture
-from test_website_conversation import Talk, of, sections
+from test_website_conversation import Talk, every_section, of
 
 PNG = GeneratedImage(mime_type="image/png", bytes=b"\x89PNG draft", model="stub", latency_ms=1, prompt="")
 
@@ -200,7 +200,7 @@ def test_owner_changes_during_personalization_are_kept_and_pictures_are_drawn(
         briefs = {p.split("Part of one editorial series for this brand: ", 1)[1].split(". Light:")[0]
                   for p in gemini_stubbed["prompts"]}
         assert len(briefs) == 1
-        story = [s for s in sections(after) if s["section_type_id"] == "about"]
+        story = [s for s in every_section(after) if s["section_type_id"] == "about"]
         assert story and story[0]["content"].get("image_asset_id")
 
 
