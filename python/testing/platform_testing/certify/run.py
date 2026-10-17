@@ -1,6 +1,6 @@
 """One business through the whole certification, step by step.
 
-    uv run python -m platform_testing.certify.run <run_dir> <scenario> <variant> [--reuse] [--no-critic]
+    uv run python -m platform_testing.certify.run <run_dir> <scenario> <variant> [--reuse] [--no-critic] [--fast]
 
   journey   the owner, from "Create Business" to a published site (journey.py)
   setup     the owner's Workspace afternoon: the kept tools made operational
@@ -35,7 +35,8 @@ def _node(*args: str, timeout: int = 900) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr)[-4000:]
 
 
-async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False, critic: bool = True) -> dict[str, Any]:
+async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False, critic: bool = True,
+              render: bool = True) -> dict[str, Any]:
     from platform_testing.certify import customer as customer_step
     from platform_testing.certify import journey as journey_step
     from platform_testing.certify import setup as setup_step
@@ -80,13 +81,13 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
             summary["steps"][name[:-5]] = {"ok": shop.get("ok", False),
                                            "failed": [s["step"] for s in shop.get("steps") or [] if not s["ok"]]}
 
-    if not done("render.json"):
+    if render and not done("render.json"):
         code, out = _node("tools/certify/render.mjs", str(folder), url, timeout=1800)
         summary["steps"]["render_log"] = out[-800:]
-    render = json.loads((folder / "render.json").read_text(encoding="utf-8")) if (folder / "render.json").exists() else {}
-    summary["steps"]["render"] = {"pages": [p.get("slug") for p in render.get("pages") or []]}
+    rendered = json.loads((folder / "render.json").read_text(encoding="utf-8")) if (folder / "render.json").exists() else {}
+    summary["steps"]["render"] = {"pages": [p.get("slug") for p in rendered.get("pages") or []]}
 
-    if critic and render:
+    if critic and rendered:
         from platform_core.website.ai_provider import get_ai_provider
         from platform_testing.certify.critic import critique_site
         from platform_testing.certify.gate import decide
@@ -116,6 +117,8 @@ if __name__ == "__main__":  # pragma: no cover — a tool
     if len(argv) != 3:
         raise SystemExit("usage: python -m platform_testing.certify.run <run_dir> <scenario> <variant> "
                          "[--reuse] [--no-critic]")
+    fast = "--fast" in sys.argv  # the owner and customer steps only: no render, no critic
     out = asyncio.run(run(Path(argv[0]), argv[1], argv[2], reuse="--reuse" in sys.argv,
-                          critic="--no-critic" not in sys.argv))
+                          critic="--no-critic" not in sys.argv and not fast, render=not fast))
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     print(json.dumps(out, indent=1, ensure_ascii=False)[:6000])

@@ -27,6 +27,7 @@ from platform_core.website.image_retrieval import (
     retrieve_for_slot,
     retrieve_many,
     weighted_score,
+    why_not,
 )
 from platform_core.website.image_search import (
     ImageCandidate,
@@ -332,6 +333,12 @@ def test_a_picture_qualifies_only_on_LOCAHs_own_rule(monkeypatch: pytest.MonkeyP
     assert not qualifies(Verdict(**good(0, business_relevance=4)), b)             # beautiful, not this business
     assert not qualifies(Verdict(**good(0, text_space=3)), b)                     # a hero needs room for the headline
     assert qualifies(Verdict(**good(0, text_space=3)), brief(key="item:x", purpose="item", aspect="4:3"))
+    # The named product, not a cousin of it: chocolate-chip cookies are not
+    # "coconut cookies", a T-bone is not "mutton" — for a slot that names one.
+    cookies = brief(key="item:coconut-cookies", purpose="item", aspect="4:5", subject="Coconut cookies")
+    assert not qualifies(Verdict(**good(0, wrong_variety=True)), cookies)
+    assert why_not(Verdict(**good(0, wrong_variety=True)), cookies) == "wrong_variety"
+    assert qualifies(Verdict(**good(0, wrong_variety=True)), b)                   # a hero names no one product
     monkeypatch.setenv("IMAGE_ACCEPT_SCORE", "95")
     assert not qualifies(Verdict(**good(0, score=90)), b)                         # the bar is configurable
 

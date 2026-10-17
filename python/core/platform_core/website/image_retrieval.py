@@ -493,6 +493,9 @@ class Verdict(BaseModel):
     has_text_or_watermark: bool = False
     has_people: bool = False
     shows_unoffered_subject: bool = False
+    # The named product, but not this one: another variety, species, cut or
+    # flavour (chocolate-chip cookies for "coconut cookies", a T-bone for "mutton").
+    wrong_variety: bool = False
     cliche_stock: bool = False
     looks_ai_generated: bool = False
     too_busy: bool = False
@@ -553,6 +556,10 @@ def why_not(verdict: Verdict, brief: PhotoBrief) -> str:
             return flag
     if verdict.has_people and any(rule.startswith("people") for rule in brief.avoid):
         return "people where the brief forbids them"
+    # A slot that names one product shows that product, not a cousin of it:
+    # business truth wins over a beautiful picture of something else.
+    if verdict.wrong_variety and brief.section_role in {"item", "range", "detail"}:
+        return "wrong_variety"
     if verdict.business_relevance is not None and verdict.business_relevance < 6:
         return f"business_relevance {verdict.business_relevance} < 6"
     if verdict.photo_quality is not None and verdict.photo_quality < 6:
@@ -822,7 +829,10 @@ _JUDGE_SYSTEM = (
     "art_direction_fit (the site's art direction, light and colour), mobile_crop (does it survive a tall phone "
     "crop). Flags: has_text_or_watermark (any lettering, logo, brand mark or watermark), has_people (a person, "
     "face or hand), shows_unoffered_subject (the main subject is a product or dish NOT in business_offers_only — "
-    "a beautiful picture of something the business does not sell is wrong), cliche_stock, looks_ai_generated, "
+    "a beautiful picture of something the business does not sell is wrong), wrong_variety (the slot's subject names "
+    "one product and the picture shows another variety, species, cut or flavour of it — chocolate-chip cookies for "
+    "'coconut cookies', a beef T-bone for 'mutton', chicken for 'fish', a croissant for 'egg puff'), cliche_stock, "
+    "looks_ai_generated, "
     "too_busy, similar_to_site (too close to a picture in `already_on_site`). Set decision to `accepted` only if "
     "you would place the picture in this slot as it is; `rejected` if wrong; `retry_required` if close but "
     "unusable. Give short reasons. Then name the single best candidate (`best_index`, -1 if none is good enough) "
@@ -1264,7 +1274,8 @@ def _audit(candidate: ImageCandidate, verdict: Verdict | None, brief: PhotoBrief
     if verdict is None:
         row["verdict"] = "not judged"
         return row
-    flags = [name for name in ("has_text_or_watermark", "has_people", "shows_unoffered_subject", "cliche_stock",
+    flags = [name for name in ("has_text_or_watermark", "has_people", "shows_unoffered_subject", "wrong_variety",
+                               "cliche_stock",
                                "looks_ai_generated", "too_busy", "similar_to_site") if getattr(verdict, name)]
     row.update(decision=verdict.decision, score=verdict.score, weighted=weighted_score(verdict, brief),
                qualifies=qualifies(verdict, brief), why_not=why_not(verdict, brief), flags=flags,
