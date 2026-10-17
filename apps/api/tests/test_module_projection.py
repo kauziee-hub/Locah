@@ -473,6 +473,15 @@ def test_navigation_drops_only_what_a_not_ready_section_filled_and_adds_the_cata
                        catalogue=("/#shop", "Menu")) == added
 
 
+def test_a_range_on_its_own_page_is_not_linked_twice() -> None:
+    # Certification run: a restaurant's nav read "Home Menu About Visit Products"
+    # once ordering went live — the catalogue landing (/menu#shop) is the Menu page.
+    stored = [{"label": "Home", "path": "/"}, {"label": "Menu", "path": "/menu"}, {"label": "Visit", "path": "/visit"}]
+    nav = _navigation(stored, page_shows={"home": True, "menu": True, "visit": True}, lost_anchors=set(),
+                      kept_anchors={"shop"}, catalogue=("/menu#shop", "Products"))
+    assert nav == stored
+
+
 def test_navigation_state_reads_each_gate_separately() -> None:
     base = {"built": True, "entitled": True, "enabled": True, "ready": False, "state": "active"}
     assert navigation_state({**base, "ready": True}) == "active"

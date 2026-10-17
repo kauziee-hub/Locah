@@ -2192,3 +2192,59 @@
 /* My account › memberships and subscriptions (P2-02): the business's own colours only. */
 [data-locah-site] .ls-account__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.3rem; }
 [data-locah-site] .ls-account__actions form { margin: 0; }
+
+/* The slim bar on a tenant's action pages (checkout, booking, a bill, a
+   payment link — SiteFrame): the business's name in its own display face,
+   and the way back to its site. */
+.ls-frame__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.1rem clamp(1.25rem, 0.5rem + 3vw, 3rem);
+  border-bottom: 1px solid var(--site-border);
+}
+[data-locah-site] a.ls-frame__name {
+  font-family: var(--site-display-font);
+  font-weight: var(--site-heading-weight, 600);
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+  color: var(--site-ink);
+  text-decoration: none;
+}
+[data-locah-site] a.ls-frame__back {
+  font-size: 0.875rem;
+  color: var(--site-muted);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+  text-decoration-thickness: 1px;
+}
+
+/* An order's confirmation: the business's receipt, set in its own face. */
+.ls-confirm__head {
+  margin-bottom: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+}
+[data-locah-site] .ls-confirm__title {
+  font-family: var(--site-display-font);
+  font-size: calc(clamp(2.4rem, 1.4rem + 3.6vw, 4.5rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.98);
+  letter-spacing: var(--site-display-tracking, -0.03em);
+  margin: 0.25rem 0 0;
+}
+.ls-confirm__lede {
+  margin-top: 1rem;
+  font-size: 1.125rem;
+  color: color-mix(in srgb, var(--site-ink) 78%, var(--site-bg));
+}
+@media (max-width: 600px) {
+  /* The name already leads back; on a phone it has the bar to itself. */
+  [data-locah-site] a.ls-frame__back {
+    display: none;
+  }
+}
+/* The WhatsApp float steps above the basket bar instead of covering it. */
+[data-locah-site]:has(.ls-basket-bar) .ls-wa-float {
+  bottom: calc(clamp(1rem, 0.5rem + 1.5vw, 1.75rem) + 4.5rem);
+}

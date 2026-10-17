@@ -260,13 +260,22 @@ export default function CheckoutClient({
   }
 
   if (confirmation) {
+    const pickupAt = options.locations.find((l) => l.is_primary) || options.locations[0]
+    const howToPay = confirmation.checkout && !['succeeded', 'paid'].includes(confirmation.state)
+      ? t('Your order is held. Finish the payment to confirm it.')
+      : confirmation.state === 'paid' || confirmation.state === 'succeeded'
+        ? t('Payment received.')
+        : confirmation.paymentError || (mode === 'delivery' ? t('Pay when it is delivered.') : t('Pay when you collect your order.'))
     return (
-      <main className="ls-section">
+      <main className="ls-section ls-confirm">
         <div className="ls-inner ls-checkout">
-          <header className="ls-bill__head">
-            <p className="ls-meta">{options.business.display_name}</p>
-            <h1 className="ls-title">{t('Order confirmed')}</h1>
-            <p className="ls-meta">{t('Order {number}', { number: confirmation.order_number })}{confirmation.due_words ? ` · ${t('ready {when}', { when: confirmation.due_words })}` : ''}</p>
+          <header className="ls-confirm__head">
+            <p className="ls-eyebrow">{t('Order {number}', { number: confirmation.order_number })}</p>
+            <h1 className="ls-confirm__title">{t('Order confirmed')}</h1>
+            <p className="ls-confirm__lede">
+              {confirmation.advance ? null : howToPay}
+              {confirmation.due_words ? ` ${t('ready {when}', { when: confirmation.due_words })}` : ''}
+            </p>
           </header>
           {confirmation.advance ? (
             <div className="ls-bill__card">
@@ -277,22 +286,39 @@ export default function CheckoutClient({
                 <Link className="ls-btn" href={confirmation.advance.path}>{t('Pay {amount} advance', { amount: rupees(confirmation.advance.amount) })}</Link>
               </div>
             </div>
-          ) : (
-            <p className="ls-meta">
-              {confirmation.checkout && !['succeeded', 'paid'].includes(confirmation.state)
-                ? t('Your order is held. Finish the payment to confirm it.')
-                : confirmation.state === 'paid' || confirmation.state === 'succeeded'
-                  ? t('Payment received.')
-                  : confirmation.paymentError || (mode === 'delivery' ? t('Pay when it is delivered.') : t('Pay when you collect your order.'))}
-            </p>
-          )}
+          ) : null}
+          {items.length ? (
+            <section className="ls-bill__card" aria-labelledby="ordered-h">
+              <h2 id="ordered-h" className="ls-checkout__h">{t('Basket')}</h2>
+              <ul className="ls-bill__lines">
+                {items.map((item, idx) => {
+                  const line = priced?.lines[idx]
+                  return (
+                    <li key={item.key ?? item.offering_id}>
+                      <span>{item.quantity} × {line?.title ?? item.title}</span>
+                      <strong>{line ? rupees(line.line_total) : ''}</strong>
+                    </li>
+                  )
+                })}
+              </ul>
+              {priced ? (
+                <dl className="ls-bill__totals">
+                  <dt className="is-total">{t('Total')}</dt>
+                  <dd className="is-total">{rupees(priced.total)}</dd>
+                </dl>
+              ) : null}
+              {mode !== 'delivery' && pickupAt?.name && !/^(primary|main|default) location$/i.test(pickupAt.name.trim()) ? (
+                <p className="ls-meta">{pickupAt.name}</p>
+              ) : null}
+            </section>
+          ) : null}
           {confirmation.checkout ? (
             <button type="button" className="ls-btn" onClick={() => openRazorpayCheckout(confirmation.checkout!, options.business.display_name)}>
               {t('Pay now')}
             </button>
           ) : null}
           <div className="ls-bill__actions">
-            <Link className="ls-btn ls-btn--outline" href={confirmation.tracking.href}>{t('Track your order')}</Link>
+            <Link className="ls-btn" href={confirmation.tracking.href}>{t('Track your order')}</Link>
             <Link className="ls-btn ls-btn--outline" href={`/${slug}`}>{t('Back to {business}', { business: options.business.display_name })}</Link>
           </div>
         </div>

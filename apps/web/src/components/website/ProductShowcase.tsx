@@ -230,18 +230,23 @@ export function ProductShowcase({
   // the layout the site was designed with holds the real catalogue.
   const shownItems: Item[] = useMemo(() => {
     if (!(canBrowse && live.length > 0)) return items
-    const pictureByName = new Map(items.map((i) => [i.name.toLowerCase(), i.image]))
+    // The designed item each live row is — the same dish under the owner's
+    // fuller name — keeps its photograph and its words; each photograph is
+    // used once, so the menu never shows the same picture twice.
+    const used = new Set<string>()
     return live.map((row) => {
       const attrs = row.attributes || {}
       const amount = formatMoney(row.packs?.[0]?.price_amount ?? row.price_amount, row.currency)
+      const designed = row.image_url ? undefined : designedFor(row.title, items, used)
+      if (designed?.image) used.add(designed.image.url)
       return {
         name: row.title,
         category: row.category || undefined,
-        description: row.description || undefined,
+        description: row.description || designed?.description || undefined,
         price: amount ? (row.packs?.length || row.option_groups?.length ? t('from {price}', { price: amount }) : amount) : undefined,
         diet: typeof attrs.diet === 'string' ? attrs.diet : undefined,
         spice: typeof attrs.spice === 'string' ? attrs.spice : undefined,
-        image: row.image_url ? { url: row.image_url, alt_text: row.title } : pictureByName.get(row.title.toLowerCase()),
+        image: row.image_url ? { url: row.image_url, alt_text: row.title } : designed?.image,
         live: row,
       }
     })
@@ -897,6 +902,38 @@ function RestList({
       </ul>
     </div>
   )
+}
+
+/** Words that name a portion or a pack, not the dish. */
+const NOT_THE_DISH = new Set(['pcs', 'piece', 'pieces', 'plate', 'plates', 'pack', 'family', 'full', 'half', 'the',
+  'and', 'with', 'kg', 'gm', 'gms', 'grams', 'per', 'box', 'small', 'large', 'regular'])
+
+function dishWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\s]+/gu, ' ')
+    .split(/\s+/)
+    .map((w) => w.replace(/s$/, ''))
+    .filter((w) => w.length > 2 && !NOT_THE_DISH.has(w))
+}
+
+/** The designed item a live catalogue row is: every word of the designed name
+ *  in the row's title ("Chicken biryani" in "Malabar Chicken Dum Biryani"),
+ *  the most specific first, and a photograph not used yet. */
+function designedFor(title: string, designed: Item[], used: Set<string>): Item | undefined {
+  const have = new Set(dishWords(title))
+  let best: Item | undefined
+  let bestScore = 0
+  for (const item of designed) {
+    const want = dishWords(item.name)
+    if (!want.length || !want.every((w) => have.has(w))) continue
+    if (item.image && used.has(item.image.url)) continue
+    if (want.length > bestScore) {
+      best = item
+      bestScore = want.length
+    }
+  }
+  return best
 }
 
 function MenuAction({ children }: { children: ReactNode }) {

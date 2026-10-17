@@ -306,8 +306,14 @@ export function WebsitePageView({
         : /#plans|#join/.test(designedHref) ? 'join' : null
   const primaryPath = typeof capabilities.primary_path === 'string' ? capabilities.primary_path : ''
   const primaryLabel = typeof capabilities.primary_label === 'string' ? capabilities.primary_label : ''
+  // A designed button that only opens a channel ("Order on WhatsApp", "Call")
+  // gives way once the business's own tool is live: a restaurant that takes
+  // orders online leads with "Order now", not a chat.
+  const designedIsChannel = /wa\.me|^whatsapp:|^tel:/.test(designedHref)
+  const toolLeads =
+    ['order', 'book', 'join'].includes(String(capabilities.primary || '')) && Boolean(primaryPath && primaryLabel)
   const navCta =
-    designedCta && (!needs || capabilities[needs])
+    designedCta && (!needs || capabilities[needs]) && !(designedIsChannel && toolLeads)
       ? designedCta
       : primaryPath && primaryLabel
         ? { label: primaryLabel, href: primaryPath }
@@ -349,6 +355,7 @@ export function WebsitePageView({
       : ctaHref
   const callLabel =
     profile === 'bold_food_commerce' || profile === 'editorial_home_food' ? t('Call to order') : t('Call')
+  const barPrimary = (stickyPrimary || toolLeads) && Boolean(ctaLabel && ctaTarget) && !/wa\.me|^tel:/.test(ctaTarget)
 
   return (
     <div
@@ -570,13 +577,15 @@ export function WebsitePageView({
       {reachable ? (
         // On a phone the two things a visitor most wants are always one tap away.
         <nav className="ls-mobile-bar" aria-label={t('Contact')}>
-          {stickyPrimary && ctaLabel && ctaTarget && !/wa\.me|^tel:/.test(ctaTarget) ? (
+          {barPrimary ? (
             // The site's main action, one thumb away (not a second WhatsApp or Call).
             <a className="ls-mobile-bar__primary" href={ctaTarget}>
               {ctaLabel}
             </a>
           ) : null}
-          {contact.phone ? <a href={`tel:${contact.phone}`}>{callLabel}</a> : null}
+          {/* Beside the main action, one channel — two buttons, never three
+              squeezed into a phone's width. */}
+          {contact.phone && !(barPrimary && waHref) ? <a href={`tel:${contact.phone}`}>{callLabel}</a> : null}
           {waHref ? (
             <a href={waHref} target="_blank" rel="noopener noreferrer">
               {journey ? t(journey.label) : 'WhatsApp'}

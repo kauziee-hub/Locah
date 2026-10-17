@@ -403,7 +403,11 @@ class WebsitePublishService:
 
         def landing(action: str) -> str | None:
             types, default_anchor = caps.LANDING_SECTIONS[action]
-            for p, s in placed:
+            # The range's own page (a menu, a shop) before the home page's
+            # teaser of it: the navigation already names that page, and a
+            # visitor who wants to order wants everything, not a taste.
+            ordered = sorted(placed, key=lambda ps: ps[0].slug == "home" or ps[0].page_type == "home")
+            for p, s in ordered:
                 if s.section_type_id in types:
                     anchor = (s.content or {}).get("anchor") or (default_anchor if s.section_type_id == "plans_section"
                                                                  else None)
@@ -503,8 +507,14 @@ def _navigation(
         out.append(item)
     if catalogue is not None:
         path, label = catalogue
+        # A link to the same inner page already leads there ("Menu" → /menu for
+        # a landing at /menu#shop); the home page does not — a one-page site
+        # still wants its link to the range further down.
+        page = path.split("#", 1)[0].rstrip("/") if path else ""
         if path and label and not any(
-            isinstance(i, dict) and (i.get("path") == path or str(i.get("label", "")).casefold() == label.casefold())
+            isinstance(i, dict) and (
+                i.get("path") == path or str(i.get("label", "")).casefold() == label.casefold()
+                or (page and str(i.get("path", "")).split("#", 1)[0].rstrip("/") == page))
             for i in out
         ):
             at = next((n for n, i in enumerate(out) if isinstance(i, dict) and "contact" in str(i.get("path", ""))),
