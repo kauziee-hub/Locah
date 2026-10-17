@@ -293,9 +293,6 @@
 }
 [data-locah-site][data-family='modern_commerce'] .ls-hero__headline .ls-accent {
   color: var(--site-primary);
-  text-decoration: underline;
-  text-decoration-thickness: 0.12em;
-  text-underline-offset: 0.12em;
 }
 [data-locah-site][data-family='modern_commerce'] .ls-category__initial {
   font-size: 6rem;

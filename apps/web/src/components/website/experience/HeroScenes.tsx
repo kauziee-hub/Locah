@@ -180,10 +180,12 @@ export function HeroScene({
             <h1 className="ls-hero__headline fx-kinetic__title">
               <span className="fx-kinetic__line fx-kinetic__line--a">
                 <span data-split="">{first}</span>
-                {lead ? (
+                {/* Only the hero's own picture belongs in the headline: a product
+                    tile borrowed from further down (a squid's eye) is not a hero. */}
+                {image ? (
                   <span className="fx-kinetic__pill" aria-hidden="true">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={lead.url} alt="" fetchPriority="high" />
+                    <img src={image.url} alt="" fetchPriority="high" />
                   </span>
                 ) : null}
               </span>
