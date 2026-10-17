@@ -17,41 +17,89 @@
     .fx-intro__name, .ls-foot__statement, .ls-nav__sheet-links a, .fx-hlist__name, .fx-spot__num, .fx-stack__big) {
   font-family: var(--site-display-font);
 }
+/* A face's own metrics: how large it runs against the others (scale), its
+   leading, tracking, width and how many characters a display line holds. The
+   hero scenes, the statement and the closing band read these instead of one
+   hard-coded set — condensed capitals run larger and looser than a tight
+   grotesk, a display serif larger again. These are the defaults; on a DNA
+   site they also replace whatever the family's type system set, so the face
+   decides, not the family. */
+[data-locah-site],
+[data-locah-site][data-display] {
+  --site-display-scale: 1;
+  --site-display-leading: 0.95;
+  --site-display-tracking: -0.035em;
+  --site-display-measure: 11ch;
+  --site-display-stretch: 100%;
+}
+[data-locah-site][data-display='instrumentserif'] {
+  --site-display-font: var(--font-site-instrumentserif), var(--site-tamil), Georgia, serif;
+  --site-heading-weight: 400;
+  --site-display-scale: 1.14;
+  --site-display-leading: 0.94;
+  --site-display-tracking: -0.02em;
+}
+[data-locah-site][data-display='intertight'] {
+  --site-display-font: var(--font-site-intertight), var(--site-tamil), system-ui, sans-serif;
+  --site-heading-weight: 600;
+  --site-display-leading: 0.92;
+  --site-display-tracking: -0.045em;
+}
+[data-locah-site][data-display='instrumentsans'] {
+  --site-display-font: var(--font-site-instrumentsans), var(--site-tamil), system-ui, sans-serif;
+  --site-heading-weight: 600;
+  --site-display-scale: 1.08;
+  --site-display-leading: 0.92;
+  --site-display-tracking: -0.035em;
+  --site-display-stretch: 85%;
+}
 [data-locah-site][data-display='syne'] {
   --site-display-font: var(--font-site-syne), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 700;
-  --site-display-tracking: -0.04em;
+  --site-display-scale: 0.9;
+  --site-display-leading: 0.98;
+  --site-display-tracking: -0.03em;
 }
 [data-locah-site][data-display='unbounded'] {
   --site-display-font: var(--font-site-unbounded), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 600;
+  --site-display-scale: 0.9;
+  --site-display-leading: 0.98;
   --site-display-tracking: -0.03em;
 }
 [data-locah-site][data-display='dmserif'] {
   --site-display-font: var(--font-site-dmserif), var(--site-tamil), Georgia, serif;
   --site-heading-weight: 400;
-  --site-display-tracking: -0.02em;
+  --site-display-leading: 0.98;
+  --site-display-tracking: -0.025em;
 }
 [data-locah-site][data-display='bodoni'] {
   --site-display-font: var(--font-site-bodoni), var(--site-tamil), Georgia, serif;
   --site-heading-weight: 500;
-  --site-display-tracking: -0.02em;
+  --site-display-scale: 1.08;
+  --site-display-tracking: -0.025em;
+  --site-display-measure: 12ch;
 }
 [data-locah-site][data-display='youngserif'] {
   --site-display-font: var(--font-site-youngserif), var(--site-tamil), Georgia, serif;
   --site-heading-weight: 400;
-  --site-display-tracking: -0.025em;
+  --site-display-scale: 0.96;
+  --site-display-leading: 1;
+  --site-display-tracking: -0.03em;
 }
 [data-locah-site][data-display='bigshoulders'] {
   --site-display-font: var(--font-site-bigshoulders), var(--site-tamil), Impact, sans-serif;
   --site-heading-weight: 800;
-  --site-display-tracking: -0.01em;
   --site-display-case: uppercase;
+  --site-display-scale: 1.32;
+  --site-display-leading: 0.86;
+  --site-display-tracking: 0.005em;
+  --site-display-measure: 9ch;
 }
 [data-locah-site][data-display='spacegrotesk'] {
   --site-display-font: var(--font-site-spacegrotesk), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 600;
-  --site-display-tracking: -0.04em;
+  --site-display-leading: 0.94;
 }
 [data-locah-site][data-display='italiana'] {
   --site-display-font: var(--font-site-italiana), var(--site-tamil), Georgia, serif;
@@ -60,7 +108,10 @@
 }
 [data-locah-site][data-display='fraunces'] {
   --site-display-font: var(--font-site-warm), var(--site-tamil), Georgia, serif;
-  --site-heading-weight: 600;
+  --site-heading-weight: 560;
+  --site-display-leading: 0.96;
+  --site-display-tracking: -0.03em;
+  --site-display-measure: 12ch;
 }
 [data-locah-site][data-display='playfair'] {
   --site-display-font: var(--font-site-playfair), var(--site-tamil), Georgia, serif;
@@ -68,21 +119,37 @@
 }
 [data-locah-site][data-display='cormorant'] {
   --site-display-font: var(--font-site-cormorant), var(--site-tamil), Georgia, serif;
-  --site-heading-weight: 600;
+  --site-heading-weight: 500;
+  --site-display-scale: 1.15;
+  --site-display-tracking: -0.015em;
+  --site-display-measure: 12ch;
 }
 [data-locah-site][data-display='anton'] {
   --site-display-font: var(--font-site-bold), var(--site-tamil), Impact, sans-serif;
   --site-heading-weight: 400;
   --site-display-case: uppercase;
-  --site-display-tracking: 0.005em;
+  --site-display-scale: 1.2;
+  --site-display-leading: 0.9;
+  --site-display-tracking: 0.01em;
 }
 [data-locah-site][data-display='archivo'] {
   --site-display-font: var(--font-site-archivo), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 800;
 }
+/* The poster concepts set Archivo on its width axis: a real condensed
+   grotesk in capitals, not a wide one squeezed. */
+[data-locah-site]:is([data-concept='noir_editorial'], [data-concept='kinetic_sport'])[data-display='archivo'] {
+  --site-display-case: uppercase;
+  --site-display-scale: 1.28;
+  --site-display-leading: 0.86;
+  --site-display-tracking: -0.005em;
+  --site-display-stretch: 72%;
+}
 [data-locah-site][data-display='bricolage'] {
   --site-display-font: var(--font-site-bricolage), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 750;
+  --site-display-leading: 0.92;
+  --site-display-tracking: -0.04em;
 }
 [data-locah-site][data-display='outfit'] {
   --site-display-font: var(--font-site-outfit), var(--site-tamil), system-ui, sans-serif;
@@ -90,7 +157,11 @@
 }
 [data-locah-site][data-display='newsreader'] {
   --site-display-font: var(--font-site-newsreader), var(--site-tamil), Georgia, serif;
-  --site-heading-weight: 500;
+  --site-heading-weight: 450;
+  --site-display-scale: 1.05;
+  --site-display-leading: 0.98;
+  --site-display-tracking: -0.025em;
+  --site-display-measure: 12ch;
 }
 [data-locah-site][data-display='plex'] {
   --site-display-font: var(--font-site-plex), var(--site-tamil), system-ui, sans-serif;
@@ -100,9 +171,37 @@
   --site-display-font: var(--font-site-clean), var(--site-tamil), system-ui, sans-serif;
   --site-heading-weight: 700;
 }
+/* A face drawn without an italic of its own borrows a real one, so no accent
+   or italic label is ever a slanted fake: Young Serif takes Fraunces's
+   italic, Italiana Bodoni's, and the grotesks Instrument Serif's. */
+[data-locah-site][data-display='youngserif'] {
+  --site-italic-font: var(--font-site-warm), var(--site-tamil), Georgia, serif;
+}
+[data-locah-site][data-display='italiana'] {
+  --site-italic-font: var(--font-site-bodoni), var(--site-tamil), Georgia, serif;
+}
+[data-locah-site]:is([data-display='syne'], [data-display='unbounded'], [data-display='bigshoulders'],
+    [data-display='spacegrotesk'], [data-display='anton'], [data-display='bricolage'], [data-display='outfit'],
+    [data-display='plex'], [data-display='manrope']) {
+  --site-italic-font: var(--font-site-instrumentserif), var(--site-tamil), Georgia, serif;
+}
 [data-locah-site][data-display] :is(h1, h2) {
   letter-spacing: var(--site-display-tracking, -0.02em);
+  line-height: var(--site-display-leading, 1.02);
+  font-stretch: var(--site-display-stretch, 100%);
   text-transform: var(--site-display-case, none);
+}
+/* Display type is drawn only in the weights and styles its face really has —
+   never a browser-slanted italic or smeared bold — and a word too long for a
+   phone breaks rather than pushing the page sideways. */
+[data-locah-site] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text, .fx-cta__title) {
+  font-synthesis: none;
+  overflow-wrap: break-word;
+}
+/* Fraunces at display size: its optical size follows the type (font-optical-
+   sizing), half-soft corners, and the upright never wonky. */
+[data-locah-site][data-display='fraunces'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text, .fx-cta__title) {
+  font-variation-settings: 'SOFT' 50, 'WONK' 0;
 }
 
 [data-locah-site][data-body='dm'] {
@@ -123,78 +222,103 @@
 [data-locah-site][data-body='bricolage'] {
   --site-font: var(--font-site-bricolage), var(--site-tamil), system-ui, sans-serif;
 }
+[data-locah-site][data-body='instrumentsans'] {
+  --site-font: var(--font-site-instrumentsans), var(--site-tamil), system-ui, sans-serif;
+}
+[data-locah-site][data-body='intertight'] {
+  --site-font: var(--font-site-intertight), var(--site-tamil), system-ui, sans-serif;
+}
 [data-locah-site][data-body] {
   font-family: var(--site-font);
 }
 
 /* ------------------------------------------- how a headline holds its accent */
 
-/* italic — the accent phrase in the display face's italic (serif DNA). */
-[data-locah-site][data-headline='italic'] :is(h1, h2) .ls-accent,
+/* The accent lives wherever a headline is set: section and hero headings, the
+   white twin of a scene headline (a <p> in cinematic_zoom), the statement and
+   the closing band. The DNA alone styles it. Retired values still render:
+   marker and gradient are drawn as serif, outline as tone, so a site that
+   stored one improves rather than breaks. */
+
+/* italic — the accent phrase in the display face's own italic (or the one it
+   borrows), tinted toward the brand's accent rather than shouting it. */
+[data-locah-site][data-headline='italic'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
 [data-locah-site][data-headline='italic'] .fx-mark {
+  font-family: var(--site-italic-font, var(--site-display-font));
   font-style: italic;
   font-weight: inherit;
-  color: var(--site-accent);
+  color: color-mix(in srgb, var(--site-accent) 78%, currentColor);
   background: none;
 }
-/* outline — the accent drawn as a hollow line. */
-[data-locah-site][data-headline='outline'] :is(h1, h2) .ls-accent,
-[data-locah-site][data-headline='outline'] .fx-mark {
-  color: transparent;
-  -webkit-text-stroke: max(1px, 0.025em) currentColor;
-  background: none;
+/* Fraunces's warm, hand-cut italic: the craft concept's accent. */
+[data-locah-site][data-concept='warm_craft']:is([data-display='fraunces'], [data-display='youngserif'])
+    :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent {
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
 }
-/* marker — a stroke of the brand colour painted under the words, as they arrive. */
-[data-locah-site][data-headline='marker'] :is(h1, h2) .ls-accent,
-[data-locah-site][data-headline='marker'] .fx-mark {
+/* serif — a grotesk headline with one phrase in a true serif italic: a change
+   of voice, not a decoration. */
+[data-locah-site]:is([data-headline='serif'], [data-headline='marker'], [data-headline='gradient'])
+    :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
+[data-locah-site]:is([data-headline='serif'], [data-headline='marker'], [data-headline='gradient']) .fx-mark {
+  font-family: var(--font-site-instrumentserif), var(--site-tamil), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.1em;
+  letter-spacing: -0.015em;
+  text-transform: none;
   color: inherit;
-  background-image: linear-gradient(
-    transparent 55%,
-    color-mix(in srgb, var(--site-accent) 62%, transparent) 55%,
-    color-mix(in srgb, var(--site-accent) 62%, transparent) 92%,
-    transparent 92%
-  );
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  background: none;
+  text-decoration: none;
+  -webkit-text-stroke: 0;
 }
-[data-fx='on'][data-headline='marker'] :is(h1, h2):not(.is-in) .ls-accent,
-[data-fx='on'][data-headline='marker'] [data-split]:not(.is-in) .fx-mark,
-[data-fx='on'][data-headline='marker'] [data-reveal]:not(.is-in) .fx-mark {
-  background-size: 0% 100%;
+/* tone — the phrase knocked back to the same ink at half strength. */
+[data-locah-site]:is([data-headline='tone'], [data-headline='outline'])
+    :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
+[data-locah-site]:is([data-headline='tone'], [data-headline='outline']) .fx-mark {
+  color: color-mix(in srgb, currentColor 52%, transparent);
+  background: none;
+  text-decoration: none;
+  -webkit-text-stroke: 0;
 }
-[data-fx='on'][data-headline='marker'] :is(h1, h2) .ls-accent,
-[data-fx='on'][data-headline='marker'] .fx-mark {
-  transition: background-size 1.1s var(--fx-ease) 0.45s;
+/* plain — no voice change, only a quiet second tone of the same ink. */
+[data-locah-site][data-headline='plain'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
+[data-locah-site][data-headline='plain'] .fx-mark {
+  color: color-mix(in srgb, currentColor 56%, transparent);
+  font-style: normal;
+  background: none;
+  text-decoration: none;
 }
-/* gradient — the accent in a sweep from the brand colour to its second. */
-[data-locah-site][data-headline='gradient'] :is(h1, h2) .ls-accent,
-[data-locah-site][data-headline='gradient'] .fx-mark {
-  background: linear-gradient(100deg, var(--site-primary), var(--site-accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-/* caps — tight capitals with the accent on its own colour. */
-[data-locah-site][data-headline='caps'] :is(h1, h2) {
+/* caps — tight capitals with the accent on its own colour. The scene's white
+   twin follows the real headline, so the two halves of a word still meet. */
+[data-locah-site][data-headline='caps'] :is(h1, h2, .ls-hero__headline) {
   text-transform: uppercase;
-  letter-spacing: -0.01em;
 }
-[data-locah-site][data-headline='caps'] :is(h1, h2) .ls-accent {
+[data-locah-site][data-headline='caps'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent {
   color: var(--site-primary);
 }
 .fx-mark {
   color: var(--site-accent);
 }
+/* A word rises inside a clipped box; an italic or serif accent leans past
+   its right edge, so the box gets room there without moving the next word. */
+[data-locah-site] :is(.ls-accent, .fx-mark) .fx-w {
+  padding-right: 0.14em;
+  margin-right: -0.14em;
+}
 
 /* ---------------------------------------------------------------- textures */
 
-/* dots — a fine dot grid on the page's quiet grounds. */
+/* dots — a fine dot grid on the page's quiet grounds, fading out from the
+   top edge (the ground itself is painted over it, so the section's content is
+   never masked). */
 [data-locah-site][data-texture='dots'] .ls-section--alt,
 [data-locah-site][data-texture='dots'] .fx-pagehero {
-  background-image: radial-gradient(color-mix(in srgb, var(--site-ink) 13%, transparent) 1px, transparent 1.4px);
-  background-size: 22px 22px;
+  background-image:
+    radial-gradient(90% 70% at 50% 0%, transparent, var(--site-bg-alt)),
+    radial-gradient(color-mix(in srgb, var(--site-ink) 7%, transparent) 1px, transparent 1.2px);
+  background-size:
+    100% 100%,
+    28px 28px;
 }
 /* grid — a drafting grid, for technical and modern DNA. */
 [data-locah-site][data-texture='grid'] .ls-section--alt,
@@ -322,8 +446,69 @@
   top: -13px;
   background: radial-gradient(circle at 10px 0, transparent 9px, var(--site-bg-alt) 9.5px) repeat-x 0 0 / 20px 14px;
 }
+/* none — no slab and no edge: the page keeps one ground and a hairline, the
+   width of the content, marks where the next section starts. A concept that
+   draws dots or a grid keeps its alternating ground; a band that turns dark
+   (data-invert, below) still wins, at the same weight and later. */
+[data-locah-site][data-divider='none']:where(:not([data-texture='dots'], [data-texture='grid'])) .ls-section--alt {
+  background-color: var(--site-bg);
+  background-image: linear-gradient(var(--site-border), var(--site-border));
+  background-size: min(1120px, calc(100% - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem))) 1px;
+  background-position: 50% 0;
+  background-repeat: no-repeat;
+}
 
 /* ----------------------------------------------------------------- buttons */
+
+/* One label style per concept, on every button in a row: the primary, the
+   secondary beside it, the header's action and the order links share family,
+   weight, size, tracking and case. The concept sets the tokens below. */
+[data-locah-site][data-concept] :is(.ls-btn, .ls-nav__cta, .ls-order, .fx-more__link) {
+  font-family: var(--site-btn-font, var(--site-font));
+  font-weight: var(--site-btn-weight, 500);
+  font-size: var(--site-btn-size, 0.9375rem);
+  letter-spacing: var(--site-btn-tracking, -0.005em);
+  text-transform: var(--site-btn-case, none);
+}
+/* The page's main actions share one height; compact controls (a menu line's
+   Add, a small button) keep theirs. */
+[data-locah-site][data-concept] :is(.ls-hero__cta, .fx-cta__actions, .ls-contact__actions) .ls-btn,
+[data-locah-site][data-concept] .fx-more__link {
+  min-height: 52px;
+  padding-inline: 1.5rem;
+}
+[data-locah-site][data-concept] .ls-hero__cta .ls-btn--primary::after {
+  font-family: var(--site-font);
+  font-weight: 400;
+}
+/* warm_craft, calm_care and fresh_market use the defaults: sentence case,
+   medium weight. */
+[data-locah-site]:is([data-concept='noir_editorial'], [data-concept='kinetic_sport']) {
+  --site-btn-case: uppercase;
+  --site-btn-tracking: 0.12em;
+  --site-btn-size: 0.75rem;
+  --site-btn-weight: 600;
+}
+[data-locah-site][data-concept='quiet_luxury'] {
+  --site-btn-case: uppercase;
+  --site-btn-tracking: 0.18em;
+  --site-btn-size: 0.72rem;
+  --site-btn-weight: 500;
+  /* Crisp rectangles everywhere: no pill beside a square. */
+  --site-btn-radius: 0;
+}
+[data-locah-site][data-concept='technical_grid'] {
+  --site-btn-font: var(--font-site-mono), ui-monospace, monospace;
+  --site-btn-case: uppercase;
+  --site-btn-tracking: 0.06em;
+  --site-btn-size: 0.78rem;
+  --site-btn-weight: 500;
+}
+[data-locah-site][data-concept='playful_pop'] {
+  --site-btn-tracking: 0;
+  --site-btn-size: 0.95rem;
+  --site-btn-weight: 600;
+}
 
 [data-locah-site][data-button='pill'] {
   --site-btn-radius: 999px;
@@ -333,19 +518,24 @@
 }
 [data-locah-site][data-button='sharp'] .ls-btn {
   border-radius: 0;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 0.82rem;
 }
+/* soft — gently rounded, no coloured glow; a neutral lift on hover only. */
 [data-locah-site][data-button='soft'] .ls-btn {
-  border-radius: 14px;
-  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--site-primary) 70%, transparent);
+  border-radius: 12px;
+  box-shadow: none;
+}
+[data-locah-site][data-button='soft'] .ls-btn--primary:hover {
+  box-shadow: 0 10px 22px -16px rgb(0 0 0 / 0.55);
 }
 [data-locah-site][data-button='outline'] .ls-btn:is(.ls-btn--primary, .ls-nav__cta, .ls-order) {
   background: transparent;
   color: var(--site-primary);
   border: 1.5px solid var(--site-primary);
-  border-radius: 999px;
+  border-radius: var(--site-btn-radius, 999px);
+}
+/* Every button in a group shares the primary's shape. */
+[data-locah-site][data-button='outline'] :is(.ls-hero__cta, .fx-cta__actions, .ls-contact__actions, .fx-zoom__copy) .ls-btn {
+  border-radius: var(--site-btn-radius, 999px);
 }
 [data-locah-site][data-button='outline'] .ls-btn:is(.ls-btn--primary, .ls-nav__cta, .ls-order):hover {
   background: var(--site-primary);
@@ -550,6 +740,12 @@
   border-color: transparent;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 24px 48px -28px rgba(0, 0, 0, 0.35);
 }
+/* On a dark ground a drop shadow only muddies: the card is lifted by a
+   hairline of light along its top edge instead. */
+[data-locah-site][data-palette='dark'][data-cardstyle='elevated'] :is(.ls-card, .fx-rail__card, .fx-pillar, .ls-fact,
+    .fx-bento__cell) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
 [data-locah-site][data-cardstyle='glass'] :is(.ls-card, .fx-rail__card, .fx-pillar, .ls-fact, .fx-faq__item) {
   background: color-mix(in srgb, var(--site-bg) 55%, transparent);
   border: 1px solid color-mix(in srgb, var(--site-ink) 10%, transparent);
@@ -572,7 +768,7 @@
   border-radius: 0;
 }
 [data-locah-site][data-shape='rounded'] .fx-shape {
-  border-radius: 28px;
+  border-radius: 16px;
 }
 [data-locah-site][data-shape='arch'] .fx-shape {
   border-radius: 999px 999px 18px 18px;
@@ -670,6 +866,12 @@
   --site-border: color-mix(in srgb, var(--site-primary-fg) 22%, transparent);
   --site-ink: var(--site-primary-fg);
 }
+/* On a band of the brand colour the accent colour can be the band itself
+   (lime on lime): the accent phrase is knocked back in tone instead. */
+[data-locah-site][data-invert='bold'] :is(.fx-statement, .fx-pillars) :is(.ls-accent, .fx-mark) {
+  color: color-mix(in srgb, currentColor 58%, transparent);
+  -webkit-text-fill-color: currentColor;
+}
 [data-locah-site][data-invert='bold'] .fx-pillars .fx-pillar {
   background: color-mix(in srgb, var(--site-primary-fg) 8%, transparent);
   border-color: color-mix(in srgb, var(--site-primary-fg) 22%, transparent);
@@ -699,14 +901,18 @@
 .fx-statement__text {
   font-family: var(--site-display-font);
   font-weight: var(--site-heading-weight, 600);
-  font-size: clamp(2rem, 1rem + 4.2vw, 5.4rem);
-  line-height: 1.04;
-  letter-spacing: -0.04em;
+  font-size: calc(clamp(2rem, 1rem + 3.6vw, 4.75rem) * var(--site-display-scale, 1));
+  line-height: calc(var(--site-display-leading, 0.95) + 0.08);
+  letter-spacing: calc(var(--site-display-tracking, -0.035em) * 0.8);
+  max-width: 20ch;
   text-wrap: balance;
   margin: 0.75rem 0 0;
 }
 .fx-statement--giant .fx-statement__inner {
   text-align: center;
+}
+.fx-statement--giant .fx-statement__text {
+  margin-inline: auto;
 }
 .fx-statement__pill {
   display: inline-block;
@@ -737,7 +943,7 @@
   }
 }
 .fx-statement--split .fx-statement__text {
-  font-size: clamp(1.8rem, 1rem + 3vw, 4rem);
+  font-size: calc(clamp(1.8rem, 1rem + 3vw, 4rem) * var(--site-display-scale, 1));
 }
 .fx-statement__media {
   margin: 0;
@@ -1287,9 +1493,6 @@
 }
 [data-locah-site][data-button='sharp'] .fx-more__link {
   border-radius: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.85rem;
 }
 [data-locah-site][data-button='underline'] .fx-more__link {
   border: 0;
@@ -1307,7 +1510,7 @@
 
 /* script — one word of a headline painted by hand, the way a butcher's
    chalkboard or a baker's paper bag carries its name. */
-[data-locah-site][data-headline='script'] :is(h1, h2) .ls-accent,
+[data-locah-site][data-headline='script'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
 [data-locah-site][data-headline='script'] .fx-mark {
   font-family: var(--font-site-caveat), var(--site-tamil), cursive;
   font-style: normal;
@@ -1335,19 +1538,37 @@
 
 /* ------------------------------------------------------- the photographs */
 
-/* macro — close, contrasty, appetising: the subject fills the frame. */
-[data-locah-site][data-photo='macro'] :is(section, .ls-hero) img:not(.fx-follow) {
-  filter: contrast(1.08) saturate(1.12);
+/* One grade across every photograph, so stock frames from different cameras
+   and light read as one shoot. Saturation is held back, never pushed: raw
+   food turns neon long before it looks fresher. The plane hero's wall is
+   graded once on its container, not tile by tile. */
+/* clean — true colour, gently evened out. */
+[data-locah-site][data-photo='clean'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: saturate(0.94) contrast(1.04);
+}
+/* macro — close and contrasty: the subject fills the frame. */
+[data-locah-site][data-photo='macro'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: contrast(1.12) saturate(0.86) brightness(0.94);
 }
 /* warm — the light of a shop at seven in the morning. */
-[data-locah-site][data-photo='warm'] :is(section, .ls-hero) img:not(.fx-follow) {
-  filter: sepia(0.14) saturate(1.06) contrast(1.02);
+[data-locah-site][data-photo='warm'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: sepia(0.1) saturate(0.95) contrast(1.04) brightness(1.02);
 }
 /* full — photographs edge to edge: no rounding, no shadow, nothing between
-   the picture and the reader. */
+   the picture and the reader, and a quiet, desaturated grade. */
+[data-locah-site][data-photo='full'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: saturate(0.8) contrast(1.06);
+}
 [data-locah-site][data-photo='full'] :is(.ls-card, .fx-shape, .fx-mtext__frame, .ls-showcase) :is(img, picture) {
   border-radius: 0;
   box-shadow: none;
+}
+/* On a dark ground a white plate glares: the whites come down a little. */
+[data-locah-site][data-palette='dark'][data-photo='clean'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: saturate(0.92) contrast(1.05) brightness(0.92);
+}
+[data-locah-site][data-palette='dark'][data-photo='macro'] :is(section, .ls-hero) img:not(.fx-follow, .fx-plane__tile > img) {
+  filter: contrast(1.14) saturate(0.84) brightness(0.9);
 }
 
 /* ------------------------------------------------- the motion budget */
@@ -1374,56 +1595,77 @@
 [data-locah-site][data-concept='noir_editorial'] .ls-title {
   font-size: clamp(2.2rem, 1.2rem + 3.6vw, 4.4rem);
   line-height: 0.95;
-  letter-spacing: -0.01em;
 }
-[data-locah-site][data-concept='noir_editorial'] .ls-eyebrow {
+[data-locah-site][data-concept='noir_editorial'] :is(.ls-eyebrow, .ls-hero__eyebrow) {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  font-size: 0.72rem;
 }
-[data-locah-site][data-concept='noir_editorial'] .ls-eyebrow::before {
+[data-locah-site][data-concept='noir_editorial'] :is(.ls-eyebrow, .ls-hero__eyebrow)::before {
   content: '';
   width: 2.5rem;
   height: 1px;
+  border-radius: 0;
+  box-shadow: none;
   background: currentColor;
 }
 
-/* warm craft — eyebrows written by hand above the heading. */
-[data-locah-site][data-concept='warm_craft'] .ls-eyebrow {
-  font-family: var(--font-site-caveat), var(--site-tamil), cursive;
-  font-size: 1.45rem;
-  font-weight: 700;
+/* warm craft and calm care — the eyebrow as an italic line in the display
+   face (or the italic it borrows), the way an editorial page introduces a
+   piece. */
+[data-locah-site]:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow) {
+  font-family: var(--site-italic-font, var(--site-display-font));
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.0625rem;
   letter-spacing: 0;
   text-transform: none;
   color: var(--site-accent);
-  transform: rotate(-2deg);
-  display: inline-block;
+}
+[data-locah-site]:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow)::before {
+  display: none;
+}
+/* Over a photograph a muted brand accent (a teal, a rust) sinks into the
+   picture: the italic phrase and the italic eyebrow lean to the copy's white,
+   keeping a tint of the brand. Poster capitals keep their colour. */
+[data-locah-site][data-headline='italic'] :is(.fx-zoom__copy--light, .fx-depth, .ls-hero--hasimage) .ls-hero__headline .ls-accent,
+[data-locah-site]:is([data-concept='warm_craft'], [data-concept='calm_care'])
+    :is(.fx-zoom__copy--light, .fx-depth, .ls-hero--hasimage) .ls-hero__eyebrow {
+  color: color-mix(in srgb, var(--site-accent) 35%, #fff);
 }
 
 /* quiet luxury — small, widely spaced capitals; light headings; air. */
-[data-locah-site][data-concept='quiet_luxury'] .ls-eyebrow {
+[data-locah-site][data-concept='quiet_luxury'] :is(.ls-eyebrow, .ls-hero__eyebrow) {
   font-size: 0.68rem;
   letter-spacing: 0.32em;
   text-transform: uppercase;
+}
+[data-locah-site][data-concept='quiet_luxury'] .ls-eyebrow {
   color: var(--site-muted);
+}
+[data-locah-site][data-concept='quiet_luxury'] .ls-hero__eyebrow::before {
+  display: none;
 }
 [data-locah-site][data-concept='quiet_luxury'] :is(.ls-title, h1) {
   font-weight: 400;
   letter-spacing: 0.005em;
 }
 
-/* fresh market — eyebrows as small coloured tags. */
-[data-locah-site][data-concept='fresh_market'] .ls-eyebrow {
-  display: inline-block;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--site-accent) 18%, transparent);
-  color: var(--site-ink);
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
+/* fresh market — eyebrows as a short label in the accent colour. */
+[data-locah-site][data-concept='fresh_market'] :is(.ls-eyebrow, .ls-hero__eyebrow) {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  color: var(--site-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* playful pop — eyebrows as stickers, a little crooked. */
@@ -1450,11 +1692,13 @@
   opacity: 0.55;
 }
 
-/* kinetic sport — headings that lean forward. */
+/* kinetic sport — poster headings in capitals. Only Archivo has a real
+   italic to lean forward with; Big Shoulders stands upright. */
 [data-locah-site][data-concept='kinetic_sport'] .ls-title {
-  font-style: italic;
   text-transform: uppercase;
-  letter-spacing: -0.005em;
+}
+[data-locah-site][data-concept='kinetic_sport'][data-display='archivo'] .ls-title {
+  font-style: italic;
 }
 
 /* Passages that slide in from the side must not widen the page while they
@@ -1465,7 +1709,7 @@
   overflow-x: clip;
 }
 /* A painted word over a photograph needs a little shade to read. */
-[data-locah-site][data-headline='script'] :is(.fx-orbit, .fx-zoom, .fx-depth) :is(h1, h2) .ls-accent {
+[data-locah-site][data-headline='script'] :is(.fx-orbit, .fx-zoom, .fx-depth) :is(h1, h2, .ls-hero__headline) .ls-accent {
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5), 0 0 3px rgba(0, 0, 0, 0.35);
 }
 
@@ -1637,6 +1881,32 @@
   [data-locah-site] .fx-menu__item:hover a.ls-order,
   [data-locah-site] .fx-menu__item a.ls-order:focus-visible {
     opacity: 1;
+  }
+}
+
+/* A tile's "order" link: the same quiet underlined link, in the tile's own
+   ink (white over a photograph), never a filled pill in every tile. */
+[data-locah-site] .fx-bento .fx-bento__cell a.ls-order {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+[data-locah-site] .fx-bento .fx-bento__cell a.ls-order:is(:hover, :focus-visible) {
+  background: none;
+  color: inherit;
+}
+@media (pointer: coarse) {
+  [data-locah-site] .fx-bento .fx-bento__cell a.ls-order {
+    padding-block: 0.6rem;
   }
 }
 
@@ -1872,9 +2142,9 @@
   margin: 0;
   max-width: 18ch;
   font-family: var(--site-display-font);
-  font-size: clamp(2.4rem, 1.2rem + 5.2vw, 6.4rem);
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-size: calc(clamp(2.4rem, 1.2rem + 5.2vw, 6.4rem) * var(--site-display-scale, 1));
+  line-height: calc(var(--site-display-leading, 0.95) + 0.05);
+  letter-spacing: calc(var(--site-display-tracking, -0.035em) * 0.8);
   color: #fff;
 }
 .fx-statement--image .ls-eyebrow {
@@ -1887,7 +2157,7 @@
 [data-locah-site][data-concept] :is(.ls-section, .ls-highlights) .ls-title {
   font-size: clamp(2rem, 1.15rem + 2.5vw, 3.5rem);
   line-height: 1.02;
-  letter-spacing: -0.028em;
+  letter-spacing: var(--site-display-tracking, -0.028em);
   text-wrap: balance;
 }
 [data-locah-site][data-concept='noir_editorial'] :is(.ls-section, .ls-highlights) .ls-title {

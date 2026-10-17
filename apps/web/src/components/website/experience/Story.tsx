@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { srcSetFor } from '../picture'
 import type { Pic } from './HeroScenes'
 
 /**
@@ -49,7 +50,7 @@ export function StorySection({ variant, anchor, eyebrow, title, body, quote, ima
           {image ? (
             <figure className="fx-read__figure" data-reveal="mask">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image.url} alt={image.alt_text || title} loading="lazy" />
+              <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} loading="lazy" />
             </figure>
           ) : null}
         </div>
@@ -65,7 +66,7 @@ export function StorySection({ variant, anchor, eyebrow, title, body, quote, ima
           <div className="fx-collage__stage">
             <figure className="fx-collage__pic fx-collage__pic--0" data-reveal="mask">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image.url} alt={image.alt_text || title} loading="lazy" />
+              <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} loading="lazy" />
             </figure>
             {others.map((pic, i) => (
               <figure
@@ -75,7 +76,7 @@ export function StorySection({ variant, anchor, eyebrow, title, body, quote, ima
                 aria-hidden="true"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pic.url} alt="" loading="lazy" />
+                <img src={pic.url} srcSet={srcSetFor(pic.url)} alt="" loading="lazy" />
               </figure>
             ))}
           </div>
@@ -107,7 +108,7 @@ export function StorySection({ variant, anchor, eyebrow, title, body, quote, ima
         {image ? (
           <figure className="fx-sticky__media" data-reveal="mask">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt={image.alt_text || title} loading="lazy" />
+            <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} loading="lazy" />
           </figure>
         ) : null}
         <div className="fx-sticky__copy">

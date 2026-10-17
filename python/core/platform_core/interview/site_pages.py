@@ -284,7 +284,8 @@ def numbers_for(bp: BusinessBlueprint, *, archetype: str, items: list[dict[str, 
     opens = _OPENS.search(hours) or _OPEN_SAID.search(corpus)
     if opens:
         out.append({"value": opens.group(1).replace(" ", "").replace(".", "").lower(), "label": "we open"})
-    return out if len(out) >= 2 else []
+    # Two numbers set enormous look thin, not proud: a band needs three.
+    return out if len(out) >= 3 else []
 
 
 # ------------------------------------------------------------ media rows

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { srcSetFor } from '../picture'
 import type { Pic } from './HeroScenes'
 
 /**
@@ -50,7 +51,7 @@ export function CtaGiant({
       {image ? (
         <div className="fx-cta__bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image.url} alt="" loading="lazy" />
+          <img src={image.url} srcSet={srcSetFor(image.url)} alt="" loading="lazy" />
         </div>
       ) : null}
       <h2 className="fx-cta__title" data-split="">
@@ -127,7 +128,7 @@ export function CategoryScene({
                   <div className="fx-rail__media">
                     {row.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={row.image.url} alt={row.image.alt_text || row.name} loading="lazy" />
+                      <img src={row.image.url} srcSet={srcSetFor(row.image.url)} alt={row.image.alt_text || row.name} loading="lazy" />
                     ) : (
                       <span className="ls-picture__plate" aria-hidden="true">
                         <span>{row.name}</span>
@@ -156,7 +157,7 @@ export function CategoryScene({
             <li key={row.name} className={`fx-bento__cell ${row.image ? 'fx-bento__cell--pic' : ''}`} data-tilt="">
               {row.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={row.image.url} alt={row.image.alt_text || row.name} loading="lazy" />
+                <img src={row.image.url} srcSet={srcSetFor(row.image.url)} alt={row.image.alt_text || row.name} loading="lazy" />
               ) : null}
               <div className="fx-bento__copy">{copy(row)}</div>
             </li>

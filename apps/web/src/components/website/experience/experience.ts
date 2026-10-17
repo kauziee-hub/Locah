@@ -50,13 +50,17 @@ const BY_PROFILE: Record<string, MotionLang> = {
  * header, cards, picture shapes, the pointer. Each value maps to rules in
  * site-dna.css; anything unknown is dropped, so an old site keeps its look.
  */
+// Retired values (syne, unbounded, anton and italiana as faces; outline, marker
+// and gradient as accents) are no longer drawn but stay here, so a site that
+// stored one keeps rendering — site-dna.css maps each to its successor.
 const DNA_VALUES: Record<string, readonly string[]> = {
   display: [
     'syne', 'unbounded', 'dmserif', 'bodoni', 'youngserif', 'bigshoulders', 'spacegrotesk', 'italiana',
     'fraunces', 'playfair', 'cormorant', 'anton', 'archivo', 'bricolage', 'outfit', 'newsreader', 'plex', 'manrope',
+    'instrumentserif', 'intertight', 'instrumentsans',
   ],
-  body: ['dm', 'manrope', 'outfit', 'plex', 'spacegrotesk', 'bricolage'],
-  headline: ['plain', 'italic', 'outline', 'marker', 'gradient', 'caps', 'script'],
+  body: ['dm', 'manrope', 'outfit', 'plex', 'spacegrotesk', 'bricolage', 'instrumentsans', 'intertight'],
+  headline: ['plain', 'italic', 'outline', 'marker', 'gradient', 'caps', 'script', 'serif', 'tone'],
   texture: ['none', 'grain', 'paper', 'dots', 'grid', 'pattern'],
   pattern: ['kolam', 'waves', 'rays', 'checks', 'arcs'],
   divider: ['none', 'curve', 'slant', 'wave', 'ticket'],

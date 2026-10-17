@@ -356,7 +356,7 @@ FAMILIES: dict[str, Family] = {f.key: f for f in (
                  "blue"),
             _pal("fresh_emerald", "light", "#0f8a5f", "#ff7a3d", "#ffffff", "#f1f7f3", "#0f1f18", "#56665d",
                  "green"),
-            _pal("charcoal_chili", "dark", "#ff4b3e", "#f2b134", "#111214", "#1a1b1f", "#f6f4f1", "#a9a5a0", "red"),
+            _pal("charcoal_chili", "dark", "#d93a2b", "#e3d5c1", "#0f0f10", "#18181b", "#f2eee8", "#9e978e", "red"),
         ),
         (
             _v("storefront", "commerce_split", "commerce", "bold_commerce", "sharp", "rounded", "compact",

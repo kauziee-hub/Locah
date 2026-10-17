@@ -22,6 +22,9 @@ import {
   Space_Grotesk,
   Italiana,
   Caveat,
+  Instrument_Serif,
+  Inter_Tight,
+  Instrument_Sans,
 } from 'next/font/google'
 
 /**
@@ -59,9 +62,14 @@ import {
  * render a tenant site.
  */
 
+/* Variable serifs load their optical-size axis: without it next/font draws a
+   90px headline from the small-text master (Fraunces opsz 14, Newsreader 16,
+   Bodoni 11) — heavy and soft where it should be crisp. Fraunces also brings
+   SOFT and WONK, the warm hand-cut italic warm_craft sets its accent in. */
 export const fraunces = Fraunces({
   subsets: ['latin'],
   display: 'swap',
+  axes: ['opsz', 'SOFT', 'WONK'],
   style: ['normal', 'italic'],
   variable: '--font-site-warm',
 })
@@ -89,13 +97,18 @@ export const playfair = Playfair_Display({
 export const dmSans = DM_Sans({
   subsets: ['latin'],
   display: 'swap',
+  axes: ['opsz'],
+  style: ['normal', 'italic'],
   variable: '--font-site-dm',
 })
 
+// The wdth axis gives the poster concepts a real condensed cut (62–125); the
+// italic is Archivo's own, so a leaning kinetic title is never faked.
 export const archivo = Archivo({
   subsets: ['latin'],
   display: 'swap',
   axes: ['wdth'],
+  style: ['normal', 'italic'],
   variable: '--font-site-archivo',
 })
 
@@ -123,11 +136,13 @@ export const cormorant = Cormorant_Garamond({
 export const bricolage = Bricolage_Grotesque({
   subsets: ['latin'],
   display: 'swap',
+  axes: ['opsz', 'wdth'],
   variable: '--font-site-bricolage',
 })
 
 export const newsreader = Newsreader({
   subsets: ['latin'],
+  axes: ['opsz'],
   style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-site-newsreader',
@@ -167,6 +182,7 @@ export const dmSerif = DM_Serif_Display({
 })
 export const bodoni = Bodoni_Moda({
   subsets: ['latin'],
+  axes: ['opsz'],
   style: ['normal', 'italic'],
   display: 'swap',
   preload: false,
@@ -198,6 +214,32 @@ export const italiana = Italiana({
   preload: false,
   variable: '--font-site-italiana',
 })
+/* The editorial archetypes the draw now leans on: a display serif whose
+   italic is also every grotesk headline's accent phrase (data-headline='serif'),
+   a neutral tight grotesk, and a grotesk with a width axis to condense on. */
+export const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-instrumentserif',
+})
+export const interTight = Inter_Tight({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-intertight',
+})
+export const instrumentSans = Instrument_Sans({
+  subsets: ['latin'],
+  axes: ['wdth'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-site-instrumentsans',
+})
 // A handwritten accent (data-headline='script'): one painted word in a headline.
 export const caveat = Caveat({
   subsets: ['latin'],
@@ -228,6 +270,9 @@ export const siteFontVariables = [
   bigShoulders,
   spaceGrotesk,
   italiana,
+  instrumentSerif,
+  interTight,
+  instrumentSans,
   caveat,
   notoTamil,
   notoDevanagari,

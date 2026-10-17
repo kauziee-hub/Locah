@@ -247,6 +247,9 @@ export function WebsitePageView({
   const sections = data.page.sections.filter((s) => s.is_visible !== false)
   const experience = siteExperience(theme)
   const dna = siteDna(theme)
+  // A designed site closes on its name, set as wide as the page: every site
+  // with a design DNA, and a family that asked for a statement footer.
+  const closingName = Boolean(dna.concept) || Boolean(family && footerStyle === 'statement')
   // Every picture on this page, once, in page order: what a hero scene (a
   // ring, a wall, floating cards) and a story collage compose with.
   const pictures: Pic[] = []
@@ -555,20 +558,18 @@ export function WebsitePageView({
       ) : null}
 
       <footer className={`ls-foot ${reachable ? 'ls-foot--with-bar' : ''}`}>
-        {family && footerStyle === 'statement' ? (
-          <p className="ls-foot__statement fx-foot-name" aria-hidden="true" data-split="">
-            {name}
-          </p>
-        ) : null}
         <div className="ls-foot__inner">
-          <div>
-            <p className="ls-foot__name">{name}</p>
-            {theme.tagline ? (
-              <p style={{ color: 'var(--site-muted)', fontSize: '0.92rem', maxWidth: '38ch' }}>
-                {String(theme.tagline)}
-              </p>
-            ) : null}
-          </div>
+          {closingName && !theme.tagline ? null : (
+            <div>
+              {/* The closing statement already says the name, larger. */}
+              {closingName ? null : <p className="ls-foot__name">{name}</p>}
+              {theme.tagline ? (
+                <p style={{ color: 'var(--site-muted)', fontSize: '0.92rem', maxWidth: '38ch' }}>
+                  {String(theme.tagline)}
+                </p>
+              ) : null}
+            </div>
+          )}
           {nav.length > 0 ? (
             <div className="ls-foot__col">
               <p className="ls-foot__heading">{t('Explore')}</p>
@@ -653,6 +654,18 @@ export function WebsitePageView({
             {t('Powered by LOCAH')}
           </Link>
         </div>
+        {closingName ? (
+          // The page signs off on the business's name, as wide as the page:
+          // --name-len lets CSS fit it on one line on any screen.
+          <p
+            className="ls-foot__statement fx-foot-name"
+            aria-hidden="true"
+            data-split=""
+            style={{ '--name-len': Array.from(name).length } as React.CSSProperties}
+          >
+            {name}
+          </p>
+        ) : null}
       </footer>
       </SiteWordsProvider>
     </div>

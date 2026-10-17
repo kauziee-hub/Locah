@@ -157,9 +157,12 @@
   .ls-hero--noimage :is(.ls-hero__sub, .ls-hero__badges li) {
   color: var(--site-muted);
 }
+/* Family accents style only sites without a design DNA: a DNA site's accent
+   comes from its headline value alone (site-dna.css). :where() keeps the
+   specificity these rules always had. */
 [data-locah-site]:is([data-family='editorial_warm'], [data-family='modern_commerce'],
     [data-family='calm_professional'], [data-family='portfolio_sketchbook'],
-    [data-family='technical_b2b'], [data-family='local_friendly'], [data-family='playful_editorial'])
+    [data-family='technical_b2b'], [data-family='local_friendly'], [data-family='playful_editorial']):where(:not([data-headline]))
   .ls-hero--noimage .ls-accent {
   color: var(--site-primary);
 }
@@ -181,7 +184,7 @@
   font-size: clamp(2.8rem, 1.6rem + 5vw, 5.6rem);
   line-height: 0.98;
 }
-[data-locah-site][data-family='editorial_warm'] .ls-hero__headline .ls-accent,
+[data-locah-site][data-family='editorial_warm']:where(:not([data-headline])) .ls-hero__headline .ls-accent,
 [data-locah-site][data-family='editorial_warm'] .ls-title em {
   font-style: italic;
   color: var(--site-accent);
@@ -251,7 +254,9 @@
   border: 1px solid var(--site-hairline);
   box-shadow: none;
 }
-[data-locah-site][data-family='premium_dark'] .ls-btn--primary {
+/* Older sites only: a concept site's buttons share one type spec, from its
+   concept's button tokens (site-dna.css). */
+[data-locah-site][data-family='premium_dark']:not([data-concept]) .ls-btn--primary {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.8rem;
@@ -291,7 +296,7 @@
   line-height: 0.95;
   max-width: 12ch;
 }
-[data-locah-site][data-family='modern_commerce'] .ls-hero__headline .ls-accent {
+[data-locah-site][data-family='modern_commerce']:where(:not([data-headline])) .ls-hero__headline .ls-accent {
   color: var(--site-primary);
 }
 [data-locah-site][data-family='modern_commerce'] .ls-category__initial {
@@ -379,7 +384,7 @@
   letter-spacing: 0;
   max-width: none;
 }
-[data-locah-site][data-family='monumental'] .ls-hero__headline .ls-accent {
+[data-locah-site][data-family='monumental']:where(:not([data-headline])) .ls-hero__headline .ls-accent {
   color: var(--site-primary);
   font-style: normal;
 }
@@ -503,24 +508,58 @@
   font-size: clamp(2.5rem, 1.5rem + 4vw, 4.6rem);
   line-height: 1.02;
 }
-[data-locah-site][data-family='local_friendly'] .ls-hero__headline .ls-accent {
+[data-locah-site][data-family='local_friendly']:where(:not([data-headline])) .ls-hero__headline .ls-accent {
   color: var(--site-primary);
   font-style: italic;
 }
 
 /* ----------------------------------------------------- statement footer */
 
+/* The page signs off on the business's name, on one line, across the full
+   column and cropped by the page's bottom edge. --name-len (set beside the
+   name) fits it: a letter is about 0.58em wide, so the size is the column
+   width over that many letters — never wider than a 390px screen. */
 .ls-foot__statement {
-  margin: 0;
-  padding: clamp(2rem, 1rem + 4vw, 4rem) clamp(1.25rem, 0.5rem + 3vw, 3rem) 0;
+  max-width: 1120px;
+  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto -0.08em;
+  padding: 0.12em 0 0;
+  overflow: hidden;
+  white-space: nowrap;
   font-family: var(--site-display-font);
   font-weight: var(--site-heading-weight, 700);
-  font-size: clamp(3rem, 1rem + 9vw, 9rem);
-  line-height: 0.9;
+  font-size: min(
+    clamp(3rem, 1rem + 9vw, 11rem),
+    calc(min(100vw - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem), 1120px) / (var(--name-len, 12) * 0.58))
+  );
+  line-height: 0.78;
   letter-spacing: -0.03em;
   text-transform: var(--site-display-case, none);
-  color: color-mix(in srgb, var(--site-ink) 90%, transparent);
-  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--site-ink) 92%, transparent);
+}
+/* `[data-locah-site] p` (margin 0 0 1rem, text-wrap: pretty) would pull the
+   name out of the column and turn wrapping back on; a condensed face is
+   fitted at its condensed width. */
+[data-locah-site] .ls-foot__statement {
+  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto -0.08em;
+  white-space: nowrap;
+  text-wrap: nowrap;
+  font-stretch: var(--site-display-stretch, 100%);
+}
+/* Tamil letters with their vowel signs run wider than Latin ones. */
+.ls-foot__statement:lang(ta) {
+  font-size: min(
+    clamp(3rem, 1rem + 9vw, 11rem),
+    calc(min(100vw - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem), 1120px) / (var(--name-len, 12) * 0.72))
+  );
+}
+/* Nothing under the name: it closes the page (above the phone's sticky bar). */
+.ls-foot:has(> .ls-foot__statement) {
+  padding-bottom: 0;
+}
+@media (max-width: 760px) {
+  .ls-foot--with-bar:has(> .ls-foot__statement) {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }
 [data-locah-site][data-family='premium_dark'] .ls-foot__statement,
 [data-locah-site][data-family='editorial_warm'] .ls-foot__statement,

@@ -1,4 +1,5 @@
 import { EnquiryForm } from './EnquiryForm'
+import { srcSetFor } from './picture'
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
 import { LiveItemsSection } from './LiveItemsSection'
@@ -99,12 +100,18 @@ function mapsHref(address: string) {
  * nobody fills in a form to ask a furniture shop about a wardrobe. They are
  * plain links from a published fact, not platform mechanics, so they need no
  * module; they appear only when the number exists.
+ *
+ * A cover (the hero, the closing band) shows one action: beside its main
+ * button the channels are `quiet` — `limit` of them as underlined links, not
+ * a row of equal buttons competing with it.
  */
 function ContactActions({
   contact,
   businessName,
   onMedia = false,
   primaryPath = '',
+  limit = 2,
+  quiet = false,
   t,
 }: {
   contact?: SiteContact
@@ -112,22 +119,27 @@ function ContactActions({
   onMedia?: boolean
   /** The section's main button — its channel is not repeated beside it. */
   primaryPath?: string
+  /** How many channels to show at most (Call first, then WhatsApp). */
+  limit?: number
+  /** Channels as text links beside a main button, not as buttons. */
+  quiet?: boolean
   t: Words
 }) {
   if (!contact?.phone && !contact?.whatsapp) return null
-  const tone = onMedia ? 'ls-btn--ghost-onmedia' : 'ls-btn--outline'
-  const showPhone = Boolean(contact.phone) && !/^tel:/i.test(primaryPath)
-  const showWhatsapp = Boolean(contact.whatsapp) && !/wa\.me|whatsapp/i.test(primaryPath)
+  const tone = quiet ? 'ls-hero__link' : `ls-btn ${onMedia ? 'ls-btn--ghost-onmedia' : 'ls-btn--outline'}`
+  const showPhone = limit > 0 && Boolean(contact.phone) && !/^tel:/i.test(primaryPath)
+  const showWhatsapp =
+    limit > (showPhone ? 1 : 0) && Boolean(contact.whatsapp) && !/wa\.me|whatsapp/i.test(primaryPath)
   return (
     <>
       {showPhone ? (
-        <a className={`ls-btn ${tone}`} href={`tel:${contact.phone}`}>
+        <a className={tone} href={`tel:${contact.phone}`}>
           {t('Call now')}
         </a>
       ) : null}
       {showWhatsapp && contact.whatsapp ? (
         <a
-          className={`ls-btn ${tone} ls-btn--whatsapp`}
+          className={quiet ? tone : `${tone} ls-btn--whatsapp`}
           href={whatsappHref(contact.whatsapp, businessName, t)}
           target="_blank"
           rel="noopener noreferrer"
@@ -433,12 +445,16 @@ export function SectionRenderer({
                 />
               </span>
             ) : null}
+            {/* One main action; beside it a single channel as a quiet link.
+                With no main button, the first channel is the button. */}
             <ContactActions
               t={t}
               contact={contact}
               businessName={businessName}
               onMedia={onMedia || (!split && !scene)}
               primaryPath={ctaLabel ? ctaPath : ''}
+              limit={1}
+              quiet={Boolean(ctaLabel && ctaPath)}
             />
           </div>
         ) : null
@@ -497,27 +513,24 @@ export function SectionRenderer({
         </>
       )
 
-      if (split) {
+      if (split && image) {
         return (
-          <section className={`ls-hero ls-hero--${variant} ${image ? '' : 'ls-hero--noimage'}`}>
+          <section className={`ls-hero ls-hero--${variant}`}>
             <div className="ls-hero__inner">{copy}</div>
-            <div className="ls-hero__media" data-reveal={image ? 'mask' : 'scale'}>
-              {image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={image.url} alt={image.alt_text || ''} fetchPriority="high" />
-              ) : (
-                <span className="ls-hero__monogram" aria-hidden="true">
-                  {(businessName || headline).trim().charAt(0)}
-                </span>
-              )}
+            <div className="ls-hero__media" data-reveal="mask">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || ''} fetchPriority="high" />
             </div>
           </section>
         )
       }
 
+      // A split with nothing for its picture half is a typographic cover —
+      // the headline centred on the ground — never a letter in an empty card.
+      const shape = split ? 'centered' : variant
       return (
         <section
-          className={`ls-hero ls-hero--${variant} ${image ? 'ls-hero--hasimage' : 'ls-hero--noimage'}`}
+          className={`ls-hero ls-hero--${shape} ${image ? 'ls-hero--hasimage' : 'ls-hero--noimage'}`}
           data-progress=""
           style={
             {
@@ -531,7 +544,7 @@ export function SectionRenderer({
             // arrival and drifts behind the words as the visitor scrolls.
             <div className="ls-hero__bg" aria-hidden="true">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image.url} alt="" fetchPriority="high" />
+              <img src={image.url} srcSet={srcSetFor(image.url)} alt="" fetchPriority="high" />
             </div>
           ) : null}
           <div className="ls-hero__inner">{copy}</div>
@@ -566,7 +579,7 @@ export function SectionRenderer({
             <div className="ls-inner ls-story__grid">
               <div className="ls-story__media" data-reveal="mask">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt={image.alt_text || title} loading="lazy" />
+                <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} loading="lazy" />
               </div>
               <div className="ls-story__copy">
                 <p className="ls-eyebrow" data-reveal="fade">
@@ -616,7 +629,7 @@ export function SectionRenderer({
             <div className="ls-about__split">
               <div className="ls-about__media" data-reveal="mask">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt={image.alt_text || title} />
+                <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} />
               </div>
               <div>
                 <Heading eyebrow={t('About')} title={title} />
@@ -661,11 +674,14 @@ export function SectionRenderer({
       // A band with nothing to press is a banner with no point.
       if (!(ctaLabel && ctaPath) && !contact?.phone && !contact?.whatsapp) return null
       if (variant === 'giant') {
+        // A band without its own picture closes on the page's last one — never
+        // the first, which is the hero's.
+        const closing = image || (pictures.length > 1 ? pictures[pictures.length - 1] : undefined)
         return (
           <CtaGiant
             headline={str(c.headline)}
             body={str(c.body)}
-            image={image}
+            image={closing}
             actions={
               <>
                 {ctaLabel && ctaPath ? (
@@ -685,6 +701,8 @@ export function SectionRenderer({
                   businessName={businessName}
                   onMedia
                   primaryPath={ctaLabel ? ctaPath : ''}
+                  limit={1}
+                  quiet={Boolean(ctaLabel && ctaPath)}
                 />
               </>
             }
@@ -723,12 +741,16 @@ export function SectionRenderer({
                   />
                 </span>
               ) : null}
+              {/* Every closing band is one action: beside a main button, one
+                  channel as a quiet link — never three buttons on a slab. */}
               <ContactActions
                 t={t}
                 contact={contact}
                 businessName={businessName}
                 onMedia
                 primaryPath={ctaLabel ? ctaPath : ''}
+                limit={ctaLabel && ctaPath ? 1 : 2}
+                quiet={Boolean(ctaLabel && ctaPath)}
               />
             </div>
           </div>
@@ -937,7 +959,7 @@ export function SectionRenderer({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         className="ls-category__img"
-                        src={picture.url}
+                        src={picture.url} srcSet={srcSetFor(picture.url)}
                         alt={picture.alt_text || str(row.name)}
                         loading="lazy"
                       />
@@ -1090,7 +1112,7 @@ export function SectionRenderer({
                   {images.map((img, i) => (
                     <li key={i} className="fx-gallery-rail__item">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} alt={img.alt_text || ''} loading="lazy" />
+                      <img src={img.url} srcSet={srcSetFor(img.url)} alt={img.alt_text || ''} loading="lazy" />
                     </li>
                   ))}
                 </ul>
@@ -1113,7 +1135,7 @@ export function SectionRenderer({
               {images.map((img, i) => (
                 <figure key={i} className="ls-gallery__item" style={{ margin: 0 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt={img.alt_text || ''} loading="lazy" />
+                  <img src={img.url} srcSet={srcSetFor(img.url)} alt={img.alt_text || ''} loading="lazy" />
                 </figure>
               ))}
             </div>

@@ -27,13 +27,14 @@
  * touch, and never for the calm motion language.
  */
 
+import { glue, textNodes } from './typeset'
+
 type Lang = 'silk' | 'snap' | 'float' | 'calm'
 
 export type MotionHandle = { stop: () => void }
 
 const clamp = (v: number, lo = 0, hi = 1) => (v < lo ? lo : v > hi ? hi : v)
 
-/** Wrap each word of an element's text in two spans, keeping inner markup. */
 export function splitWords(el: HTMLElement): number {
   if (el.dataset.splitDone) return Number(el.style.getPropertyValue('--wn')) || 0
   // A heading is still read as one phrase, not word by word.
@@ -41,17 +42,16 @@ export function splitWords(el: HTMLElement): number {
   if (label && !label.hasAttribute('aria-label')) {
     label.setAttribute('aria-label', (label.textContent || '').replace(/\s+/g, ' ').trim())
   }
+  glue(el)
   let index = 0
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-  const nodes: Text[] = []
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text)
-  for (const node of nodes) {
+  for (const node of textNodes(el)) {
     const text = node.nodeValue || ''
     if (!text.trim()) continue
     const frag = document.createDocumentFragment()
-    for (const token of text.split(/(\s+)/)) {
+    // A no-break space joins two words into one unit that moves together.
+    for (const token of text.split(/([^\S\u00a0]+)/)) {
       if (!token) continue
-      if (/^\s+$/.test(token)) {
+      if (/^[^\S\u00a0]+$/.test(token)) {
         frag.appendChild(document.createTextNode(token))
         continue
       }

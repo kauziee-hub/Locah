@@ -40,15 +40,14 @@ def _hero(f: SiteFixture) -> dict[str, Any]:
 def test_the_golden_business_types_get_their_own_hero(sites: dict[str, SiteFixture]) -> None:
     # Each hero is a scene suited to how the business presents itself: a home
     # kitchen's dishes turn or open up, a gym is loud type, a developer's
-    # homes float in layers, a precise B2B plant stays quiet.
-    expected = {"home-food": {"orbit", "plane", "cinematic_zoom", "depth"},
-                "gym": {"kinetic", "cinematic_zoom", "depth"},
+    # homes float in layers, a precise B2B plant opens one quiet picture.
+    expected = {"home-food": {"orbit", "plane", "cinematic_zoom"},
+                "gym": {"kinetic", "cinematic_zoom"},
                 "real-estate": {"depth", "cinematic_zoom", "plane"},
                 "meat-shop": {"kinetic", "plane", "cinematic_zoom"},
-                "industrial": {"depth", "cinematic_zoom"}}
+                "industrial": {"cinematic_zoom"}}
     for key, heroes in expected.items():
         assert _hero(sites[key])["layout_variant"] in heroes, key
-    assert len({_hero(sites[k])["layout_variant"] for k in expected}) >= 3
 
 
 def test_motion_follows_how_the_business_presents_itself(sites: dict[str, SiteFixture]) -> None:
@@ -63,10 +62,17 @@ def test_motion_follows_how_the_business_presents_itself(sites: dict[str, SiteFi
             assert _hero(f)["layout_variant"] not in {"orbit", "plane", "kinetic"}, key
 
 
-def test_no_hero_scene_takes_over(sites: dict[str, SiteFixture]) -> None:
-    heroes = Counter(_hero(f)["layout_variant"] for f in sites.values())
-    assert len(heroes) >= 4, heroes
-    assert heroes.most_common(1)[0][1] <= len(sites) // 2, heroes
+def test_every_scene_but_the_cover_is_earned(sites: dict[str, SiteFixture]) -> None:
+    # The opening picture (cinematic_zoom) is the cover a site gets unless its
+    # material earns another: poster type needs a poster face, and floating
+    # frames show homes and project work, not a counter or a kitchen.
+    for key, f in sites.items():
+        hero = _hero(f)
+        theme = f.payload["theme_hints"]
+        if hero["layout_variant"] == "kinetic" and hero["content"].get("image_asset_id"):
+            assert theme["dna"]["display"] in {"bigshoulders", "archivo", "anton"}, key
+        if hero["layout_variant"] == "depth":
+            assert theme["site_archetype"] in {"real_estate_projects", "project_portfolio"}, key
 
 
 def test_the_five_look_like_five_businesses(sites: dict[str, SiteFixture]) -> None:

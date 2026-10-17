@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from platform_core.interview.design_dna import BY_KEY, CONCEPTS, choose_dna, concept_weights
+from platform_core.interview.design_dna import BY_KEY, CONCEPTS, SERIF, choose_dna, concept_weights
 from platform_core.interview.draft_merge import base_fingerprints, merge
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, CatalogueItem, TargetState
 from platform_core.interview.motion_director import direct as direct_motion
@@ -57,6 +57,26 @@ def test_every_dna_value_is_one_the_renderer_draws() -> None:
         assert concept.key in allowed["concept"]
         assert concept.space in allowed["space"] and concept.photo in allowed["photo"]
         assert concept.budget in allowed["budget"]
+
+
+def test_every_drawn_face_accent_edge_and_grade_has_its_css() -> None:
+    css = (WEB.parents[2] / "packages" / "ui" / "src" / "site-dna.css").read_text(encoding="utf-8")
+    for concept in CONCEPTS:
+        for trait in ("display", "body", "headline", "divider"):
+            for value in getattr(concept, trait):
+                assert f"[data-{trait}='{value}']" in css, (concept.key, trait, value)
+        assert f"[data-photo='{concept.photo}']" in css, (concept.key, concept.photo)
+
+
+def test_an_accent_is_only_ever_set_in_a_style_its_face_really_has() -> None:
+    for family in ("premium_dark", "modern_commerce", "monumental", "playful_editorial", "editorial_warm"):
+        for i in range(40):
+            dna = choose_dna(BUTCHER, family=family, archetype="product_commerce", motion="silk", seed=f"{family}-{i}")
+            # A grotesk's italic accent is a true serif italic; a serif never sets its accent in capitals.
+            if dna.headline == "italic":
+                assert dna.display in SERIF, (family, i, dna.display)
+            if dna.headline in {"caps", "serif"}:
+                assert dna.display not in SERIF, (family, i, dna.display, dna.headline)
 
 
 def test_the_same_business_always_gets_the_same_dna() -> None:
@@ -380,7 +400,7 @@ def test_the_vision_critic_keeps_only_what_exists_and_never_writes() -> None:
 
     from platform_core.interview.site_vision_critic import Shot, critique, revise
 
-    payload = {"pages": [{"slug": "home", "sections": [
+    payload: dict[str, Any] = {"pages": [{"slug": "home", "sections": [
         {"section_type_id": "hero", "layout_variant": "cinematic_zoom", "content": {"headline": "H",
                                                                                     "image_asset_id": ASSET}},
         {"section_type_id": "product_showcase", "layout_variant": "bento", "content": {"anchor": "shop", "items": []}},
@@ -425,7 +445,7 @@ def test_a_quiet_brand_never_gets_a_loud_hero_from_the_critic() -> None:
     from platform_core.interview.site_critic import Finding
     from platform_core.interview.site_vision_critic import revise
 
-    payload = {"pages": [{"slug": "home", "sections": [
+    payload: dict[str, Any] = {"pages": [{"slug": "home", "sections": [
         {"section_type_id": "hero", "layout_variant": "cinematic_zoom", "content": {"image_asset_id": ASSET}}]}],
         "theme_hints": {"dna": {"budget": "restrained"}}}
     tried: set[tuple[str, int, str]] = set()
@@ -477,6 +497,6 @@ def test_the_numbers_band_holds_only_facts() -> None:
     got = numbers_for(bp, archetype="product_commerce", items=items, ordering=[])
     assert got == [{"value": "1987", "label": "Serving since"}, {"value": "5", "label": "items on the counter"},
                    {"value": "6am", "label": "we open"}]
-    # One fact is not a band.
-    bp.messages = [Message(role="user", text="We sell mutton.")]
+    # Two facts are not a band: the counter and nothing else stays off the page.
+    bp.messages = [Message(role="user", text="We sell mutton. Open 6 am to 1 pm.")]
     assert numbers_for(bp, archetype="product_commerce", items=items, ordering=[]) == []

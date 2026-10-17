@@ -7,15 +7,16 @@ layer of decisions — an art director's, made in order:
 
 1. **concept** — one coherent art direction for this brand, the way a studio
    pitches one idea, never a bag of random traits. One butcher is *noir
-   editorial* (dark, huge close-up photography, condensed capitals, sharp cuts,
-   one cinematic reveal); another *warm craft* (cream paper, a hand-painted
-   accent, story first, a market-board catalogue); a third *quiet luxury*
-   (black and white, vast whitespace, full-screen photographs, almost no
-   motion). Concepts fit some families and businesses better than others; the
+   editorial* (dark, huge close-up photography, a display serif or condensed
+   capitals, sharp cuts, one cinematic reveal); another *warm craft* (cream
+   paper, a warm serif italic accent, story first, a market-board catalogue);
+   a third *quiet luxury* (black and white, vast whitespace, full-screen
+   photographs, almost no motion). Concepts fit some families and businesses better than others; the
    pick among the fitting ones is a stable draw seeded by the business.
 2. **traits, inside the concept** — the typefaces (from a library wider than
-   any family's), how a headline carries its accent (italic, outline, a painted
-   marker, a handwritten script, a gradient, tight capitals), the ground
+   any family's), how a headline carries its accent (the display face's own
+   italic, one phrase in a serif italic, the phrase knocked back in tone, a
+   handwritten script, tight capitals, or a quiet two-tone), the ground
    (paper, grain, dots, a drafting grid, the business's own motif), the edge
    between sections, buttons, header, cards, the shape pictures are cut to, a
    trailing cursor, which sections turn dark.
@@ -37,7 +38,8 @@ from typing import Any
 
 DNA_VERSION = "dna-v2"
 
-SERIF = frozenset({"dmserif", "bodoni", "youngserif", "italiana", "fraunces", "playfair", "cormorant", "newsreader"})
+SERIF = frozenset({"dmserif", "bodoni", "youngserif", "italiana", "fraunces", "playfair", "cormorant", "newsreader",
+                   "instrumentserif"})
 BUDGETS = ("restrained", "gentle", "signature", "expressive")
 
 
@@ -90,23 +92,24 @@ class Concept:
 CONCEPTS: tuple[Concept, ...] = (
     Concept(
         "noir_editorial",
-        "dark editorial: huge close-up photography, condensed capitals, sharp cuts, one cinematic reveal",
+        "dark editorial: huge close-up photography, a display serif or condensed capitals, sharp cuts, "
+        "one cinematic reveal",
         {"premium_dark": 3, "monumental": 3, "modern_commerce": 1.5},
         {"personality=bold": 3, "energy=high": 2, "positioning=premium": 2, "positioning=modern": 2,
          "service_mode=food": 1, "service_mode=retail": 1},
-        ("bigshoulders", "anton", "archivo", "syne"), ("caps", "outline"), ("dm", "manrope"),
+        ("instrumentserif", "bodoni", "archivo"), ("italic", "caps"), ("instrumentsans", "dm"),
         ("grain", "none"), ("rays",), ("slant", "none"), ("sharp", "underline"), ("overlay", "bar"),
         ("flat", "bordered"), ("rect", "slant"), ("dot", "none"), ("bold", "bands"),
         "regular", "macro", "signature",
     ),
     Concept(
         "warm_craft",
-        "warm craft: cream paper, a hand-painted accent, story first, a market-board catalogue",
+        "warm craft: cream paper, a warm serif italic accent, story first, a market-board catalogue",
         {"editorial_warm": 3, "local_friendly": 2.5, "playful_editorial": 1},
         {"positioning=heritage": 3, "personality=warm": 3, "personality=friendly": 1.5,
          "service_mode=food": 2, "service_mode=craft": 2, "service_mode=making": 1.5},
-        ("youngserif", "fraunces", "dmserif"), ("script", "marker", "italic"), ("dm", "manrope", "outfit"),
-        ("paper", "pattern"), ("kolam", "arcs", "checks"), ("ticket", "curve"), ("soft", "pill"),
+        ("fraunces", "dmserif", "youngserif"), ("italic",), ("dm", "manrope"),
+        ("paper", "pattern"), ("kolam", "arcs", "checks"), ("none", "ticket"), ("soft", "pill"),
         ("centered", "bar"), ("elevated", "offset", "bordered"), ("arch", "rounded"), ("none",),
         ("bands", "calm"), "regular", "warm", "gentle",
     ),
@@ -116,7 +119,7 @@ CONCEPTS: tuple[Concept, ...] = (
         {"premium_dark": 3, "airy_property": 2.5, "calm_professional": 1.5, "editorial_warm": 1},
         {"positioning=premium": 3, "personality=refined": 3, "personality=calm": 1.5, "service_mode=wellbeing": 1.5,
          "service_mode=hospitality": 2},
-        ("italiana", "bodoni", "cormorant", "newsreader"), ("plain", "italic"), ("manrope", "dm"),
+        ("bodoni", "instrumentserif", "cormorant", "newsreader"), ("italic", "plain"), ("manrope", "instrumentsans"),
         ("none",), ("arcs",), ("none",), ("underline", "outline"), ("centered", "overlay"),
         ("flat",), ("rect",), ("none", "dot"), ("calm", "bands"), "airy", "full", "restrained",
     ),
@@ -126,9 +129,9 @@ CONCEPTS: tuple[Concept, ...] = (
         {"modern_commerce": 3, "local_friendly": 2, "playful_editorial": 1},
         {"positioning=modern": 2, "positioning=value": 2, "positioning=everyday": 1.5, "service_mode=retail": 1.5,
          "service_mode=food": 1, "energy=high": 1, "journey=order": 1},
-        ("syne", "unbounded", "spacegrotesk", "outfit", "archivo"), ("gradient", "marker", "plain"), ("dm", "manrope"),
-        ("dots", "grid", "none"), ("waves", "rays"), ("none", "curve", "wave"), ("pill", "soft"),
-        ("floating", "bar"), ("elevated", "glass"), ("rounded", "blob"), ("none",), ("bold", "calm"),
+        ("intertight", "instrumentsans", "bricolage"), ("serif", "tone", "plain"), ("dm", "instrumentsans", "manrope"),
+        ("none", "grain"), ("waves", "rays"), ("none",), ("pill", "soft"),
+        ("floating", "bar"), ("elevated", "glass"), ("rounded",), ("none",), ("bold", "calm"),
         "regular", "clean", "expressive",
     ),
     Concept(
@@ -136,7 +139,7 @@ CONCEPTS: tuple[Concept, ...] = (
         "playful: chunky friendly type, offset cards, wavy edges, springy motion",
         {"playful_editorial": 3, "local_friendly": 2},
         {"personality=playful": 4, "personality=friendly": 1.5, "service_mode=learning": 1},
-        ("bricolage", "youngserif", "unbounded"), ("marker", "script", "outline"), ("dm", "outfit"),
+        ("bricolage", "fraunces", "youngserif"), ("italic", "script"), ("dm", "outfit"),
         ("dots", "pattern"), ("checks", "waves"), ("wave", "curve"), ("pill",), ("floating",),
         ("offset",), ("blob", "rounded"), ("none",), ("bold",), "regular", "clean", "expressive",
     ),
@@ -146,8 +149,8 @@ CONCEPTS: tuple[Concept, ...] = (
         {"calm_professional": 4, "airy_property": 2, "editorial_warm": 0.5},
         {"trust=high": 3, "personality=calm": 3, "service_mode=care": 2, "service_mode=advisory": 2,
          "service_mode=learning": 1.5, "service_mode=wellbeing": 1},
-        ("newsreader", "fraunces", "manrope", "outfit"), ("plain", "italic"), ("manrope", "dm"),
-        ("none", "paper"), ("waves",), ("curve", "none"), ("soft", "pill"), ("bar", "floating", "centered"),
+        ("newsreader", "fraunces", "instrumentsans", "manrope"), ("plain", "italic"), ("manrope", "dm"),
+        ("none", "paper"), ("waves",), ("none",), ("soft", "pill"), ("bar", "floating", "centered"),
         ("elevated", "flat"), ("rounded", "arch"), ("none",), ("calm",), "airy", "clean", "restrained",
     ),
     Concept(
@@ -155,7 +158,7 @@ CONCEPTS: tuple[Concept, ...] = (
         "engineered: grotesk type on a drafting grid, sharp bordered cards, precise motion",
         {"monumental": 1.5, "modern_commerce": 1.5, "calm_professional": 1.5},
         {"personality=technical": 4, "audience=b2b": 2},
-        ("spacegrotesk", "plex", "archivo"), ("plain", "caps", "outline"), ("plex", "dm"),
+        ("intertight", "spacegrotesk", "plex"), ("plain", "tone", "caps"), ("plex", "dm"),
         ("grid",), ("rays",), ("none", "slant"), ("sharp",), ("bar",), ("bordered",), ("rect",), ("none",),
         ("bands",), "dense", "clean", "gentle",
     ),
@@ -164,7 +167,7 @@ CONCEPTS: tuple[Concept, ...] = (
         "kinetic: poster type, slanted cuts, hard contrast, punchy motion",
         {"monumental": 4, "modern_commerce": 1},
         {"energy=high": 3, "personality=bold": 2, "offering=plan": 2, "offering=class": 2},
-        ("bigshoulders", "anton", "unbounded"), ("caps", "outline"), ("dm", "manrope"),
+        ("bigshoulders", "archivo"), ("caps",), ("instrumentsans", "dm"),
         ("grain", "none"), ("rays",), ("slant",), ("sharp",), ("overlay", "bar"), ("bordered", "offset"),
         ("slant", "rect"), ("dot", "none"), ("bold",), "regular", "macro", "expressive",
     ),
@@ -224,6 +227,10 @@ def choose_dna(dims: dict[str, Any], *, family: str, archetype: str, motion: str
     headline = _draw(_ranked(chosen.headline), seed, "headline")
     if headline == "caps" and serif:
         headline = "italic"
+    # A grotesk has no italic worth the name: its accent phrase is set in a true
+    # serif italic instead (the contrast of voice, not a slanted sans).
+    if headline == "italic" and not serif:
+        headline = "serif"
     if calm:
         headline = "italic" if serif else "plain"
     cursor = "none" if calm or personality == "calm" else _draw(_ranked(chosen.cursor), seed, "cursor")

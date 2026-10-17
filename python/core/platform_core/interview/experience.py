@@ -50,10 +50,10 @@ DESCRIBE: dict[str, str] = {
     "float": "soft, slightly springy movement — playful, friendly, local",
     "calm": "gentle fades only — care, law, finance; trust before spectacle",
     "cinematic_zoom": "the cover picture starts framed beside the headline and opens to full-bleed as you scroll",
-    "orbit": "the business's own pictures on a slowly turning 3D ring beside the headline (needs 4+ pictures)",
-    "plane": "a tilted wall of the business's pictures that straightens toward you as you scroll (needs 4+)",
-    "kinetic": "poster-sized type that pulls apart around a growing picture — loud, typographic",
-    "depth": "one photograph with framed pictures floating over it at different depths",
+    "orbit": "the business's own pictures on a slowly turning 3D ring beside the headline (needs 8+ pictures)",
+    "plane": "a tilted wall of the business's pictures that straightens toward you as you scroll (needs 8+)",
+    "kinetic": "poster-sized type that pulls apart around a growing picture — loud, typographic (poster faces only)",
+    "depth": "one photograph with framed pictures floating over it at different depths (homes and project work)",
     "aurora": "a slowly moving gradient in the brand colours behind large type — for sites without photos",
     "menu_book": "a real menu: chapters by category, a rail that follows the reader, diet marks, prices",
     "rail": "a horizontal run of large picture cards, held in place while it travels",
@@ -181,40 +181,45 @@ def hero_options(arche: str, motion: str, c: Content, dims: dict[str, Any]) -> l
     the fallback at the end of each list, not the default at its head.
     """
     personality = str(dims.get("personality", ""))
-    many = c.pictures >= 4
-    layered = c.pictures >= 2
+    # A ring or a wall shows every picture at once: with fewer than eight the
+    # same photographs repeat, and it reads as an image search.
+    wall = c.pictures >= 8
+    # Framed pictures floating over a photograph show homes and work; over a
+    # butcher's counter or a bakery's they read as a scrapbook.
+    layered = c.pictures >= 2 and arche in {"real_estate_projects", "project_portfolio"}
     if not c.hero_picture and not c.pictures:
         return ["aurora", "kinetic"] if motion != "calm" else ["aurora"]
     if motion == "calm":
         # Quiet, but never a flat banner: layers that drift, or a picture that
-        # opens — and with no photographs, a slow gradient.
-        return ["depth", "cinematic_zoom"] if layered else ["cinematic_zoom", "aurora"]
+        # opens — and with hardly a photograph, a slow gradient.
+        if layered:
+            return ["depth", "cinematic_zoom"]
+        return ["cinematic_zoom"] if c.pictures >= 2 else ["cinematic_zoom", "aurora"]
     options: list[str]
     if arche in {"menu_commerce", "product_commerce"}:
+        # Food is sold by its picture: the opening photograph before poster type.
         if motion == "snap":
-            options = (["plane"] if many else []) + ["kinetic", "cinematic_zoom"]
+            options = (["plane"] if wall else []) + ["cinematic_zoom", "kinetic"]
         elif motion == "float":
-            options = (["orbit", "plane"] if many else ["depth"]) + ["cinematic_zoom"]
+            options = (["orbit", "plane"] if wall else []) + ["cinematic_zoom"]
         else:
-            options = (["plane", "orbit"] if many else []) + ["depth", "cinematic_zoom"]
+            options = (["plane", "orbit"] if wall else []) + ["cinematic_zoom"]
     elif arche == "membership_fitness":
-        options = ["kinetic", "depth", "cinematic_zoom"] if personality != "calm" else ["depth", "cinematic_zoom"]
+        options = ["kinetic", "cinematic_zoom"] if personality != "calm" else ["cinematic_zoom"]
     elif arche in {"real_estate_projects", "project_portfolio"}:
-        options = ["depth"] + (["plane"] if many else []) + ["cinematic_zoom"]
+        options = (["depth"] if layered else []) + (["plane"] if wall else []) + ["cinematic_zoom"]
     elif arche == "service_appointment":
         if motion == "snap":
-            options = ["kinetic", "depth", "cinematic_zoom"]
-        elif motion == "float" and many:
-            options = ["orbit", "depth", "cinematic_zoom"]
+            options = ["kinetic", "cinematic_zoom"]
+        elif motion == "float" and wall:
+            options = ["orbit", "cinematic_zoom"]
         else:
-            options = ["depth", "cinematic_zoom"]
+            options = ["cinematic_zoom"]
     elif arche == "b2b_rfq":
-        options = ["depth", "cinematic_zoom"]
+        options = ["cinematic_zoom"]
     else:
-        options = ["kinetic", "depth", "cinematic_zoom"] if motion in {"snap", "float"} else ["depth", "cinematic_zoom"]
-    if not layered:
-        options = [o for o in options if o != "depth"]
-    return options or ["cinematic_zoom"]
+        options = ["kinetic", "cinematic_zoom"] if motion in {"snap", "float"} else ["cinematic_zoom"]
+    return options
 
 
 def catalogue_options(arche: str, offering: str, c: Content) -> list[str]:
@@ -313,7 +318,10 @@ def choose_experience(
         cta = "giant"
     marquee = ""
     if motion != "calm" and c.categories >= 3:
-        marquee = "band" if motion in {"snap", "float"} else "outline"
+        # A solid band of words belongs to poster brands; every other site
+        # carries its words as an outlined line (the composer adds the poster
+        # concept, which is chosen after this).
+        marquee = "band" if family == "monumental" else "outline"
     intro = motion in {"silk", "snap"} and str(dims.get("positioning", "")) in {"premium", "heritage", "modern"}
     grain = family in {"editorial_warm", "premium_dark", "portfolio_sketchbook"}
     return Experience(motion=motion, hero=hero, catalogue=catalogue, story=story, cta=cta, marquee=marquee,

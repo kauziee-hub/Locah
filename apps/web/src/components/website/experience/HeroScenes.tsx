@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { srcSetFor } from '../picture'
 import { AuroraCanvas } from './AuroraCanvas'
 
 /**
@@ -36,11 +37,16 @@ type Vars = CSSProperties & Record<`--${string}`, string | number>
  *  focused or clicked. React 18's types say boolean; the DOM wants presence. */
 const INERT = { inert: '' } as unknown as { inert?: boolean }
 
+/** Distinct pictures a ring or a wall needs: below this the same photographs
+ *  repeat, and a wall of them reads as an image search. */
+const DISTINCT_FOR = { plane: 8, orbit: 6 } as const
+
 /** The scene this hero can really draw with the pictures it has. */
 export function sceneFor(variant: string, pictures: Pic[], image?: Pic): string {
   const count = pictures.length
-  if ((variant === 'orbit' || variant === 'plane') && count < 4) {
-    return image || count ? 'cinematic_zoom' : 'aurora'
+  if (variant === 'orbit' || variant === 'plane') {
+    const distinct = new Set(pictures.map((p) => p.url)).size
+    if (distinct < DISTINCT_FOR[variant]) return image || count ? 'cinematic_zoom' : 'aurora'
   }
   if (['cinematic_zoom', 'depth', 'kinetic'].includes(variant) && !image && !count) return 'aurora'
   return variant
@@ -106,7 +112,7 @@ export function HeroScene({
           </div>
           <div className="fx-zoom__frame">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={lead.url} alt={lead.alt_text || ''} fetchPriority="high" />
+            <img src={lead.url} srcSet={srcSetFor(lead.url)} alt={lead.alt_text || ''} fetchPriority="high" />
             <div className="fx-zoom__scrim" aria-hidden="true" />
             <div className="ls-hero__inner fx-zoom__copy fx-zoom__copy--light" aria-hidden="true" {...INERT}>
               <Copy parts={light} late />
@@ -131,7 +137,7 @@ export function HeroScene({
               {cards.map((pic, i) => (
                 <figure key={i} className="fx-orbit__card" style={{ '--i': i } as Vars}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={pic.url} alt="" loading={i < 5 ? 'eager' : 'lazy'} />
+                  <img src={pic.url} srcSet={srcSetFor(pic.url)} alt="" loading={i < 5 ? 'eager' : 'lazy'} />
                 </figure>
               ))}
             </div>
@@ -142,8 +148,10 @@ export function HeroScene({
   }
 
   if (variant === 'plane') {
-    const tiles = fill(pictures, 16)
-    const columns = [0, 1, 2, 3].map((c) => tiles.filter((_, i) => i % 4 === c))
+    // Twelve tiles in three columns: with eight or more pictures none shows
+    // more than about one and a half times.
+    const tiles = fill(pictures, 12)
+    const columns = [0, 1, 2].map((c) => tiles.filter((_, i) => i % 3 === c))
     return (
       <section className="ls-hero fx-plane" data-scene="" style={base}>
         <div className="fx-plane__stage">
@@ -154,7 +162,7 @@ export function HeroScene({
                   {column.map((pic, i) => (
                     <figure key={i} className="fx-plane__tile">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={pic.url} alt="" loading={c < 2 && i < 2 ? 'eager' : 'lazy'} />
+                      <img src={pic.url} srcSet={srcSetFor(pic.url)} alt="" loading={i < 2 ? 'eager' : 'lazy'} />
                     </figure>
                   ))}
                 </div>
@@ -185,7 +193,7 @@ export function HeroScene({
                 {image ? (
                   <span className="fx-kinetic__pill" aria-hidden="true">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={image.url} alt="" fetchPriority="high" />
+                    <img src={image.url} srcSet={srcSetFor(image.url)} alt="" fetchPriority="high" />
                   </span>
                 ) : null}
               </span>
@@ -216,7 +224,7 @@ export function HeroScene({
       <section className="ls-hero fx-depth ls-hero--hasimage" data-progress="" data-pointer="" style={base}>
         <div className="fx-depth__bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lead.url} alt="" fetchPriority="high" />
+          <img src={lead.url} srcSet={srcSetFor(lead.url)} alt="" fetchPriority="high" />
         </div>
         <div className="ls-hero__inner fx-depth__copy">
           <Copy parts={parts} />
@@ -226,7 +234,7 @@ export function HeroScene({
             {floats.map((pic, i) => (
               <figure key={pic.url} className={`fx-depth__float fx-depth__float--${i}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pic.url} alt="" />
+                <img src={pic.url} srcSet={srcSetFor(pic.url)} alt="" />
               </figure>
             ))}
           </div>

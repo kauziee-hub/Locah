@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 
+import { typeset } from './typeset'
+
 /**
  * Starts the motion runtime for the tenant site that contains it.
  *
@@ -15,6 +17,9 @@ export function SiteMotion() {
     const anchor = document.querySelector<HTMLElement>('[data-locah-site]')
     if (!anchor) return
     const root = anchor
+    // Typography is not motion: every visitor gets units kept with their
+    // numbers and headings without a lone last word.
+    typeset(root)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduced || root.dataset.motion === 'none') {
       root.removeAttribute('data-fx')

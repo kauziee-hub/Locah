@@ -16,8 +16,15 @@
   font-family: var(--site-font);
   color: var(--site-ink);
   background: var(--site-bg);
-  line-height: 1.65;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Faces are drawn as they ship: no faked italic or bold from a face that
+     has none, display sizes from a variable face's own optical size. */
+  font-synthesis: none;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
 }
 
 [data-locah-site] * {
@@ -250,6 +257,15 @@
   font-size: clamp(1.02rem, 0.95rem + 0.4vw, 1.25rem);
   max-width: 46ch;
   opacity: 0.94;
+}
+/* (0,2,0): the paragraph reset above is (0,1,1) and would otherwise press the
+   sub flush against the headline's last line. */
+[data-locah-site] .ls-hero__sub {
+  margin-top: clamp(1.25rem, 0.9rem + 1.2vw, 2rem);
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  max-width: 42ch;
 }
 .ls-hero--centered .ls-hero__sub {
   margin-inline: auto;
@@ -1098,6 +1114,21 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* The name in the header is a wordmark: the display face at its own heading
+   weight (never a faked 700), set like the headlines it sits above. */
+.ls-nav__name {
+  font-weight: var(--site-heading-weight);
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+[data-locah-site]:is([data-display='bigshoulders'], [data-display='anton'], [data-type='monumental_condensed'],
+    [data-concept='noir_editorial'][data-display='archivo'], [data-concept='kinetic_sport'][data-display='archivo'])
+  .ls-nav__name {
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .ls-nav__logo {
   width: 34px;
   height: 34px;
@@ -1413,26 +1444,31 @@
    has atmosphere when the owner has not uploaded a photo yet.
    ========================================================================== */
 
+/* An editorial label, not a status pill: tracked capitals after a hairline. */
 .ls-hero__eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  margin: 0 0 1.35rem;
-  padding: 0.38rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  gap: 0.75rem;
+  margin: 0 0 clamp(1.25rem, 0.9rem + 1vw, 2rem);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font-family: var(--site-font);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 .ls-hero__eyebrow::before {
   content: '';
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--site-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--site-accent) 28%, transparent);
+  flex: none;
+  width: 1.75rem;
+  height: 1px;
+  border-radius: 0;
+  background: currentColor;
+  box-shadow: none;
+  opacity: 0.6;
 }
 .ls-hero--image_left .ls-hero__eyebrow,
 .ls-hero--image_right .ls-hero__eyebrow {
@@ -1442,23 +1478,56 @@
 .ls-accent {
   color: var(--site-accent);
 }
-[data-locah-site][data-personality='warm'] .ls-accent,
-[data-locah-site][data-typography='editorial_serif'] .ls-accent {
+/* Older sites only: a site with a design DNA styles its accent from its
+   headline value alone (site-dna.css). :where() keeps the specificity. */
+[data-locah-site][data-personality='warm']:where(:not([data-headline])) .ls-accent,
+[data-locah-site][data-typography='editorial_serif']:where(:not([data-headline])) .ls-accent {
   font-style: italic;
 }
 /* Over a photo or the brand colour the accent is lifted toward white, so an
    accent that equals the primary colour does not vanish into it. */
-.ls-hero:is(.ls-hero--centered, .ls-hero--left_aligned, .ls-hero--full_width) .ls-accent {
+:where([data-locah-site]:not([data-headline]))
+  .ls-hero:is(.ls-hero--centered, .ls-hero--left_aligned, .ls-hero--full_width)
+  .ls-accent {
   color: color-mix(in srgb, var(--site-accent) 42%, #ffffff);
 }
 
 .ls-hero__cta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
 }
 .ls-hero--centered .ls-hero__cta {
   justify-content: center;
+}
+/* The one channel beside the main button: a quiet underlined link in the
+   surrounding ink, still a full 48px tap target. */
+[data-locah-site] a.ls-hero__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding-inline: 0.25rem;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.35em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  transition: text-decoration-color 140ms ease;
+}
+[data-locah-site] a.ls-hero__link:hover {
+  text-decoration-color: currentColor;
+}
+[data-locah-site] a.ls-hero__link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+/* On a phone the sticky bar already carries Call and WhatsApp. */
+@media (max-width: 760px) {
+  [data-locah-site]:has(.ls-mobile-bar) .ls-hero__link {
+    display: none;
+  }
 }
 
 /* No photo: a tonal field in the brand colour instead of a flat slab. */
@@ -1558,13 +1627,19 @@
   filter: none;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
+/* WhatsApp is recognised by its glyph, drawn in the button's own ink — not
+   by a third, foreign green beside the business's colours. */
+[data-locah-site] {
+  --ls-wa-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.2Z'/%3E%3C/svg%3E");
+}
 .ls-btn--whatsapp::before {
   content: '';
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: #25d366;
+  width: 1.05em;
+  height: 1.05em;
   flex: none;
+  background: currentColor;
+  -webkit-mask: var(--ls-wa-glyph) center / contain no-repeat;
+  mask: var(--ls-wa-glyph) center / contain no-repeat;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1595,8 +1670,9 @@
 /* Section headings: a small category label above a statement. */
 .ls-eyebrow {
   margin: 0 0 0.7rem;
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--site-accent);
@@ -1792,6 +1868,23 @@
   font-size: 0.97rem;
 }
 
+/* Supporting copy is read, not glanced at: never under 15px, open leading,
+   and an ink tint that holds 4.5:1 on the ground (muted grey at 13px read as
+   a template's filler). Picture tiles keep their white copy. */
+[data-locah-site] :is(.ls-step__body, .fx-pillar__body, .ls-fact__body, .ls-card__text, .ls-board__text,
+    .ls-pricelist__desc, .ls-category__text) {
+  font-size: max(0.9375rem, 1em);
+  line-height: 1.5;
+}
+[data-locah-site] :is(.ls-step__body, .fx-pillar__body, .ls-fact__body, .ls-card__text, .ls-board__text,
+    .ls-pricelist__desc) {
+  color: color-mix(in srgb, var(--site-ink) 72%, var(--site-bg));
+}
+[data-locah-site] .fx-bento__copy p {
+  font-size: max(0.9375rem, 1em);
+  line-height: 1.5;
+}
+
 /* ==========================================================================
    Contact actions — Call / WhatsApp / Directions wherever a visitor decides
    ========================================================================== */
@@ -1799,7 +1892,8 @@
 .ls-cta__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
 }
 .ls-cta--centered .ls-cta__actions {
   justify-content: center;
@@ -1822,6 +1916,7 @@
   border-color: transparent;
 }
 
+/* The WhatsApp float in the site's own ink and ground; the glyph says what it is. */
 .ls-wa-float {
   position: fixed;
   right: clamp(1rem, 0.5rem + 1.5vw, 1.75rem);
@@ -1829,18 +1924,28 @@
   z-index: 40;
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: #25d366;
-  color: #ffffff;
-  box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.18),
-    0 2px 6px rgba(0, 0, 0, 0.12);
+  background: var(--site-ink);
+  color: var(--site-bg);
+  border: 1px solid color-mix(in srgb, var(--site-bg) 14%, transparent);
+  box-shadow: 0 12px 28px -12px rgb(0 0 0 / 0.5);
   transition: transform 160ms ease;
+}
+/* The site's link colour (inherit, at 0,3,1) would paint the glyph in the
+   float's own fill: the glyph takes the ground colour on itself. */
+.ls-wa-float svg {
+  color: var(--site-bg);
 }
 .ls-wa-float:hover {
   transform: scale(1.06);
+}
+/* A header button that already opens WhatsApp is enough on a wide screen. */
+@media (min-width: 761px) {
+  [data-locah-site]:has(.ls-nav__cta[href^='https://wa.me']) .ls-wa-float {
+    display: none;
+  }
 }
 .ls-wa-float:focus-visible,
 .ls-mobile-bar a:focus-visible,
@@ -1866,9 +1971,11 @@
     grid-auto-columns: 1fr;
     gap: 0.6rem;
     padding: 0.65rem 0.9rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
-    background: var(--site-bg);
+    background: color-mix(in srgb, var(--site-bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
     border-top: 1px solid var(--site-border);
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: none;
   }
   /* nav + [href] outrank the site-wide link rule (0,3,1), which otherwise gave
      the Call button the page's ink on the primary colour. */
@@ -1884,9 +1991,22 @@
     background: var(--site-primary);
     color: var(--site-primary-fg);
   }
+  /* WhatsApp beside the main action is outlined in the site's ink, so the
+     filled button stays the one action; the glyph keeps it recognisable. */
   [data-locah-site] nav.ls-mobile-bar a[href^='https://wa.me'] {
-    background: #25d366;
-    color: #ffffff;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--site-ink);
+    border: 1px solid color-mix(in srgb, var(--site-ink) 24%, transparent);
+  }
+  [data-locah-site] nav.ls-mobile-bar a[href^='https://wa.me']::before {
+    content: '';
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+    background: currentColor;
+    -webkit-mask: var(--ls-wa-glyph) center / contain no-repeat;
+    mask: var(--ls-wa-glyph) center / contain no-repeat;
   }
   .ls-foot--with-bar {
     padding-bottom: calc(1.75rem + 76px);

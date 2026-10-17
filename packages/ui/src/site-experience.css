@@ -336,6 +336,12 @@ html.lenis.lenis-smooth {
 
 /* ============================================================ hero scenes */
 
+/* A scene is a cover: its headline, a line and one action. The facts under
+   the buttons wait for the moving band and the ordering strip. */
+[data-locah-site] :is(.fx-orbit, .fx-plane, .fx-kinetic, .fx-zoom, .fx-depth, .fx-aurora) .ls-hero__badges {
+  display: none;
+}
+
 /* Shared: a pinned stage, held while its section scrolls past. */
 .fx-zoom,
 .fx-orbit,
@@ -463,12 +469,15 @@ html.lenis.lenis-smooth {
 [data-locah-site][data-personality='bold'][data-typography='modern_sans'] .fx-zoom__copy--light .ls-hero__headline {
   text-transform: uppercase;
 }
+/* Every scene headline reads its face's own metrics (site-dna.css sets them
+   per display face): condensed capitals run larger and looser than a tight
+   grotesk, a display serif in between. */
 [data-locah-site] .fx-zoom .ls-hero__headline {
-  font-size: clamp(2.8rem, 1.2rem + 5vw, 6.6rem);
-  line-height: 0.95;
-  letter-spacing: -0.045em;
+  font-size: calc(clamp(2.9rem, 1.4rem + 5.6vw, 7.25rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
   /* Beside the framed picture at first, never over it. */
-  max-width: min(11ch, 38vw);
+  max-width: min(var(--site-display-measure, 11ch), 38vw);
   color: inherit;
   margin: 0;
 }
@@ -492,9 +501,6 @@ html.lenis.lenis-smooth {
   border-color: rgba(255, 255, 255, 0.5);
   background: rgba(255, 255, 255, 0.06);
 }
-[data-locah-site] .fx-zoom .ls-hero__badges li {
-  color: #fff;
-}
 .fx-zoom .fx-cue {
   color: var(--site-ink);
   opacity: calc(1 - var(--k));
@@ -507,8 +513,46 @@ html.lenis.lenis-smooth {
 }
 @media (max-width: 900px) {
   [data-locah-site] .fx-zoom .ls-hero__headline {
-    max-width: 14ch;
-    font-size: clamp(2.4rem, 1.2rem + 7vw, 4rem);
+    max-width: 13ch;
+    font-size: calc(clamp(2.75rem, 1.6rem + 6vw, 4.25rem) * var(--site-display-scale, 1));
+  }
+}
+/* A cover on a wide screen: the words sit low on the photograph's own dark
+   floor, set large, with air before the line under them — not floating in
+   the top third with half the picture empty below. The ink and the white
+   copy share every rule, so the split along the frame's edge stays exact. */
+@media (min-width: 901px) {
+  .fx-zoom__copy {
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: clamp(2.5rem, 1.5rem + 5vh, 5.5rem);
+  }
+  .fx-zoom__scrim {
+    background:
+      linear-gradient(to top, rgba(8, 8, 8, 0.8) 0%, rgba(8, 8, 8, 0.42) 38%, rgba(8, 8, 8, 0.08) 68%),
+      linear-gradient(100deg, rgba(8, 8, 8, 0.5) 0%, rgba(8, 8, 8, 0) 58%);
+  }
+  [data-locah-site] .fx-zoom .ls-hero__headline {
+    /* Never taller than the screen leaves room for; and at first the words
+       end before the framed picture begins (its left edge is at 55%). */
+    font-size: calc(min(clamp(3rem, 1rem + 6vw, 7.5rem), 13vh) * var(--site-display-scale, 1));
+    max-width: min(
+      var(--site-display-measure, 11ch),
+      calc(53vw - max(0px, 50vw - 600px) - clamp(1.25rem, 0.5rem + 3vw, 3rem))
+    );
+  }
+  [data-locah-site] .fx-zoom .ls-hero__sub {
+    margin-top: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+    max-width: 36ch;
+    font-size: clamp(1.05rem, 0.98rem + 0.3vw, 1.25rem);
+    line-height: 1.55;
+  }
+  /* The copy now holds the bottom of the screen. */
+  .fx-zoom .fx-cue {
+    display: none;
   }
 }
 
@@ -557,10 +601,10 @@ html.lenis.lenis-smooth {
   }
 }
 [data-locah-site] .fx-orbit .ls-hero__headline {
-  font-size: clamp(2.3rem, 1rem + 4.2vw, 5.6rem);
-  line-height: 0.98;
-  letter-spacing: -0.045em;
-  max-width: 12ch;
+  font-size: calc(clamp(2.9rem, 1.4rem + 5.6vw, 7.25rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
+  max-width: var(--site-display-measure, 11ch);
   color: var(--site-ink);
 }
 [data-locah-site] .fx-orbit .ls-hero__sub {
@@ -620,10 +664,6 @@ html.lenis.lenis-smooth {
     --card-h: clamp(140px, 27vh, 220px);
   }
 }
-/* The ring needs the room: in a scene the facts under the buttons wait. */
-[data-locah-site] .fx-orbit .ls-hero__badges {
-  display: none;
-}
 
 /* plane — a tilted wall of pictures that straightens toward the visitor. */
 .fx-plane {
@@ -635,6 +675,9 @@ html.lenis.lenis-smooth {
   perspective: 1300px;
   perspective-origin: 70% 30%;
   overflow: hidden;
+  /* One grade for the whole wall, so photographs from different cameras
+     read as one shoot (graded once here, not tile by tile). */
+  filter: saturate(0.86) contrast(1.06) brightness(0.9);
 }
 .fx-plane__grid {
   position: absolute;
@@ -642,7 +685,7 @@ html.lenis.lenis-smooth {
   left: 18%;
   width: 92%;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: clamp(10px, 1.4vw, 22px);
   transform-origin: 50% 40%;
   transform: rotateX(calc((1 - var(--p)) * 46deg)) rotateZ(calc((1 - var(--p)) * -20deg))
@@ -662,9 +705,9 @@ html.lenis.lenis-smooth {
   margin: 0;
   aspect-ratio: 4 / 5;
   overflow: hidden;
-  border-radius: var(--site-radius);
+  /* Prints on a wall: tight corners, no shadow. */
+  border-radius: min(var(--site-radius), 6px);
   background: var(--site-bg-alt);
-  box-shadow: 0 30px 50px -30px rgba(0, 0, 0, 0.5);
 }
 .fx-plane__tile img {
   width: 100%;
@@ -688,17 +731,6 @@ html.lenis.lenis-smooth {
 [data-fx='on'] .fx-plane__scrim {
   opacity: clamp(0, calc(1 - (var(--p) - 0.75) * 4), 1);
 }
-@media (max-width: 760px) {
-  /* A phone shows the wall behind the whole column of copy: a full veil. */
-  .fx-plane__scrim {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--site-bg) 70%, transparent) 0%,
-      color-mix(in srgb, var(--site-bg) 92%, transparent) 40%,
-      color-mix(in srgb, var(--site-bg) 92%, transparent) 100%
-    );
-  }
-}
 .fx-plane__copy {
   position: relative;
   z-index: 3;
@@ -714,16 +746,19 @@ html.lenis.lenis-smooth {
   transform: translate3d(0, calc(var(--p) * -60px), 0);
 }
 [data-locah-site] .fx-plane .ls-hero__headline {
-  font-size: clamp(2.6rem, 1.3rem + 5vw, 6.2rem);
-  line-height: 0.96;
-  letter-spacing: -0.045em;
-  max-width: 11ch;
+  font-size: calc(clamp(2.9rem, 1.4rem + 5.6vw, 7.25rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
+  max-width: var(--site-display-measure, 11ch);
   color: var(--site-ink);
 }
 [data-locah-site] .fx-plane .ls-hero__sub {
   /* Clear of the headline's descenders, and readable where the wall of
      pictures runs behind it. */
-  margin-top: 1.1rem;
+  margin-top: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+  max-width: 36ch;
+  font-size: clamp(1.05rem, 0.98rem + 0.3vw, 1.25rem);
+  line-height: 1.55;
   color: color-mix(in srgb, var(--site-ink) 78%, var(--site-bg));
   text-shadow: 0 1px 14px var(--site-bg), 0 0 2px color-mix(in srgb, var(--site-bg) 70%, transparent);
 }
@@ -750,6 +785,69 @@ html.lenis.lenis-smooth {
     padding-top: calc(var(--fx-nav-h) + 2rem);
   }
 }
+@media (max-width: 760px) {
+  /* A phone shows the wall behind the whole column of copy: a full veil. */
+  .fx-plane__scrim {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--site-bg) 70%, transparent) 0%,
+      color-mix(in srgb, var(--site-bg) 92%, transparent) 40%,
+      color-mix(in srgb, var(--site-bg) 92%, transparent) 100%
+    );
+  }
+}
+/* Without motion the plane is a still composition, not a paused one: the
+   words on their own ground at the left, the wall upright at the right. */
+[data-locah-site]:not([data-fx='on']) .fx-plane__scrim {
+  background: linear-gradient(
+    96deg,
+    var(--site-bg) 0%,
+    var(--site-bg) 40%,
+    color-mix(in srgb, var(--site-bg) 55%, transparent) 52%,
+    transparent 64%
+  );
+}
+@media (min-width: 901px) {
+  [data-locah-site]:not([data-fx='on']) .fx-plane__grid {
+    top: -6%;
+    left: 52%;
+    width: 56%;
+    transform: none;
+  }
+  [data-locah-site]:not([data-fx='on']) .fx-plane__copy > * {
+    max-width: min(34rem, 44vw);
+  }
+}
+/* On a phone the words come first on clean ground, and the wall is a strip
+   of pictures beneath them. */
+@media (max-width: 900px) {
+  [data-locah-site]:not([data-fx='on']) .fx-plane__stage {
+    display: flex;
+    flex-direction: column;
+  }
+  [data-locah-site]:not([data-fx='on']) .fx-plane__copy {
+    order: -1;
+    width: 100%;
+    padding-bottom: 1.5rem;
+  }
+  [data-locah-site]:not([data-fx='on']) .fx-plane__view {
+    position: relative;
+    inset: auto;
+    flex: 1 0 auto;
+    min-height: clamp(220px, 40svh, 360px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 14%);
+  }
+  [data-locah-site]:not([data-fx='on']) .fx-plane__grid {
+    top: 0;
+    left: -4%;
+    width: 120%;
+    transform: none;
+  }
+  [data-locah-site]:not([data-fx='on']) .fx-plane__scrim {
+    display: none;
+  }
+}
 
 /* kinetic — poster type that pulls apart around a growing picture. */
 .fx-kinetic__stage {
@@ -769,8 +867,8 @@ html.lenis.lenis-smooth {
     clamp(3rem, 0.6rem + 9.6vw, 12.5rem),
     calc((100vw - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem)) / (var(--hero-longest, 8) * 0.82))
   );
-  line-height: 0.88;
-  letter-spacing: -0.055em;
+  line-height: calc(var(--site-display-leading, 0.95) - 0.04);
+  letter-spacing: calc(var(--site-display-tracking, -0.035em) - 0.02em);
   color: var(--site-ink);
 }
 .fx-kinetic__line {
@@ -794,10 +892,6 @@ html.lenis.lenis-smooth {
 }
 .fx-kinetic__stage {
   overflow: hidden;
-}
-[data-locah-site] .fx-kinetic__line--b .ls-accent {
-  color: var(--site-primary);
-  font-style: italic;
 }
 .fx-kinetic__pill {
   flex: none;
@@ -889,18 +983,17 @@ html.lenis.lenis-smooth {
 }
 [data-locah-site] .fx-depth .ls-hero__headline {
   color: #fff;
-  font-size: clamp(2.8rem, 1.5rem + 5.4vw, 6.6rem);
-  line-height: 0.98;
-  letter-spacing: -0.045em;
-  max-width: 12ch;
+  font-size: calc(clamp(2.9rem, 1.4rem + 5.6vw, 7.25rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
+  max-width: var(--site-display-measure, 11ch);
 }
-[data-locah-site] .fx-depth .ls-hero__eyebrow,
-[data-locah-site] .fx-depth .ls-accent {
+[data-locah-site] .fx-depth .ls-hero__eyebrow {
   color: var(--site-accent);
 }
+/* The accent phrase on its own line; how it is set is the DNA's. */
 [data-locah-site] .fx-depth .ls-accent {
   display: block;
-  font-style: italic;
 }
 .fx-depth__floats {
   position: absolute;
@@ -1047,10 +1140,10 @@ html.lenis.lenis-smooth {
 }
 [data-locah-site] .fx-aurora .ls-hero__headline {
   color: var(--site-ink);
-  font-size: clamp(2.8rem, 1.2rem + 6.4vw, 7.6rem);
-  line-height: 0.96;
-  letter-spacing: -0.05em;
-  max-width: 12ch;
+  font-size: calc(clamp(2.9rem, 1.4rem + 5.6vw, 7.25rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
+  max-width: var(--site-display-measure, 11ch);
 }
 [data-locah-site] .fx-aurora .ls-hero__sub {
   color: color-mix(in srgb, var(--site-ink) 78%, transparent);
@@ -1585,7 +1678,7 @@ html.lenis.lenis-smooth {
 .fx-bento__cell {
   position: relative;
   min-height: 200px;
-  border-radius: calc(var(--site-radius) + 6px);
+  border-radius: calc(var(--site-radius) + 2px);
   overflow: hidden;
   background: var(--site-bg-alt);
   border: 1px solid var(--site-border);
@@ -1606,12 +1699,26 @@ html.lenis.lenis-smooth {
 .fx-bento__cell:hover img {
   transform: scale(1.06);
 }
+/* A photograph is its own edge: no frame line around it. */
+.fx-bento__cell--pic {
+  border: 0;
+}
+/* An eased scrim under the words, and a soft vignette that sits a bright
+   white-plate shot into the page instead of a hard black ramp. */
 .fx-bento__cell--pic::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.05) 60%);
+  background:
+    radial-gradient(140% 100% at 50% 30%, transparent 50%, rgb(0 0 0 / 0.28)),
+    linear-gradient(
+      to top,
+      rgb(0 0 0 / 0.74) 0%,
+      rgb(0 0 0 / 0.5) 20%,
+      rgb(0 0 0 / 0.2) 42%,
+      transparent 64%
+    );
 }
 .fx-bento__copy {
   padding: clamp(1rem, 0.8rem + 1vw, 1.6rem);
@@ -1964,19 +2071,16 @@ html.lenis.lenis-smooth {
 
 /* ============================================================== bands */
 
-/* marquee — the business's words, always moving, faster as you scroll. */
+/* marquee — the business's words, always moving, faster as you scroll. Set
+   in ink on the page's own ground between hairlines; the brand colour is
+   spent only on the marks between the words. */
 .fx-marquee {
   --gap: clamp(1.5rem, 1rem + 2vw, 3.5rem);
   overflow: hidden;
   padding-block: clamp(1.1rem, 0.8rem + 1.2vw, 2rem);
-  background: var(--site-primary);
-  color: var(--site-primary-fg);
-  border-block: 1px solid color-mix(in srgb, var(--site-primary-fg) 12%, transparent);
-}
-.fx-marquee--outline {
   background: var(--site-bg);
   color: var(--site-ink);
-  border-color: var(--site-border);
+  border-block: 1px solid var(--site-border);
 }
 .fx-marquee__track {
   display: flex;
@@ -1997,21 +2101,20 @@ html.lenis.lenis-smooth {
   letter-spacing: -0.03em;
   white-space: nowrap;
 }
+.fx-marquee--outline .fx-marquee__list {
+  font-size: clamp(2.4rem, 1rem + 5vw, 6rem);
+}
 .fx-marquee--outline .fx-marquee__list li:nth-child(even) {
   color: transparent;
   -webkit-text-stroke: 1px var(--site-ink);
 }
 .fx-marquee__list li::after {
-  content: '✦';
+  content: '/';
   display: inline-block;
   margin-left: var(--gap);
-  font-size: 0.5em;
-  vertical-align: middle;
-  color: var(--site-accent);
-}
-.fx-marquee:not(.fx-marquee--outline) .fx-marquee__list li::after {
-  color: inherit;
-  opacity: 0.6;
+  font-size: 0.8em;
+  font-weight: 300;
+  color: var(--site-primary);
 }
 @media (prefers-reduced-motion: no-preference) {
   [data-fx='on'] .fx-marquee__track {
@@ -2031,8 +2134,9 @@ html.lenis.lenis-smooth {
   isolation: isolate;
   overflow: hidden;
   padding: clamp(5rem, 3rem + 10vw, 11rem) clamp(1.25rem, 0.5rem + 3vw, 3rem);
-  background: var(--site-primary);
-  color: var(--site-primary-fg);
+  /* A tonal close, not a slab of the brand colour: the one button carries it. */
+  background: var(--site-bg-alt);
+  color: var(--site-ink);
   text-align: center;
 }
 .fx-cta__bg {
@@ -2057,9 +2161,9 @@ html.lenis.lenis-smooth {
   background: rgba(6, 6, 6, 0.58);
 }
 [data-locah-site] .fx-cta__title {
-  font-size: clamp(2.6rem, 1rem + 7vw, 8.4rem);
-  line-height: 0.92;
-  letter-spacing: -0.05em;
+  font-size: calc(clamp(2.75rem, 1.2rem + 6.4vw, 8rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.95);
+  letter-spacing: var(--site-display-tracking, -0.035em);
   max-width: 14ch;
   margin-inline: auto;
 }
@@ -2076,14 +2180,20 @@ html.lenis.lenis-smooth {
   justify-content: center;
   gap: 0.75rem;
 }
-[data-locah-site] .fx-cta .ls-btn--primary,
-[data-locah-site] .fx-cta .ls-btn--onmedia {
+[data-locah-site] .fx-cta .ls-btn--primary {
   min-height: 60px;
   padding: 0 2.25rem;
-  font-size: 1.05rem;
-  border-radius: 999px;
-  background: var(--site-accent);
-  color: var(--site-accent-fg, #111);
+  border-radius: var(--site-btn-radius, 999px);
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+}
+/* Over a photograph the one button is white: any brand colour fights it. */
+[data-locah-site] .fx-cta--pic .ls-btn--primary {
+  background: #fff;
+  color: #111;
+}
+[data-locah-site] .fx-cta .ls-hero__link {
+  color: inherit;
 }
 
 /* highlights counters — the owner's own numbers, counted up. */

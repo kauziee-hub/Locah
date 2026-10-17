@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { srcSetFor } from './picture'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { addToBasket, fetchPublicOfferings } from '@/lib/checkout-api'
 import type { SiteContact } from './SectionRenderer'
@@ -128,7 +129,7 @@ function Picture({ image, name, className, plate = name }: { image?: Asset; name
     <div className={className}>
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image.url} alt={image.alt_text || name} loading="lazy" />
+        <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || name} loading="lazy" />
       ) : (
         // No picture yet (or one that must be a real photo, like a project):
         // a designed plate in the site's own colours — never a giant initial.
@@ -401,7 +402,7 @@ export function ProductShowcase({
                     >
                       {item.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img className="fx-hlist__thumb" src={item.image.url} alt="" loading="lazy" />
+                        <img className="fx-hlist__thumb" src={item.image.url} srcSet={srcSetFor(item.image.url)} alt="" loading="lazy" />
                       ) : null}
                       <span className="fx-hlist__name">
                         <Diet value={item.diet} t={t} /> {item.name}
@@ -540,7 +541,7 @@ export function ProductShowcase({
                   <div className="fx-chapter__frame" data-parallax="">
                     {category?.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={category.image.url} alt={category.image.alt_text || name} loading="lazy" />
+                      <img src={category.image.url} srcSet={srcSetFor(category.image.url)} alt={category.image.alt_text || name} loading="lazy" />
                     ) : (
                       <span className="ls-picture__plate" aria-hidden="true">
                         <span>{name || title}</span>
@@ -603,7 +604,7 @@ export function ProductShowcase({
               >
                 {item.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image.url} alt={item.image.alt_text || item.name} loading="lazy" />
+                  <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
                 ) : null}
                 <div className="fx-bento__copy">
                   {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
@@ -645,7 +646,7 @@ export function ProductShowcase({
                 <figure className="fx-spot__media" data-reveal="mask">
                   {item.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.image.url} alt={item.image.alt_text || item.name} loading="lazy" />
+                    <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
                   ) : (
                     <span className="ls-picture__plate" aria-hidden="true">
                       <span>{item.name}</span>
@@ -706,7 +707,7 @@ export function ProductShowcase({
                 {item.image ? (
                   <div className="fx-stack__media">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.image.url} alt={item.image.alt_text || item.name} loading="lazy" />
+                    <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
                   </div>
                 ) : (
                   <div className="fx-stack__big" aria-hidden="true">
@@ -1013,7 +1014,7 @@ function MenuBook({
                     {info?.image ? (
                       <div className="fx-menu__banner" data-reveal="mask">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={info.image.url} alt={info.image.alt_text || name} loading="lazy" />
+                        <img src={info.image.url} srcSet={srcSetFor(info.image.url)} alt={info.image.alt_text || name} loading="lazy" />
                       </div>
                     ) : null}
                   </div>
@@ -1027,7 +1028,7 @@ function MenuBook({
                       {item.image ? (
                         <div className="fx-menu__thumb">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={item.image.url} alt={item.image.alt_text || item.name} loading="lazy" />
+                          <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
                         </div>
                       ) : null}
                       <h4 className="fx-menu__name">

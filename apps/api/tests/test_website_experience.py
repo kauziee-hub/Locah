@@ -7,19 +7,23 @@ dishes — and the model's preference wins only inside that set.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
+from platform_core.interview.design_dna import choose_dna
 from platform_core.interview.experience import (
     CATALOGUE_LAYOUTS,
     HERO_SCENES,
     MOTIONS,
     choose_experience,
     content_of,
+    hero_options,
     marquee_words,
     options_for_model,
 )
 from platform_core.interview.models import BusinessBlueprint
+from platform_core.interview.site_composer import fit_to_dna
 from platform_core.validation.website import validate_generation_payload
 
 ASSET = "11111111-1111-4111-8111-111111111111"
@@ -69,6 +73,28 @@ def test_a_ring_or_a_wall_only_where_there_are_pictures_for_it() -> None:
                               sections=_menu(8, pictured=6), expected_pictures=8, seed=str(s)).hero
             for s in range(40)}
     assert many & {"orbit", "plane"}
+
+
+def test_food_opens_on_its_picture_and_floating_frames_are_for_homes_and_work() -> None:
+    c = content_of(_menu(8, pictured=6), expected_pictures=6)
+    assert hero_options("menu_commerce", "snap", c, WARM_FOOD) == ["cinematic_zoom", "kinetic"]
+    for arche in ("menu_commerce", "product_commerce", "membership_fitness", "service_appointment", "b2b_rfq"):
+        for motion in MOTIONS:
+            assert "depth" not in hero_options(arche, motion, c, WARM_FOOD), (arche, motion)
+    assert "depth" in hero_options("real_estate_projects", "calm", c, WARM_FOOD)
+
+
+def test_poster_type_only_in_a_poster_face() -> None:
+    exp = choose_experience(_bp(), archetype="membership_fitness", family="monumental", dims=GYM,
+                            sections=_menu(6, pictured=6), expected_pictures=6, choices={"hero": "kinetic"})
+    assert exp.hero == "kinetic"
+    dna = choose_dna(GYM, family="monumental", archetype="membership_fitness", motion=exp.motion, seed="x")
+    grotesk = fit_to_dna(exp, replace(dna, display="intertight"), pictured=True)
+    assert grotesk.hero == "cinematic_zoom"
+    assert "not a poster face" in grotesk.reasons[-1]
+    assert fit_to_dna(exp, replace(dna, display="bigshoulders"), pictured=True).hero == "kinetic"
+    # With no picture to open, the type is the hero.
+    assert fit_to_dna(exp, replace(dna, display="intertight"), pictured=False).hero == "kinetic"
 
 
 def test_no_photographs_means_type_or_a_living_gradient() -> None:

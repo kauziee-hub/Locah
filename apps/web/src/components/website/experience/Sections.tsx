@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { srcSetFor } from '../picture'
 import type { CSSProperties, ReactNode } from 'react'
 import type { Pic } from './HeroScenes'
 
@@ -88,7 +89,7 @@ export function Statement({
         <div className="fx-statement__bg" aria-hidden="true">
           <div className="fx-statement__bgframe" data-parallax="">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt="" loading="lazy" />
+            <img src={image.url} srcSet={srcSetFor(image.url)} alt="" loading="lazy" />
           </div>
         </div>
         <div className="fx-statement__inner">
@@ -120,7 +121,7 @@ export function Statement({
           </div>
           <figure className="fx-statement__media fx-shape" data-reveal="mask">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt="" loading="lazy" />
+            <img src={image.url} srcSet={srcSetFor(image.url)} alt="" loading="lazy" />
           </figure>
         </div>
       </section>
@@ -148,7 +149,7 @@ export function Statement({
                 {pill && words.length > 6 ? (
                   <span className="fx-statement__pill" aria-hidden="true">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={pill.url} alt="" loading="lazy" />
+                    <img src={pill.url} srcSet={srcSetFor(pill.url)} alt="" loading="lazy" />
                   </span>
                 ) : null}
                 <span className={marked ? 'fx-mark' : undefined}>{word}</span>{' '}
@@ -195,7 +196,7 @@ export function Pillars({
         {pictured ? (
           <figure className="fx-pillars__media fx-shape" data-reveal="mask">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt={image.alt_text || ''} loading="lazy" />
+            <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || ''} loading="lazy" />
           </figure>
         ) : null}
         <div className="fx-pillars__body">
@@ -339,7 +340,7 @@ export function MediaText({
             {pictured.map((row, i) => (
               <figure key={row.title} className="fx-mtext__frame fx-shape" style={{ '--i': i } as Vars}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={row.image!.url} alt="" loading="lazy" />
+                <img src={row.image!.url} srcSet={srcSetFor(row.image!.url)} alt="" loading="lazy" />
               </figure>
             ))}
           </div>
@@ -379,7 +380,7 @@ export function MediaText({
               {row.image ? (
                 <figure className="fx-mtext__media fx-shape" data-reveal="mask">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={row.image.url} alt="" loading="lazy" />
+                  <img src={row.image.url} srcSet={srcSetFor(row.image.url)} alt="" loading="lazy" />
                 </figure>
               ) : null}
               <div className="fx-mtext__copy" data-reveal={i % 2 ? 'left' : 'right'}>
@@ -430,7 +431,7 @@ export function PageHero({
       {image ? (
         <figure className="fx-pagehero__media" data-reveal="mask">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image.url} alt={image.alt_text || ''} fetchPriority="high" />
+          <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || ''} fetchPriority="high" />
         </figure>
       ) : null}
       <div className="fx-pagehero__pattern" aria-hidden="true" />

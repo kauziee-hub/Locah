@@ -26,13 +26,14 @@ from __future__ import annotations
 
 import hashlib
 import re
+from dataclasses import replace
 from typing import Any
 
 from platform_core.interview import motion_director, site_critic, site_pages
 from platform_core.interview.creative_director import CreativeDirection
 from platform_core.interview.catalogue_capture import item_traits
-from platform_core.interview.design_dna import choose_dna
-from platform_core.interview.experience import choose_experience, marquee_words
+from platform_core.interview.design_dna import DesignDna, choose_dna
+from platform_core.interview.experience import Experience, choose_experience, marquee_words
 from platform_core.interview.media_director import picture_for, slug
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, TargetState
 from platform_core.interview.taxonomy import normalise_name
@@ -61,6 +62,37 @@ _PLAN_GROUP = re.compile(r"\b(plans?|memberships?|packages?|pass(es)?|fees|prici
 _GENERIC_TITLE = re.compile(
     r"^\s*(what we do|our services|what we offer|our offerings|(?:available|our) options|"
     r"our products|products|offerings|services|our items|items|browse|explore)\s*$", re.I)
+
+
+# Poster type needs a poster face: condensed, heavy capitals. Set in any other
+# face at nine rems it is only big type, and the opening picture says more.
+_POSTER_FACES = frozenset({"bigshoulders", "archivo", "anton"})
+
+
+def fit_to_dna(experience: Experience, dna: DesignDna, *, pictured: bool) -> Experience:
+    """The experience, checked against the design language it will be drawn in
+    (chosen after it): a poster scene only in a poster face, and a solid band
+    of words for a poster concept."""
+    hero, marquee, reasons = experience.hero, experience.marquee, list(experience.reasons)
+    if hero == "kinetic" and pictured and dna.display not in _POSTER_FACES:
+        hero = "cinematic_zoom"
+        reasons.append(f"hero kinetic → cinematic_zoom: {dna.display} is not a poster face")
+    if marquee and dna.concept == "kinetic_sport":
+        marquee = "band"
+    if (hero, marquee) == (experience.hero, experience.marquee):
+        return experience
+    return replace(experience, hero=hero, marquee=marquee, reasons=tuple(reasons))
+
+
+def _band_after_first_section(sections: list[dict[str, Any]]) -> None:
+    """The moving band follows the page's first section after the hero: glued
+    to the hero it reads as part of a template's first screen."""
+    band = next((s for s in sections if s["section_type_id"] == "marquee"), None)
+    if band is None:
+        return
+    sections.remove(band)
+    hero = next((i for i, s in enumerate(sections) if s["section_type_id"] == "hero"), -1)
+    sections.insert(min(hero + 2, len(sections)), band)
 
 
 def _expected_pictures(bp: BusinessBlueprint) -> int:
@@ -641,11 +673,18 @@ def compose_site(
     # How this site moves and which scenes it is built from (experience.py):
     # chosen from what the page really carries, so a ring only where there
     # are pictures for it and a menu book only where there are dishes.
+    expected = _expected_pictures(bp)
     experience = choose_experience(
         bp, archetype=arche, family=direction.family, dims=dims, sections=sections,
-        expected_pictures=_expected_pictures(bp),
+        expected_pictures=expected,
         choices=(direction.model_choices or {}).get("experience") or None,
     )
+    # This brand's design language (it needs the motion), and the scenes
+    # checked against it.
+    seed = str(bp.business_id)
+    dna = choose_dna(dims, family=direction.family, archetype=arche, motion=experience.motion, seed=seed,
+                     concept=str((direction.model_choices or {}).get("concept") or "") or None)
+    experience = fit_to_dna(experience, dna, pictured=bool(hero_picture) or expected > 0)
     showcases = [s for s in sections if s["section_type_id"] == "product_showcase"]
     # How the range browses before the experience makes a scene of it: kept
     # for the range's own page.
@@ -658,7 +697,8 @@ def compose_site(
             section["layout_variant"] = experience.story
         elif kind == "cta_band" and experience.cta:
             section["layout_variant"] = experience.cta
-        elif kind == "highlights" and experience.motion != "calm":
+        elif kind == "highlights" and experience.motion != "calm" and len(section["content"].get("items") or []) >= 3:
+            # Two numbers set enormous look thin, not proud: they stay a strip.
             section["layout_variant"] = "counters"
     if not showcases and experience.catalogue in {"rail", "bento"}:
         # A range known only by its categories takes the same composition.
@@ -675,19 +715,17 @@ def compose_site(
     if experience.marquee:
         words = marquee_words(sections, list(hero.get("badges") or []))
         if len(words) >= 3:
-            sections.insert(1, {"section_type_id": "marquee", "layout_variant": experience.marquee,
-                                "content": {"items": words}})
+            sections.insert(min(2, len(sections)), {"section_type_id": "marquee",
+                                                    "layout_variant": experience.marquee,
+                                                    "content": {"items": words}})
 
     for section in sections:
         section["is_visible"] = True
 
-    # This brand's design language, and the site's pages: home and, where
-    # there is enough to fill them, the range, the story and the visit.
-    seed = str(bp.business_id)
-    dna = choose_dna(dims, family=direction.family, archetype=arche, motion=experience.motion, seed=seed,
-                     concept=str((direction.model_choices or {}).get("concept") or "") or None)
     # How much of it moves, and where: the concept's budget, spent deliberately.
     motion_notes = motion_director.direct(sections, dna.budget, range_variant=range_variant)
+    # The site's pages: home and, where there is enough to fill them, the
+    # range, the story and the visit.
     first_group = bp.taxonomy.groups[0].name if bp.taxonomy.groups else ""
     site = site_pages.build(
         bp, copy=copy, archetype=arche, name=name, home=sections, trade_label=_trade_nav(bp, arche),
@@ -760,6 +798,8 @@ def compose_site(
         theme["utility_bar"] = utility[:2]
 
     pages = site.pages
+    # The art direction's rhythm may have reordered home's middle around it.
+    _band_after_first_section(pages[0]["sections"])
     pages[0]["seo_description"] = (hero.get("subheadline") or facts.get("description", ""))[:300]
     from platform_core.interview.semantic_design import validate as validate_semantics
 
