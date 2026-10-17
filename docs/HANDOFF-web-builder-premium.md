@@ -38,7 +38,10 @@ Pixabay key appeared in the founder's pasted docs — suggest rotating it.
 | Story/process/detail of a shop/kitchen show its own goods | done | `image_retrieval.goods_subject` |
 | Premium photo lab (real API run, saves picks + audit) | done | `platform_testing/premium_lab.py`, `lab_shots.py` |
 | Real run: bakery 6/10 slots, Cleaver 5/7, gym 2/4, Ishant 1-2/7 (see findings) + before/after shots | done once; Ishant needs a rerun with Unsplash | `.site-lab/photo-report.json`; scratchpad `photos-before/`, `photos-after/` |
-| Design v2 (type, hero legibility, no underline/marker accents) | not started | `design_dna.py`, `site-dna.css`, `site-fonts.ts` |
+| Hero fixes: no underlined accent, plane scrim kept, kinetic on screen, kinetic pill only the hero's own photo | done (`118f9cc`) | `site-families.css`, `site-experience.css`, `HeroScenes.tsx` |
+| Design v2 spec — three design-director reviews with exact changes | done | `docs/design-v2-panel.md` |
+| Design v2 batch 1 — accent system (serif/tone, no marker/underline/outline), font library (Instrument Serif, Inter Tight, Instrument Sans; retire Syne/Unbounded/Space Grotesk outside technical), optical sizes, typeset eyebrows, one button spec per concept, hero sub spacing | in progress (an agent edits the working tree; review `git diff` before committing) | typography review ranks 1-3, 5-7 |
+| Design v2 batch 2 — hero CTA discipline (one primary + quiet link, no tick discs), hero variant policy, cover composition, palette discipline (one saturated hue; tonal utility bar; WhatsApp float in tenant palette), photo grade per concept, cards/radii, section rhythm, closing band, footer | not started | hero review ranks 3-8; colour review ranks 3-8 |
 
 Commits on this branch this session: `b78f7b5` (checkpoint), `f25cc9b`
 (pipeline), `6d3d1a7` (lab, tests, guards).
