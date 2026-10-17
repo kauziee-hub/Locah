@@ -81,6 +81,15 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
             summary["steps"][name[:-5]] = {"ok": shop.get("ok", False),
                                            "failed": [s["step"] for s in shop.get("steps") or [] if not s["ok"]]}
 
+    if (cust.get("capabilities") or {}).get("book"):
+        for flag in ("", "--mobile"):
+            name = "book-mobile.json" if flag else "book.json"
+            if not done(name):
+                _node("tools/certify/book.mjs", str(folder), url, *([flag] if flag else []), timeout=300)
+            booked = json.loads((folder / name).read_text(encoding="utf-8")) if (folder / name).exists() else {}
+            summary["steps"][name[:-5]] = {"ok": booked.get("ok", False),
+                                           "failed": [s["step"] for s in booked.get("steps") or [] if not s["ok"]]}
+
     if render and not done("render.json"):
         code, out = _node("tools/certify/render.mjs", str(folder), url, timeout=1800)
         summary["steps"]["render_log"] = out[-800:]

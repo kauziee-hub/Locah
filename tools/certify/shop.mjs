@@ -102,7 +102,7 @@ try {
     const body = await page.eval('document.body.innerText')
     confirmed = /Order confirmed/.test(body)
     step('the page says Order confirmed', confirmed, body.slice(0, 200))
-    step('with an order number', /Order\s+[A-Z0-9-]{3,}/.test(body), (body.match(/Order\s+[A-Z0-9-]{3,}/) || [''])[0])
+    step('with an order number', /Order\s+[A-Z0-9-]{3,}/i.test(body), (body.match(/Order\s+[A-Z0-9-]{3,}/i) || [''])[0])
     step('and how to pay', /Pay when|Payment received|advance|Finish the payment/i.test(body))
     step('and a way to track it', await page.eval(`[...document.querySelectorAll('a')].some((a) => /track/i.test(a.innerText))`))
     await shot('confirmed')

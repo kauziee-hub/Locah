@@ -138,10 +138,12 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
     offerings = options.get("offerings") or options.get("services") or []
     providers = options.get("providers") or []
     modes = [str(m) for m in options.get("modes") or []]
+    table = options.get("table") if isinstance(options.get("table"), dict) else None
     offering = offerings[0] if offerings else {}
-    mode = str(offering.get("mode") or offering.get("reservation_mode") or (modes[0] if modes else "appointment"))
-    if not flow.step("something bookable", bool(location_id) and (bool(offerings) or bool(modes)),
-                     f"{len(offerings)} offerings, modes {modes}"):
+    mode = "table" if table and not offerings else str(
+        offering.get("mode") or offering.get("reservation_mode") or (modes[0] if modes else "appointment"))
+    if not flow.step("something bookable", bool(location_id) and (bool(offerings) or bool(modes) or bool(table)),
+                     f"{len(offerings)} offerings, modes {modes}, tables {(table or {}).get('tables')}"):
         return flow
     day = _next_weekday()
     if mode in {"rental", "stay", "accommodation"}:
@@ -203,6 +205,21 @@ async def enquiry_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: s
     return flow
 
 
+async def join_by_channel_flow(web: httpx.AsyncClient, slug: str, site: dict[str, Any]) -> Flow:
+    """A plan business that takes no online enquiries (no Leads): each live
+    plan says "Ask to join" on the business's own WhatsApp or phone — the
+    site must have the plans and a channel to send the customer to."""
+    flow = Flow("join")
+    res = await web.get(f"/v1/public/websites/{slug}/plans")
+    plans = (_data(res.json()) or {}).get("plans") or [] if res.status_code < 400 else []
+    if not flow.step("live plans listed", bool(plans), [p.get("title") for p in plans]):
+        return flow
+    contact = ((site.get("business") or {}).get("contact") or {})
+    channel = "whatsapp" if contact.get("whatsapp") else "phone" if contact.get("phone") else ""
+    flow.step("'Ask to join' reaches the business (enquiries off)", bool(channel), channel or "no WhatsApp or phone")
+    return flow
+
+
 async def run(run_dir: Path, site_key: str) -> Customer:
     folder = run_dir / "sites" / site_key
     journey = json.loads((folder / "journey.json").read_text(encoding="utf-8"))
@@ -235,10 +252,12 @@ async def run(run_dir: Path, site_key: str) -> Customer:
             customer.flows.append(await order_flow(web, owner, customer.slug, business_id))
         if caps.get("book"):
             customer.flows.append(await book_flow(web, owner, customer.slug, business_id))
-        if caps.get("join"):
+        if caps.get("join") and caps.get("enquire"):
             plan = next((p for p in setup.get("plans") or [] if p.get("live") and p.get("id")), None)
             customer.flows.append(await enquiry_flow(web, owner, customer.slug, business_id,
                                                      purpose="membership", plan_id=str((plan or {}).get("id") or "")))
+        elif caps.get("join"):
+            customer.flows.append(await join_by_channel_flow(web, customer.slug, site))
         if caps.get("enquire") or caps.get("request_quote"):
             purpose = "quote_request" if caps.get("request_quote") else "enquiry"
             customer.flows.append(await enquiry_flow(web, owner, customer.slug, business_id, purpose=purpose))

@@ -138,7 +138,20 @@ def _duration(title: str, group: str) -> int:
     return 45
 
 
-async def setup_offerings(ws: Workspace, setup: Setup, scenario: Any) -> None:
+def owner_kind(trade: str, name: str, group: str) -> str:
+    """The kind an owner picks for an item they type into the Workspace."""
+    from platform_core.services.business_interview import _row_kind
+
+    if trade == "restaurant":
+        return "menu_item"
+    if trade == "gym":
+        return str(_row_kind("membership_plan", name, group))
+    if trade == "hotel":
+        return str(_row_kind("accommodation", name, group))
+    return "product" if trade == "retail" else "service"
+
+
+async def setup_offerings(ws: Workspace, setup: Setup, scenario: Any, *, track_stock: bool) -> None:
     b = setup.business_id
     # "Set up my items" in the interview: the catalogue the owner described,
     # as private, unpriced drafts the owner then publishes.
@@ -153,12 +166,16 @@ async def setup_offerings(ws: Workspace, setup: Setup, scenario: Any) -> None:
     prices = owner_prices(scenario.key)
     if not rows and prices:
         # Nothing came over from the interview (a minimal owner): they type
-        # their items into the Workspace instead.
+        # their items into the Workspace instead, choosing each item's kind.
+        from platform_testing.certify.owners import CATALOGUES
+
         setup.findings.append("no catalogue items from the interview; typed into the Workspace")
-        for name_key, (amount, _unit, _group) in list(prices.items())[:8]:
+        typed = [(group, name, price) for group, items in CATALOGUES.get(scenario.key, {}).items()
+                 for name, price, _unit, _note in items][:8]
+        for group, name, amount in typed:
             await ws.call("POST", f"/v1/platform/businesses/{b}/products", {
-                "title": name_key.title(), "status": "draft", "visibility": "private", "price_type": "fixed",
-                "price_amount": amount})
+                "title": name, "status": "draft", "visibility": "private", "price_type": "fixed",
+                "price_amount": amount, "offering_type": owner_kind(scenario.kind, name, group)})
         _, data = await ws.call("GET", f"/v1/platform/businesses/{b}/products?limit=200")
         rows = _rows(data)
     for row in rows:
@@ -167,6 +184,9 @@ async def setup_offerings(ws: Workspace, setup: Setup, scenario: Any) -> None:
         price = (float(row["price_amount"]) if row.get("price_amount") else None) or (found[0] if found else None)
         kind = str(row.get("offering_type") or "product")
         patch: dict[str, Any] = {"version": row.get("version"), "status": "active", "visibility": "public"}
+        if track_stock and kind in {"product", "menu_item"}:
+            # An owner who kept Inventory switches on "Track stock" for what they sell.
+            patch["track_inventory"] = True
         if price:
             patch.update({"price_type": "starting_from" if found and "onwards" in found[1] else "fixed",
                           "price_amount": price})
@@ -201,18 +221,26 @@ async def setup_inventory(ws: Workspace, setup: Setup) -> None:
             setup.stocked += int(status < 400)
 
 
-async def setup_bookings(ws: Workspace, setup: Setup, scenario: Any, name: str) -> None:
+async def setup_bookings(ws: Workspace, setup: Setup, scenario: Any, name: str, *, people: bool) -> None:
     b = setup.business_id
     bookable = [o for o in setup.offerings
                 if o["live"] and o["type"] in {"service", "class_session", "accommodation"}]
-    if scenario.kind == "restaurant" or not bookable:
+    if not bookable and scenario.kind != "restaurant":
+        setup.findings.append("bookings kept but nothing bookable: no live service, class or room "
+                              f"({', '.join(sorted({o['type'] for o in setup.offerings})) or 'no items'})")
+    if scenario.kind == "restaurant":
         # A restaurant books tables, not its dishes.
         for n in range(1, 5):
+            # One party at a table at a time (exclusive, capacity 1); a table seats 1-4.
             status, out = await ws.call("POST", f"/v1/platform/businesses/{b}/bookings/resources", {
                 "location_id": setup.location_id, "resource_type": "table", "name": f"Table {n}",
-                "capacity": 4, "min_party_size": 1, "max_party_size": 4})
+                "allocation_mode": "exclusive", "capacity": 1, "min_party_size": 1, "max_party_size": 4})
             if status < 400:
                 setup.resources.append(str(((out or {}).get("data") or {}).get("id") or ""))
+    if not people:
+        # Bookable services, classes and rooms need no named person; people and
+        # their weeks belong to Workforce, which only some owners keep.
+        return
     status, out = await ws.call("POST", f"/v1/platform/businesses/{b}/workforce/members", {
         "display_name": name, "location_ids": [setup.location_id], "primary_location_id": setup.location_id})
     if status >= 400:
@@ -223,7 +251,8 @@ async def setup_bookings(ws: Workspace, setup: Setup, scenario: Any, name: str) 
         await ws.call("POST", f"/v1/platform/businesses/{b}/workforce/members/{member}/availability", {
             "location_id": setup.location_id, "weekday": day, "start_time": OPENS, "end_time": CLOSES})
     for row in bookable:
-        await ws.call("POST", f"/v1/platform/businesses/{b}/workforce/members/{member}/services/{row['id']}")
+        await ws.call("POST", f"/v1/platform/businesses/{b}/workforce/members/{member}/services",
+                      {"offering_id": row["id"]})
 
 
 def _plan_days(name: str) -> int:
@@ -292,7 +321,7 @@ async def run(run_dir: Path, site_key: str) -> Setup:
         primary = next((loc for loc in locations if loc.get("is_primary")), locations[0] if locations else None)
         setup.location_id = str((primary or {}).get("id") or "")
         if "offerings-catalog" in modules:
-            await setup_offerings(ws, setup, scenario)
+            await setup_offerings(ws, setup, scenario, track_stock="inventory" in modules)
         if "orders" in modules:
             # An owner who kept the fulfilment tool delivers; the rest hand over
             # at the counter.
@@ -300,7 +329,8 @@ async def run(run_dir: Path, site_key: str) -> Setup:
         if "inventory" in modules:
             await setup_inventory(ws, setup)
         if "bookings" in modules:
-            await setup_bookings(ws, setup, scenario, scenario.business_name.split()[0])
+            await setup_bookings(ws, setup, scenario, scenario.business_name.split()[0],
+                                 people="workforce" in modules)
         if "memberships" in modules:
             await setup_memberships(ws, setup, scenario)
         if "invoicing" in modules:
