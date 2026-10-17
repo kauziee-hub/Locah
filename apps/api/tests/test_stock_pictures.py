@@ -398,7 +398,7 @@ async def test_a_pixabay_picture_is_copied_into_storage_never_hotlinked(monkeypa
     fetch.assert_awaited_once_with(photo.url)
     asset = session.added[0]
     assert asset.bucket == "media" and asset.source_type == "stock_photo" and asset.status == "ready"
-    assert asset.storage_key == f"stock/{business_id}/{asset.id}.jpg"
+    assert asset.storage_key == f"generated/stock/{business_id}/{asset.id}.jpg"
     assert asset.size_bytes == len(body) and asset.mime_type == "image/jpeg"
     # The asset serves LOCAH's own copy, not Pixabay's link.
     assert asset.public_url != photo.url and "pixabay" not in asset.public_url
@@ -634,3 +634,48 @@ async def test_a_found_cover_is_recorded_on_the_request_and_handed_to_placement(
     ref = next(x for x in bp.media_assets if x.asset_id == request.asset_id)
     assert (ref.role, ref.source) == ("hero", "STOCK_PHOTO")
     placed.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_pixabay_copy_passes_the_real_storage_clients_own_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: the copy was keyed `stock/...`, which put_generated_object refuses
+    (it only writes under `generated/`) — every Pixabay pick would have raised in
+    production. Only the HTTP transport is faked here, never the storage client."""
+    import httpx
+
+    monkeypatch.setattr("platform_core.services.media.AuditService.record", AsyncMock())
+    monkeypatch.setenv("SUPABASE_URL", STORAGE)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "local-service-role")
+    monkeypatch.setattr("platform_core.website.image_retrieval.fetch_full_image",
+                        AsyncMock(return_value=(b"jpeg", "image/jpeg")))
+    posted: list[str] = []
+
+    class _Client:
+        def __init__(self, *a: Any, **k: Any) -> None: ...
+        async def __aenter__(self) -> Any: return self
+        async def __aexit__(self, *e: Any) -> bool: return False
+
+        async def post(self, url: str, **kw: Any) -> httpx.Response:
+            posted.append(url)
+            return httpx.Response(200, json={"Key": "ok"})
+
+    monkeypatch.setattr("platform_core.media.supabase_storage.httpx.AsyncClient", _Client)
+    session = _session()
+    await MediaService.persist_found(session, business_id=uuid4(), actor_id=uuid4(), purpose="website",
+                                     found=pixabay(8), alt_text="x", generated_for="category:x")
+    assert len(posted) == 1 and "/storage/v1/object/media/generated/stock/" in posted[0]
+
+
+@pytest.mark.asyncio
+async def test_storage_being_down_leaves_the_slot_empty_instead_of_failing_the_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("platform_core.services.media.AuditService.record", AsyncMock())
+    monkeypatch.setenv("SUPABASE_URL", STORAGE)
+    monkeypatch.setattr("platform_core.website.image_retrieval.fetch_full_image",
+                        AsyncMock(return_value=(b"jpeg", "image/jpeg")))
+    monkeypatch.setattr("platform_core.media.supabase_storage.put_generated_object",
+                        AsyncMock(side_effect=RuntimeError("Storage refused generated upload (503)")))
+    with pytest.raises(ValidationError):
+        await MediaService.persist_found(_session(), business_id=uuid4(), actor_id=uuid4(), purpose="website",
+                                         found=pixabay(9), alt_text="x", generated_for="category:x")

@@ -526,8 +526,14 @@ class MediaService:
         body, mime_type = fetched
         normalized_mime = mime_type if mime_type in ALLOWED_MIME_TYPES else "image/jpeg"
         asset_id = uuid.uuid4()
-        storage_key = f"stock/{business_id}/{asset_id}.{EXTENSION_BY_MIME.get(normalized_mime, 'jpg')}"
-        await put_generated_object(bucket="media", storage_key=storage_key, body=body, mime_type=normalized_mime)
+        # Platform-written objects live under generated/ (put_generated_object refuses
+        # anything else); a copied stock photograph is one of them.
+        storage_key = f"generated/stock/{business_id}/{asset_id}.{EXTENSION_BY_MIME.get(normalized_mime, 'jpg')}"
+        try:
+            await put_generated_object(bucket="media", storage_key=storage_key, body=body,
+                                       mime_type=normalized_mime)
+        except Exception as exc:  # noqa: BLE001 — storage down or not configured: the slot stays empty
+            raise ValidationError("The chosen picture could not be copied into storage") from exc
         asset = MediaAsset(
             id=asset_id,
             business_id=business_id,
