@@ -64,7 +64,8 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
     if not done("setup.json"):
         await setup_step.run(run_dir, site_key)
     setup = json.loads((folder / "setup.json").read_text(encoding="utf-8"))
-    summary["steps"]["setup"] = {"ok": not setup.get("findings"), "findings": setup.get("findings")}
+    summary["steps"]["setup"] = {"ok": not setup.get("findings"), "findings": setup.get("findings"),
+                                "notes": setup.get("notes")}
 
     if not done("customer.json"):
         await customer_step.run(run_dir, site_key)

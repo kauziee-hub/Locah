@@ -598,7 +598,9 @@ async def _call(provider: VisionProvider, context: dict[str, Any], images: list[
                 schema: dict[str, Any], system: str, model: str | None,
                 timeout_seconds: int) -> dict[str, Any]:
     config: dict[str, Any] = {"purpose": PURPOSE, "system_prompt": system,
-                              "max_output_tokens": 3000, "temperature": 0.1}
+                              # A long page (14 defects) plus the model's reasoning outran 3000
+                              # tokens: the home page came back cut off ("length").
+                              "max_output_tokens": 8000, "temperature": 0.1}
     if model:
         config["model"] = model
     raw = await provider.generate_structured_with_images(

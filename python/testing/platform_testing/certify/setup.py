@@ -57,6 +57,7 @@ class Setup:
     ready: dict[str, Any] = field(default_factory=dict)
     calls: list[dict[str, Any]] = field(default_factory=list)
     findings: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # what the owner had to do by hand; not a failure
 
     def save(self, folder: Path) -> None:
         (folder / "setup.json").write_text(json.dumps(self.__dict__, ensure_ascii=False, indent=1),
@@ -221,10 +222,42 @@ async def setup_inventory(ws: Workspace, setup: Setup) -> None:
             setup.stocked += int(status < 400)
 
 
+BOOKABLE = {"service", "class_session", "accommodation"}
+
+
+async def add_bookable(ws: Workspace, setup: Setup, scenario: Any) -> None:
+    """An owner who kept Bookings and finds nothing to book (a gym whose chat
+    named only plans and packs) adds what people book — a drop-in class, a
+    consultation — in the Workspace, from their own price list."""
+    from platform_testing.certify.owners import CATALOGUES
+
+    b = setup.business_id
+    have = {_norm(o["title"]) for o in setup.offerings}
+    added: list[str] = []
+    for group, items in CATALOGUES.get(scenario.key, {}).items():
+        for name, price, _unit, _note in items:
+            kind = owner_kind(scenario.kind, name, group)
+            if kind not in BOOKABLE or _norm(name) in have:
+                continue
+            status, out = await ws.call("POST", f"/v1/platform/businesses/{b}/products", {
+                "title": name, "status": "active", "visibility": "public", "price_type": "fixed",
+                "price_amount": price, "offering_type": kind,
+                **({"attributes": {"duration_minutes": 60 if kind == "class_session" else _duration(name, group)}}
+                   if kind != "accommodation" else {})})
+            row = (out or {}).get("data") or {}
+            if status < 400 and row.get("id"):
+                setup.offerings.append({"id": str(row["id"]), "title": name, "type": kind, "price": price,
+                                        "live": True})
+                added.append(name)
+    if added:
+        setup.notes.append(f"nothing bookable came over from the interview; the owner added {', '.join(added)}")
+
+
 async def setup_bookings(ws: Workspace, setup: Setup, scenario: Any, name: str, *, people: bool) -> None:
     b = setup.business_id
-    bookable = [o for o in setup.offerings
-                if o["live"] and o["type"] in {"service", "class_session", "accommodation"}]
+    if scenario.kind != "restaurant" and not any(o["live"] and o["type"] in BOOKABLE for o in setup.offerings):
+        await add_bookable(ws, setup, scenario)
+    bookable = [o for o in setup.offerings if o["live"] and o["type"] in BOOKABLE]
     if not bookable and scenario.kind != "restaurant":
         setup.findings.append("bookings kept but nothing bookable: no live service, class or room "
                               f"({', '.join(sorted({o['type'] for o in setup.offerings})) or 'no items'})")
@@ -359,4 +392,4 @@ if __name__ == "__main__":  # pragma: no cover — a tool
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     print(json.dumps({k: out.__dict__[k] for k in ("site_key", "offerings", "plans", "provider_id",
                                                    "resources", "fulfilment", "stocked", "invoicing",
-                                                   "findings")}, indent=1, ensure_ascii=False))
+                                                   "findings", "notes")}, indent=1, ensure_ascii=False))

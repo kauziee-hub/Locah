@@ -60,7 +60,9 @@ try {
   // What to book: the first choice offered (a service, a class, a table, a room).
   const choices = await page.eval(`[...document.querySelectorAll('button[aria-pressed]')].filter((b) => b.offsetParent !== null).map((b) => b.innerText.trim().slice(0, 40))`)
   if (choices.length) await page.eval(`[...document.querySelectorAll('button[aria-pressed]')].find((b) => b.offsetParent !== null).click()`)
-  step('something to book', choices.length > 0, choices.join(' / '))
+  // A business with one thing to book (a restaurant's tables) shows it already chosen.
+  const form = await page.eval(`!!document.querySelector('input[type=date]')`)
+  step('something to book', choices.length > 0 || form, choices.join(' / ') || 'one choice, already chosen')
   await sleep(800)
   await shot('choose')
   const stay = await page.eval(`[...document.querySelectorAll('label')].some((l) => /check-in/i.test(l.innerText))`)
@@ -72,11 +74,28 @@ try {
     await sleep(2500)
     step('dates are open', !(await page.eval(`/not available|no room|fully booked/i.test(document.body.innerText)`)))
   } else {
-    await setValue(page, 'input[type=date]', workday())
-    await sleep(2500)
-    // An open time: the slot buttons that appear for the day.
-    const slots = await page.eval(`[...document.querySelectorAll('button[aria-pressed]')].filter((b) => b.offsetParent !== null && /\\d{1,2}[:.]\\d{2}|am|pm/i.test(b.innerText)).map((b) => b.innerText.trim())`)
-    if (step('open times for the day', slots.length > 0, `${slots.length}`)) {
+    // A customer looks at the next days until one is open (a salon shut on
+    // Mondays, a restaurant serving dinner only some nights).
+    let slots = []
+    let free = false
+    const tried = []
+    for (let ahead = 2; ahead < 10 && !slots.length && !free; ahead++) {
+      const day = workday(ahead)
+      if (tried.includes(day)) continue
+      tried.push(day)
+      await setValue(page, 'input[type=date]', day)
+      await sleep(2500)
+      // An open time: the slot buttons that appear for the day.
+      slots = await page.eval(`[...document.querySelectorAll('button[aria-pressed]')].filter((b) => b.offsetParent !== null && !b.disabled && /\\d{1,2}[:.]\\d{2}|am|pm/i.test(b.innerText)).map((b) => b.innerText.trim())`)
+      // Hours the business never gave: the customer asks for a time instead.
+      free = !slots.length && await page.eval(`!!document.querySelector('input[type=time]')`)
+    }
+    if (free) {
+      await setValue(page, 'input[type=time]', '11:00')
+      await sleep(400)
+    }
+    step('hours known (slots, not a time to ask for)', !free, free ? 'the business gave no opening hours' : '')
+    if (step('open times in the next week', slots.length > 0 || free, `${slots.length} on ${tried[tried.length - 1]} (tried ${tried.join(', ')})`) && slots.length) {
       const pick = slots[Math.floor(slots.length / 2)]
       await page.eval(`[...document.querySelectorAll('button[aria-pressed]')].find((b) => b.innerText.trim() === ${JSON.stringify(pick)}).click()`)
       await sleep(600)
@@ -90,7 +109,8 @@ try {
   await page.eval(`document.querySelector('form button[type=submit]').click()`)
   for (let i = 0; i < 40 && !booked; i++) {
     await sleep(500)
-    booked = await page.eval(`/Confirmed|Request sent|We have your request|You are on the waitlist/.test(document.body.innerText)`)
+    // innerText follows the theme's text-transform ("CONFIRMED").
+    booked = await page.eval(`/Confirmed|Request sent|We have your request|You are on the waitlist/i.test(document.body.innerText)`)
   }
   const body = await page.eval('document.body.innerText')
   step('the page says it is booked', booked, body.slice(0, 240))

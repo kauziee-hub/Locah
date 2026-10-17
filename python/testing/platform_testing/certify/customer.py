@@ -158,14 +158,36 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
                 "party_size": 2 if mode in {"table", "reservation"} else 1}
         if offering.get("id"):
             body["offering_id"] = offering["id"]
-        res = await web.post(f"/v1/public/websites/{slug}/booking/slots", json=body)
-        slots = _data(res.json()) if res.status_code < 400 else {}
-        slots = slots.get("slots", slots) if isinstance(slots, dict) else slots
-        open_slots = [s for s in slots or [] if isinstance(s, dict) and s.get("available", True)]
-        if not flow.step(f"open slots on {day.isoformat()}", bool(open_slots), f"{len(open_slots)} slots"):
-            return flow
-        slot = open_slots[len(open_slots) // 2]
-        starts, ends = str(slot.get("starts_at") or slot.get("start")), str(slot.get("ends_at") or slot.get("end"))
+        # A customer looks at the next days until one is open (a salon is shut
+        # on Mondays; a restaurant serves dinner only some nights).
+        open_slots: list[dict[str, Any]] = []
+        tried: list[str] = []
+        hours_known = True
+        for ahead in range(8):
+            date = (day + timedelta(days=ahead)).isoformat()
+            body["date"] = date
+            res = await web.post(f"/v1/public/websites/{slug}/booking/slots", json=body)
+            found = _data(res.json()) if res.status_code < 400 else {}
+            hours_known = not (isinstance(found, dict) and found.get("hours_known") is False)
+            slots = found.get("slots", found) if isinstance(found, dict) else found
+            open_slots = [s for s in slots or [] if isinstance(s, dict) and not s.get("full")
+                          and s.get("available", True)]
+            tried.append(date)
+            if open_slots or not hours_known:
+                break
+        # A business that never gave its hours shows no slots: the customer
+        # asks for a time instead (the Book page's "Pick a time"). It books,
+        # but a booking business without hours is a defect of its own.
+        flow.step("hours known (slots, not a time to ask for)", hours_known, "the business gave no opening hours")
+        if not hours_known:
+            starts, ends = f"{tried[-1]}T11:00:00+05:30", f"{tried[-1]}T11:30:00+05:30"
+        else:
+            if not flow.step("open slots in the next week", bool(open_slots),
+                             f"{len(open_slots)} slots on {tried[-1]} (tried {', '.join(tried)})"):
+                return flow
+            slot = open_slots[len(open_slots) // 2]
+            starts = str(slot.get("starts_at") or slot.get("start"))
+            ends = str(slot.get("ends_at") or slot.get("end"))
     booking = {"location_id": location_id, "reservation_mode": mode, "starts_at": starts, "ends_at": ends,
                "party_size": 2 if mode in {"table", "reservation"} else 1, "guest": GUEST}
     if offering.get("id"):
@@ -179,8 +201,11 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
     made = made.get("booking", made) if isinstance(made, dict) else {}
     booking_id = str(made.get("id") or "")
     if booking_id:
-        res = await web.get(f"/v1/public/bookings/{booking_id}")
-        flow.step("customer can see the booking", res.status_code < 400, res.text[:300])
+        # The link the customer is given carries the booking's management token.
+        res = await web.get(f"/v1/public/bookings/{booking_id}",
+                            params={"token": str(made.get("management_token") or "")})
+        flow.step("customer can see the booking with the link they were given", res.status_code < 400,
+                  res.text[:300])
         res = await owner.get(f"/v1/platform/businesses/{business_id}/bookings?limit=20")
         rows = _data(res.json()) if res.status_code < 400 else []
         rows = rows.get("items", rows) if isinstance(rows, dict) else rows

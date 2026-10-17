@@ -150,7 +150,10 @@ async def interview(owner: Owner, journey: Journey, business_id: str, script: An
         ready = _ready(data)
         journey.turns.append({"said": text, "reply": _last_reply(data), "next_ask": ask, "ready": ready})
         answer = _answer(script, ask, business_name)
-        if ready and (not ask or ask == "free" or answer is None or answer in said):
+        # A question this owner has no words for still gets an answer once ("not
+        # sure, keep it simple") — a real owner replies rather than leaving —
+        # so the interview can move on to what it has not asked yet.
+        if ready and (not ask or ask == "free" or answer in said or (answer is None and script.fallback in said)):
             break
         if answer is None or answer in said:
             if script.fallback in said and ready:
