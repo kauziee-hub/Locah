@@ -209,6 +209,8 @@ _MEAT = re.compile(
     r"liver|brain|bone|boneless|curry cut|wings?|drumsticks?|meat)\b", re.I)
 _EGG = re.compile(r"\b(?:egg|eggs|omelette|omelet|anda|muttai)\b", re.I)
 _SPICY_MARK = re.compile(r"(?:🌶+|\(\s*(?:spicy|hot|extra hot)\s*\))", re.I)
+_STARTING = re.compile(r"\s+(?:from|starting(?:\s+(?:at|from))?|starts?\s+(?:at|from)|onwards|upwards|@|at)$",
+                       re.I)
 
 
 @dataclass
@@ -258,6 +260,11 @@ def _entry(raw: str) -> ReadItem | None:
     if not p:
         return None
     name = _clean_name(text[: p.start()])
+    # "Cakes from 750", "Global colour starting 3500": the word is about the
+    # price, not part of the name.
+    starting = _STARTING.search(name)
+    if starting:
+        name = _clean_name(name[: starting.start()])
     if not name or len(name) < 2 or not re.search(r"[A-Za-z஀-௿ऀ-ॿ]{2}", name):
         return None
     if len(name.split()) > 7 or _NOT_A_THING.search(name):
@@ -268,6 +275,8 @@ def _entry(raw: str) -> ReadItem | None:
     unit = (p.group("unit") or "").strip(" .")
     unit = re.sub(r"^(?:per|a|for)\s+", "", unit, flags=re.I).strip("/ ")
     unit_text = f"per {unit}" if unit and not re.match(r"\d", unit) else unit
+    if starting and not unit_text:
+        unit_text = "onwards"
     if duration:
         unit_text = duration if not unit_text else f"{unit_text} · {duration}"
     if not diet and _MEAT.search(name):
@@ -419,9 +428,124 @@ def merge_priced(bp: BusinessBlueprint, groups: list[ReadGroup]) -> int:
                 existing.spice = existing.spice or entry.spice
             # A group the owner named but had not listed is now listed.
             target.needs = [n for n in target.needs if n != "varieties"]
+    changed += tidy(bp)
     if changed:
         refresh_needs(bp)
     return changed
+
+
+# A count or a measure is how much, not what: "Appam 2 pcs" is the appam;
+# "from" is about the price.
+_MEASURE = re.compile(r"^(?:\d+|pcs?|pieces?|nos?|g|gm|kg|ml|l|ltr|plates?|from|onwards|starting)$", re.I)
+
+
+def _singular(word: str) -> str:
+    w = word.casefold()
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    if w.endswith(("ches", "shes", "sses", "xes", "zes")):
+        return w[:-2]
+    return w[:-1] if w.endswith("s") and not w.endswith(("ss", "'s")) else w
+
+
+def _words(name: str) -> frozenset[str]:
+    return frozenset(_singular(w) for w in re.findall(r"[A-Za-z']{2,}|\d+", name) if not _MEASURE.match(w))
+
+
+def _amount(price: str) -> str:
+    return re.sub(r"\D", "", (price or "").split("/")[0])
+
+
+def tidy(bp: BusinessBlueprint) -> int:
+    """One item per thing the owner sells. Returns how many names were folded.
+
+    The model's reading of the conversation and the price-list reader can name
+    the same thing twice — "Appam 2 pcs" and "Appam", "Men's haircut" and
+    "Men's", "Boneless chicken" and "Boneless". A name whose words are all in
+    a fuller name folds into it when both carry the same price, or when one
+    has no price and there is only the one fuller name it could be. Different
+    prices are different things ("Chicken biryani" is not "Biryani 220"). An
+    owner's own edit is never folded away.
+    """
+    default = _default_group(bp)
+    for group in bp.taxonomy.groups:
+        for item in group.items:
+            if item.source == "owner_edited":
+                continue
+            starting = _STARTING.search(item.name)
+            if starting and _clean_name(item.name[: starting.start()]):
+                # Read before "from" was known to be about the price.
+                item.name = _clean_name(item.name[: starting.start()])
+                item.unit = item.unit or "onwards"
+            if item.unit.casefold() in {"from", "starting"}:
+                item.unit = "onwards"
+    folded = 0
+    held = {id(g) for g in bp.taxonomy.groups if g.items}
+    # One fold at a time, until none is left: one can make the next possible
+    # ("Colour" waits on the two "Global colour"s becoming one).
+    for _ in range(sum(len(g.items) for g in bp.taxonomy.groups)):
+        found = _fold_once(bp, default)
+        folded += found
+        if not found:
+            break
+    if folded:
+        # A group emptied by folding (the catch-all "Services" that held
+        # "Men's") is not a chapter the owner still has to fill.
+        bp.taxonomy.groups = [g for g in bp.taxonomy.groups if g.items or g.price or id(g) not in held]
+    return folded
+
+
+def _fold_once(bp: BusinessBlueprint, default: str) -> int:
+    order = {id(i): n for n, i in enumerate(i for g in bp.taxonomy.groups for i in g.items)}
+
+    def plainer(other: CatalogueItem, other_group: CatalogueGroup, item: CatalogueItem,
+                group: CatalogueGroup) -> bool:
+        """Same words, two spellings ("Pool villa", "Pool villas"): which stays."""
+        if len(other.name) != len(item.name):
+            return len(other.name) < len(item.name)
+        if (other_group.name == default) != (group.name == default):
+            return bool(group.name == default)  # the owner's own chapter keeps it
+        return order[id(other)] < order[id(item)]
+
+    for group in bp.taxonomy.groups:
+        for item in group.items:
+            if item.source == "owner_edited":
+                continue
+            words = _words(item.name)
+            if not words:
+                continue
+            # Fewer words: the fuller name is the thing.
+            fuller = [(g, i) for g in bp.taxonomy.groups for i in g.items
+                      if i is not item and (words < _words(i.name)
+                                            or (words == _words(i.name) and plainer(i, g, item, group)))]
+            mine = _amount(item.price)
+            same = [(g, i) for g, i in fuller if mine and _amount(i.price) == mine]
+            if not same and len(fuller) == 1 and (not mine or not _amount(fuller[0][1].price)):
+                same = fuller
+            if not same and not mine and len([1 for g, _ in fuller if g is group]) >= 2:
+                # "Haircut", unpriced, beside "Women's haircut" and "Men's
+                # haircut": the chapter's word, covered by what it holds.
+                group.items.remove(item)
+                return 1
+            if len(same) != 1:
+                continue
+            home, keep = same[0]
+            # "Appam 2 pcs" into "Appam": the 2 pcs is how much the price buys.
+            extra = [w for w in item.name.split() if w.casefold() not in keep.name.casefold().split()]
+            measured = bool(extra) and all(_MEASURE.match(w) for w in extra) and not any(
+                w.casefold() in {"from", "onwards", "starting"} for w in extra)
+            measure = " ".join(extra) if measured else ""
+            keep.price, keep.unit = keep.price or item.price, keep.unit or item.unit or measure
+            keep.description = keep.description or item.description
+            keep.diet, keep.spice = keep.diet or item.diet, keep.spice or item.spice
+            keep.tag = keep.tag or item.tag
+            group.items.remove(item)
+            if home.name == default and group.name != default and len(group.items) < 24:
+                # The owner's own chapter beats the catch-all one.
+                home.items.remove(keep)
+                group.items.append(keep)
+            return 1
+    return 0
 
 
 # ------------------------------------------------------------------- traits

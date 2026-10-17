@@ -84,6 +84,47 @@ def test_an_answer_to_send_me_your_menu_lands_in_the_catalogue() -> None:
     assert cc.capture(bp, "We have been doing this for 12 years", ()) == 0
 
 
+def test_from_is_about_the_price_not_the_name() -> None:
+    assert _names(cc.read_priced_list("Cakes from 750, Global colour starting at 3500")) == [
+        ("Cakes", "750", "onwards"), ("Global colour", "3500", "onwards")]
+
+
+def _salon(*groups: CatalogueGroup) -> BusinessBlueprint:
+    bp = _kitchen()
+    bp.taxonomy.groups = list(groups)
+    return bp
+
+
+def test_the_same_thing_named_twice_is_one_item() -> None:
+    # Certification: the model's reading and the price-list reader both named
+    # these — "Appam 2 pcs" and "Appam", "Men's haircut" and "Men's".
+    bp = _salon(
+        CatalogueGroup(name="Hair", items=[
+            CatalogueItem(name="Haircut"), CatalogueItem(name="Colour"),
+            CatalogueItem(name="Women's haircut", price="900"), CatalogueItem(name="Men's haircut", price="450"),
+            CatalogueItem(name="Global colour", price="3500")]),
+        CatalogueGroup(name="Appam & Stew", items=[
+            CatalogueItem(name="Appam 2 pcs", price="50"), CatalogueItem(name="Appam", price="50"),
+            CatalogueItem(name="Chicken stew", price="240")]),
+        CatalogueGroup(name="Services", label_source="ai_suggestion", items=[
+            CatalogueItem(name="Men's", price="450"), CatalogueItem(name="Global colour from", price="3500")]),
+    )
+    assert cc.tidy(bp) >= 5
+    assert [(g.name, [(i.name, i.unit) for i in g.items]) for g in bp.taxonomy.groups] == [
+        ("Hair", [("Women's haircut", ""), ("Men's haircut", ""), ("Global colour", "onwards")]),
+        ("Appam & Stew", [("Appam", "2 pcs"), ("Chicken stew", "")]),
+    ]
+
+
+def test_different_prices_are_different_things_and_owner_edits_stay() -> None:
+    bp = _salon(CatalogueGroup(name="Biryani", items=[
+        CatalogueItem(name="Biryani", price="220"), CatalogueItem(name="Chicken biryani", price="280"),
+        CatalogueItem(name="Mutton", price="300", source="owner_edited"),
+        CatalogueItem(name="Mutton biryani", price="300")]))
+    assert cc.tidy(bp) == 0
+    assert len(bp.taxonomy.groups[0].items) == 4
+
+
 def test_all_veg_except_marks_every_dish_and_bestsellers_are_featured() -> None:
     bp = _kitchen()
     cc.read_traits(bp, "Chicken biryani and egg biryani are non-veg, the rest are veg. "

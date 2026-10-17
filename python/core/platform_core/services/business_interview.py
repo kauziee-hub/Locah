@@ -126,8 +126,9 @@ def _setup_details(bp: BusinessBlueprint) -> list[dict[str, str]]:
     An item named in more than one group ("Curry cut" of chicken and of
     mutton) carries its group, so the two do not collapse into one.
     """
-    from platform_core.interview.catalogue_capture import item_traits
+    from platform_core.interview.catalogue_capture import _words, item_traits, tidy
 
+    tidy(bp)  # "Appam" and "Appam 2 pcs" are one dish
     groups = bp.taxonomy.groups
     if not groups:
         return [{"title": d.name.strip()} for d in bp.website_draft.offerings]
@@ -135,9 +136,17 @@ def _setup_details(bp: BusinessBlueprint) -> list[dict[str, str]]:
     for group in groups:
         for item in group.items:
             counts[item.name.casefold()] = counts.get(item.name.casefold(), 0) + 1
+    listed = [_words(i.name) for g in groups for i in g.items]
     rows: list[dict[str, str]] = []
     for group in groups:
         if not group.items:
+            # A group the owner priced is a thing sold ("Duck roast 420").
+            # An unpriced one, beside items the owner did list, is a chapter
+            # still to fill ("Brass", "Baguettes" beside "Herb baguette") —
+            # a group is not an item. With no items anywhere, the groups are
+            # all there is to set up.
+            if not group.price and listed:
+                continue
             rows.append({"title": group.name, "price": group.price, "unit": group.unit})
             continue
         for item in group.items:
@@ -1091,7 +1100,10 @@ class BusinessInterviewService:
                 if amount:
                     # A price the owner gave (in the chat or typed in the panel).
                     payload.update({"price_type": "fixed", "price_amount": amount})
-                    if row.get("unit"):
+                    if row.get("unit") == "onwards":
+                        # "Global colour from 3500": a starting price, not a unit.
+                        payload["price_type"] = "starting_from"
+                    elif row.get("unit"):
                         payload["unit_of_measure"] = row["unit"][:40]
                 if row.get("description"):
                     payload["description"] = row["description"][:240]
