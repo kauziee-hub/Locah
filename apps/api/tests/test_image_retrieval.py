@@ -746,12 +746,16 @@ async def test_the_tag_library_is_searched_with_the_subject_keywords_the_writer_
 
 @pytest.mark.asyncio
 async def test_a_candidate_whose_own_words_name_nothing_of_the_business_never_reaches_the_judge() -> None:
-    search = FakeSearch([candidate(1, desc="avocado, fruit, green"), candidate(2, desc="hands, spa, massage"),
-                         candidate(3, desc="raw chicken on a board")])
+    search = FakeSearch([candidate(1, desc="avocado, fruit, green", provider="pixabay", w=1280, h=720),
+                         candidate(2, desc="hands, spa, massage", provider="pixabay", w=1280, h=720),
+                         candidate(3, desc="meat, raw, butcher", provider="pixabay", w=1280, h=720),
+                         candidate(4, desc="a close up of a piece of food on a plate")])  # Unsplash alt text
     ai = FakeAI([[good(0)]])
     outcome = await retrieve_for_slot(brief(), provider=ai, search=search)
-    assert outcome.found is not None and outcome.found.photo_id == "3"
-    assert [d["source_description"] for d in ai.judge_calls[0][0]["candidates"]] == ["raw chicken on a board"]
+    assert outcome.found is not None
+    judged = {d["source_description"] for d in ai.judge_calls[0][0]["candidates"]}
+    # Pixabay tags must name the business ("meat" is chicken's kin); Unsplash goes to the judge.
+    assert judged == {"meat, raw, butcher", "a close up of a piece of food on a plate"}
 
 
 @pytest.mark.asyncio

@@ -838,9 +838,28 @@ _GENERIC = frozenset(
     "shop counter local business offering selling every where what".split())
 
 
+# The words a photo library uses for a trade's goods when the owner's own word
+# is more specific ("mutton" is tagged "meat", "prawns" "shrimp").
+_KIN: dict[str, tuple[str, ...]] = {
+    "chicken": ("meat", "poultry", "butcher", "raw"), "mutton": ("meat", "lamb", "goat", "butcher", "raw"),
+    "goat": ("meat", "mutton"), "lamb": ("meat", "mutton"), "beef": ("meat", "steak", "butcher"),
+    "steak": ("meat", "beef", "butcher"), "steaks": ("meat", "beef", "butcher"), "pork": ("meat", "butcher"),
+    "fish": ("seafood", "fishmonger", "fishes"), "seafood": ("fish", "shellfish"),
+    "prawn": ("shrimp", "seafood"), "prawns": ("shrimp", "seafood"), "crab": ("seafood", "shellfish"),
+    "squid": ("seafood", "calamari"), "egg": ("eggs",), "eggs": ("egg",),
+    "bread": ("bakery", "loaf", "baker", "baking"), "breads": ("bakery", "loaf", "baker", "baking"),
+    "cake": ("bakery", "pastry", "dessert"), "cakes": ("bakery", "pastry", "dessert"),
+    "puff": ("pastry", "bakery"), "puffs": ("pastry", "bakery"), "cookie": ("biscuit", "bakery"),
+    "cookies": ("biscuits", "biscuit", "bakery"), "gym": ("fitness", "weights", "barbell", "workout"),
+    "powerlifting": ("barbell", "weights", "deadlift", "squat"), "coffee": ("cafe", "espresso"),
+    "flowers": ("florist", "bouquet"), "salon": ("hair", "hairdresser", "beauty"),
+}
+
+
 def _relevance_words(brief: PhotoBrief) -> set[str]:
     """What a candidate's own words should mention for it to be about this business:
-    the subject and the owner's offerings (with simple singular forms), and the trade."""
+    the subject and the owner's offerings (with simple singular forms and the
+    words a library uses for them), and the trade."""
     words = (_subject_words(brief) | _words(brief.trade) | _words(brief.business)) - _GENERIC
     out = set(words)
     for w in words:
@@ -848,6 +867,8 @@ def _relevance_words(brief: PhotoBrief) -> set[str]:
             out.add(w[:-2])
         if w.endswith("s") and len(w) > 3:
             out.add(w[:-1])
+    for w in list(out):
+        out.update(_KIN.get(w, ()))
     return out
 
 
@@ -1060,9 +1081,12 @@ async def gather_pool(
                 continue
             if not (url_allowed(candidate.image_url) and url_allowed(candidate.preview_url)):
                 continue
-            if relevant and candidate.description and not (_words(candidate.description) & relevant):
-                # Its own words (tags, alt text) name nothing this business is or sells:
-                # an avocado for a butcher never reaches the judge.
+            if (candidate.provider == "pixabay" and relevant and candidate.description
+                    and not (_words(candidate.description) & relevant)):
+                # Pixabay matches tags, and its tags name nothing this business is or
+                # sells: an avocado for a butcher never reaches the judge. (Unsplash's
+                # search is semantic and its alt text generic — "raw meat on a board" —
+                # so its results go to the judge, who looks at the picture itself.)
                 continue
             pool[candidate.key] = candidate
             if len(pool) >= intent.pool:
