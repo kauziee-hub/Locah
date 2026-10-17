@@ -51,6 +51,10 @@ class Journey:
     variant: str
     business_id: str = ""
     slug: str = ""
+    # The local owner identity (never its token): the setup step signs in as
+    # the same owner to make the kept tools operational.
+    owner_id: str = ""
+    owner_email: str = ""
     modules_wanted: list[str] = field(default_factory=list)
     modules_enabled: list[str] = field(default_factory=list)
     modules_failed: dict[str, str] = field(default_factory=dict)
@@ -70,7 +74,7 @@ class Journey:
                                              encoding="utf-8")
 
 
-async def new_owner(label: str) -> tuple[str, str]:
+async def new_owner(label: str) -> tuple[str, str, str]:
     """A fresh local owner identity and its locally signed session token."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -86,7 +90,7 @@ async def new_owner(label: str) -> tuple[str, str]:
     exp = datetime.now(timezone.utc) + timedelta(hours=12)
     token = jwt.encode({"sub": str(user_id), "email": email, "aud": "authenticated", "role": "authenticated",
                         "exp": exp}, SECRET, algorithm="HS256")
-    return str(user_id), token
+    return str(user_id), email, token
 
 
 class Owner:
@@ -292,7 +296,7 @@ async def run(run_dir: Path, scenario_key: str, variant: str) -> Journey:
                       modules_wanted=list(scenario.modules))
     folder = run_dir / "sites" / site_key
     started = time.monotonic()
-    _, token = await new_owner(scenario.key[:12])
+    journey.owner_id, journey.owner_email, token = await new_owner(scenario.key[:12])
     owner = Owner(token)
     try:
         status, out = await owner.call("POST", "/v1/platform/businesses/start", {})
