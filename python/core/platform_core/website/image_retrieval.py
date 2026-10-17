@@ -92,8 +92,10 @@ def _int_env(name: str, default: int, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
-def max_rounds() -> int:
-    return _int_env("IMAGE_MAX_ROUNDS", 2, 1, 6)
+def max_rounds(importance: str = "minor") -> int:
+    """Search/judge rounds before a slot stays empty: a slot that matters (hero,
+    statement, story) gets one more try than a product tile."""
+    return _int_env("IMAGE_MAX_ROUNDS", 3 if importance == "major" else 2, 1, 6)
 
 
 def candidates_per_round(importance: str = "minor") -> int:
@@ -1116,7 +1118,7 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
     history: list[dict[str, Any]] = []
     pages: dict[str, int] = {}
     hint = str(getattr(search, "query_hint", "") or "")
-    for round_number in range(max_rounds()):
+    for round_number in range(max_rounds(brief.importance)):
         tags: dict[str, str] = {}
         try:
             queries, tags = await write_query_plan(provider, brief, rounds_done=round_number, history=history,
