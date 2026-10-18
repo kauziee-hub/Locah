@@ -689,8 +689,12 @@ def compose_site(
         story: dict[str, Any] = {"title": (copy.about_title or "Our story")[:120], "body": story_body[:2000],
                                  "eyebrow": "Our story", "anchor": "story"}
         # A pull quote beside a written story; not the same words twice when the
-        # story IS the owner's own answer.
-        if claims and not (from_owner and _plain_text(claims[0]) in _plain_text(story_body)):
+        # story IS the owner's own answer, nor the title said again in quotes
+        # ("Started by teachers in 2014" over "Started by teachers in 2014, 420
+        # children now." reads as a broken testimonial).
+        title, quote = _plain_text(story["title"]), _plain_text(claims[0]) if claims else ""
+        if claims and not (from_owner and quote in _plain_text(story_body)) \
+                and not (title and (title in quote or quote in title)):
             story["quote"] = claims[0][:200]
         # Its own picture first; else the first category's (the last one was
         # just shown above); the hero only as a last resort.

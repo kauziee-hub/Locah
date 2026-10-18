@@ -526,6 +526,10 @@ def test_the_final_live_details() -> None:
                                               quote="Fresh stock comes every morning. Family run for 8 years.")
     about = sections(compose(bp, WebsiteCopy(about_body="Family run for eight years.")))["about"]["content"]
     assert about["quote"] == "Fresh stock comes every morning."
+    # Never the story's own title said again in quotes (a broken testimonial).
+    about = sections(compose(bp, WebsiteCopy(about_title="Fresh stock comes every morning",
+                                              about_body="Family run for eight years.")))["about"]["content"]
+    assert "quote" not in about
 
 
 def test_a_bakery_that_keeps_things_aside_on_a_call_leads_with_its_food():

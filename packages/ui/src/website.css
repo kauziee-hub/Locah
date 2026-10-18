@@ -439,10 +439,14 @@
   padding: 0;
   display: grid;
   gap: 1.15rem;
+  /* Beside a taller column (the place card) the list keeps to its top: a
+     label never floats far above its value. */
+  align-content: start;
 }
 .ls-contact__item {
   display: grid;
   gap: 0.15rem;
+  align-content: start;
 }
 .ls-contact__label {
   font-size: 0.72rem;
