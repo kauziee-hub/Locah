@@ -291,3 +291,14 @@ def test_a_restaurant_without_its_menu_online_still_gets_a_warm_site():
     p = build_plan(business_type="restaurant", active_modules=set(), capability_rows=rows)
     chosen = select_contextual_template(bp, p)
     assert chosen.personality == "warm" and not chosen.required_modules
+
+
+def test_an_item_line_that_only_says_where_it_is_booked_is_dropped() -> None:
+    # Certification (salon): "Full-head colour, done at the salon." and
+    # "Makeup for your wedding day — book it ahead." read as tautology.
+    from platform_core.interview.website_copy import _PADDING
+
+    assert _PADDING.search("Full-head colour, done at the salon.")
+    assert _PADDING.search("Makeup for your wedding day — book it ahead.")
+    assert not _PADDING.search("Keratin treatment for smoother, frizz-free hair.")
+    assert not _PADDING.search("Crisp sourdough with an open crumb.")

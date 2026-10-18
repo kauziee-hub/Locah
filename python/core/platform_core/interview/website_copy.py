@@ -214,10 +214,20 @@ def govern_copy(copy: WebsiteCopy, bp: BusinessBlueprint) -> WebsiteCopy:
         kept: list[NamedLine] = []
         for entry in getattr(copy, field):
             name, line = _clean(entry.name), _clean(entry.line)
-            if name.casefold() in named and line and _grounded(line, corpus):
+            if name.casefold() in named and line and _grounded(line, corpus) and not _PADDING.search(line):
                 kept.append(NamedLine(name=name, line=line))
         data[field] = kept
     return WebsiteCopy(**data)
+
+
+# A line that only says where or how a thing is booked says nothing about it:
+# "Full-head colour, done at the salon.", "Makeup for your wedding day — book
+# it ahead." (certification: a service list a critic called tautological).
+# Such a line is dropped, not shown.
+_PADDING = re.compile(
+    r"\b(?:done|available|offered|made|served) (?:at|in) (?:the|our) "
+    r"(?:salon|clinic|shop|store|studio|kitchen|bakery|gym|centre|center)\b|"
+    r"\bbook (?:it|a time|ahead|now)\b|\bon appointment\b|\bthat suits you\b", re.I)
 
 
 COPY_PROMPT = (
@@ -248,8 +258,10 @@ COPY_PROMPT = (
     "- catalogue_intro, about_intro, visit_intro: one short opening sentence for the menu/shop, "
     "story and visit pages, from what the owner said.\n"
     "- category_lines / item_lines: for each group and item in brief.catalogue, one short "
-    "appetising line (at most 14 words) about what it is or what it is good for, naming it "
-    "exactly as given; never a price, weight, origin or quality claim the owner did not make.\n"
+    "appetising line (at most 14 words) about what the customer gets — what is in it, what it "
+    "is for or what it is like — naming it exactly as given; never a price, weight, origin or "
+    "quality claim the owner did not make, and never only where or how it is booked ('done at "
+    "the salon', 'book it ahead' say nothing). Leave a line out rather than pad it.\n"
     "NEVER add numbers, years, awards, certifications, guarantees, ratings, reviews, "
     "staff, 'best', 'trusted', 'organic', 'authentic' or any fact the owner did not say. "
     "Never write 'Welcome to', 'your trusted partner', 'quality and excellence', 'one-stop' "
