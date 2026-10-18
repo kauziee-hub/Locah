@@ -623,6 +623,13 @@ async function settle() {
   await sleep(300)
 }
 
+/** The site rendered something a visitor can read: its root and some words. */
+async function hasContent() {
+  return evaluate(
+    `!!document.querySelector('[data-locah-site]') && ((document.body && document.body.innerText) || '').trim().length > 40`
+  ).catch(() => false)
+}
+
 async function fullShot(file, name) {
   const vp = VIEWPORTS[name]
   const docH = await evaluate(`Math.max((document.scrollingElement || document.documentElement).scrollHeight, document.body ? document.body.scrollHeight : 0)`)
@@ -908,8 +915,20 @@ for (let qi = 0; qi < queue.length; qi++) {
     entry.viewports[vpName] = v
     try {
       await setViewport(vpName, { reducedMotion: true })
-      const nav0 = await goto(pg.url)
+      let nav0 = await goto(pg.url)
+      // A dev server compiling or restarting answers 500 or an empty shell for
+      // a while: the page is fetched again before anything is measured, and one
+      // still empty is recorded as blank — a technical failure, never judged
+      // as a design.
+      for (let again = 1; again <= 2 && (nav0.status >= 500 || !(await hasContent())); again++) {
+        await sleep(8000 * again)
+        nav0 = await goto(pg.url)
+      }
       v.status = nav0.status
+      if (nav0.status > 0 && nav0.status < 400 && !(await hasContent())) {
+        v.blank = true
+        entry.blank = true
+      }
       if (nav0.error) v.error = nav0.error
       if (entry.status == null) entry.status = nav0.status
       if (!nav0.status) throw new Error(nav0.error || 'navigation failed')

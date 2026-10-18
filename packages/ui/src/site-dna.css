@@ -301,6 +301,13 @@
   background: none;
   text-decoration: none;
 }
+/* Over a wash or a photograph the half-strength tone turns to mud: there it
+   keeps most of its ink, lifted off the picture by a halo of the ground. */
+[data-locah-site]:is([data-headline='tone'], [data-headline='outline'], [data-headline='plain'])
+    :is(.fx-aurora, .fx-depth, .fx-zoom, .ls-hero--hasimage) .ls-hero__headline .ls-accent {
+  color: color-mix(in srgb, currentColor 80%, transparent);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--site-bg) 55%, transparent);
+}
 /* caps — tight capitals with the accent on its own colour. The scene's white
    twin follows the real headline, so the two halves of a word still meet. */
 [data-locah-site][data-headline='caps'] :is(h1, h2, .ls-hero__headline) {

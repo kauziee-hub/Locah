@@ -324,18 +324,30 @@ _BOOKING_WORDS = {
 }
 
 
+# "people should book", "most customers WhatsApp us", "they usually come at 8":
+# the owner describing their customers to us, not words for the site.
+_ABOUT_CUSTOMERS = re.compile(
+    r"\b(?:people|customers|clients|patients|parents|they|them|most of them)\b(?:\s+\w+)?\s+"
+    r"(?:should|must|need to|have to|usually|mostly|normally|generally|always|often|can|come|book|call|order|"
+    r"message|whatsapp)\b",
+    re.I)
+
+
 def _booking_sentence(bp: BusinessBlueprint, action: str) -> str:
     """The owner's own sentence about how that booking works — or nothing.
 
     Never a summary glued to a quote ("Sign up, Book a trial, WhatsApp Monthly
-    membership is 3500…"): one sentence the owner said, that names it.
+    membership is 3500…"): one sentence the owner said, that names it. Never
+    the owner talking ABOUT their customers ("people should book a table"):
+    on the site that reads as a note left in, not a word to the visitor.
     """
     words = _BOOKING_WORDS.get(action, r"\bbook|\bappointment|\bslot")
     said = [_answer(bp, "bookings.format"), (bp.discovery.get("commerce.action") or TargetState()).quote,
             *(m.text for m in bp.messages if m.role == "user")]
     for text in said:
         for sentence in re.split(r"(?<=[.!?])\s+|\s[—–]\s", " ".join((text or "").split())):
-            if re.search(words, sentence, re.I) and not re.search(r"\d{3,}", sentence) and len(sentence) <= 140:
+            if re.search(words, sentence, re.I) and not re.search(r"\d{3,}", sentence) and len(sentence) <= 140 \
+                    and not _ABOUT_CUSTOMERS.search(sentence):
                 sentence = sentence.strip(" .")
                 return (sentence[0].upper() + sentence[1:] + ".") if sentence else ""
     return ""

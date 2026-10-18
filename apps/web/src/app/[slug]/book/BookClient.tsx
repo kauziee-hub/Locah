@@ -321,7 +321,7 @@ export default function BookClient({
                   </button>
                 ))}
               </div>
-              <label>{t('Date')}
+              <label>{t('Another date')}
                 <input type="date" min={today()} value={day} onChange={(e) => setDay(e.target.value)} required style={field} />
               </label>
               {slots && slots.length ? (
@@ -397,6 +397,20 @@ export default function BookClient({
 
           {picked && !SLOT_MODES.includes(mode) ? <p role="status">{t('Available')} ✓</p> : null}
           {error ? <p role="alert">{error}</p> : null}
+
+          {!readyForContact ? (
+            // Where the booking is confirmed, shown before it can be: the whole
+            // way to a booking is visible from the first screen.
+            <div className="ls-book__last ls-book__pending">
+              <span className="ls-meta">{t('Your name and phone number')}</span>
+              <button type="button" className="ls-btn ls-checkout__place" disabled aria-describedby="book-time-first">
+                {t('Confirm booking')}
+              </button>
+              <small id="book-time-first" className="ls-meta">
+                {timed ? t('Choose a day and a time first.') : t('Choose your dates first.')}
+              </small>
+            </div>
+          ) : null}
 
           {readyForContact ? (
             <>

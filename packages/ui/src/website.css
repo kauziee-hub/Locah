@@ -2666,3 +2666,12 @@
     display: none;
   }
 }
+
+/* The booking form's last step, shown (disabled) before a time is chosen. */
+[data-locah-site] .ls-book__pending {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  padding-top: 1rem;
+  border-top: 1px solid var(--site-border);
+}

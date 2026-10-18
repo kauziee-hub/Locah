@@ -516,6 +516,10 @@ def render_defects(render: Mapping[str, Any], round_no: int) -> list[dict[str, A
             add(slug, "status", "all", "critical", "architecture",
                 f"the {slug} page answers HTTP {status} instead of rendering")
             continue
+        if page.get("blank"):
+            add(slug, "blank", "all", "critical", "architecture",
+                f"the {slug} page rendered blank: no site and no words after three loads")
+            continue
         meta = page.get("meta") if isinstance(page.get("meta"), Mapping) else {}
         assert isinstance(meta, Mapping)
         if not str(page.get("title") or "").strip():
@@ -758,7 +762,7 @@ async def critique_site(
     for page in pages:
         slug = _page_slug(page)
         status = page.get("status")
-        if isinstance(status, int) and not isinstance(status, bool) and status >= 400:
+        if (isinstance(status, int) and not isinstance(status, bool) and status >= 400) or page.get("blank"):
             continue  # a deterministic critical defect says so; nothing to look at
         vps = page.get("viewports") if isinstance(page.get("viewports"), Mapping) else {}
         assert isinstance(vps, Mapping)

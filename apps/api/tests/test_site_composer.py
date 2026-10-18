@@ -617,3 +617,16 @@ def test_the_website_lists_each_thing_once() -> None:
              {"name": "Head massage", "category": "Spa"}]
     names = [i["name"] for i in one_of_each(items)]
     assert names == ["Bridal makeup", "Women's haircut", "Men's haircut", "Facial", "Head massage"]
+
+
+def test_the_owner_talking_about_customers_is_never_site_copy() -> None:
+    from platform_core.interview.site_composer import _ABOUT_CUSTOMERS
+
+    # Said to us about their customers: on the site it reads as a note left in.
+    for said in ("Dinner mainly, people should book a table", "Most customers usually book on WhatsApp",
+                 "They book by phone", "Parents can book a free trial class"):
+        assert _ABOUT_CUSTOMERS.search(said), said
+    # Said to the visitor, or about the business itself: kept.
+    for said in ("Book a table on WhatsApp", "Walk-ins welcome, but book for Friday nights",
+                 "We take bookings by phone", "Book a consultation before you come"):
+        assert not _ABOUT_CUSTOMERS.search(said), said

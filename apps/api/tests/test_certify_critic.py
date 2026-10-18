@@ -187,6 +187,8 @@ def test_tiles_stay_within_limits() -> None:
 def test_render_measurements_become_defects(tmp_path: Path) -> None:
     render = json.loads((_site(tmp_path) / "render.json").read_text(encoding="utf-8"))
     render["pages"].append({"slug": "about", "status": 404, "viewports": {}})
+    # A page the dev server never drew is a technical failure, not a design to judge.
+    render["pages"].append({"slug": "visit", "status": 200, "blank": True, "viewports": {}})
     found = {d["kind"] + (":" + d["id"].rsplit(":", 1)[-1] if d["kind"] == "axe" else ""): d
              for d in critic.render_defects(render, 1)}
     by = {k: (d["page"], d["severity"], d["layer"]) for k, d in found.items()}
@@ -203,6 +205,8 @@ def test_render_measurements_become_defects(tmp_path: Path) -> None:
     assert by["cls"] == ("menu", "major", "responsive")
     assert by["console_errors"] == ("menu", "minor", "architecture")
     assert by["status"] == ("about", "critical", "architecture")
+    assert by["blank"] == ("visit", "critical", "architecture")
+    assert not [k for k, d in found.items() if d["page"] == "visit" and k != "blank"]
     assert not [d for d in found.values() if d["page"] == "home"]
     assert all(d["source"] == "render" for d in found.values())
 
