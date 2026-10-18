@@ -396,6 +396,38 @@ def _line(copy: WebsiteCopy, name: str, kind: str) -> str:
     return next((c.line for c in lines if c.name.casefold() == name.casefold()), "")
 
 
+def one_of_each(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each thing once on the website.
+
+    The catalogue can hold the same name in two groups ("Bridal makeup" under
+    Salon services and under Skin & makeup) and a bare name above its kinds
+    ("Haircut" beside "Women's haircut" and "Men's haircut"): the salon's
+    services read as a padded, repeating list (certification). The priced
+    entry of a repeated name is kept; an unpriced name whose words sit inside
+    two or more priced names is their heading, not a service of its own.
+    """
+    from platform_core.interview.catalogue_capture import _words
+
+    kept: dict[str, dict[str, Any]] = {}
+    out: list[dict[str, Any]] = []
+    for entry in items:
+        key = str(entry.get("name") or "").casefold()
+        first = kept.get(key)
+        if first is None:
+            kept[key] = entry
+            out.append(entry)
+        elif not first.get("price") and entry.get("price"):
+            first.update({k: v for k, v in entry.items() if k != "category" or "category" not in first})
+    named = [(entry, _words(str(entry.get("name") or ""))) for entry in out]
+
+    def heading(entry: dict[str, Any], words: frozenset[str]) -> bool:
+        if entry.get("price") or not words:
+            return False
+        return sum(1 for other, more in named if other is not entry and other.get("price") and words < more) >= 2
+
+    return [entry for entry, words in named if not heading(entry, words)]
+
+
 def browse_sections(
     bp: BusinessBlueprint, direction: CreativeDirection, copy: WebsiteCopy, order_label: str
 ) -> list[dict[str, Any]]:
@@ -451,6 +483,7 @@ def browse_sections(
             # Veg or non-veg, how hot, the owner's own "Bestseller" — as they said it.
             entry.update(item_traits(item))
             items.append(entry)
+    items = one_of_each(items)
     categories: list[dict[str, Any]] = []
     for group in groups:
         card: dict[str, Any] = {"name": group.name[:80]}

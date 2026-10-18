@@ -584,7 +584,8 @@ def test_an_inner_page_does_not_reopen_on_the_home_pictures(monkeypatch: Any) ->
     on_home = _pictures_in(pages["home"]["sections"])
     about = pages["about"]["sections"]
     about_hero = next(s for s in about if s["section_type_id"] == "hero")
-    assert about_hero["content"].get("image_asset_id") not in on_home | {None}
+    # A picture the home page has not shown, or none (set in type) — never a home picture.
+    assert about_hero["content"].get("image_asset_id") not in on_home
     story = next(s for s in about if s["section_type_id"] == "about")
     assert story["content"].get("image_asset_id") == "pic-story"  # the story keeps its own picture
     for section in about:
@@ -600,3 +601,19 @@ def test_shop_now_only_where_the_site_sells_online() -> None:
     assert _browse_cta(bp, "product_commerce", "product", "b2c", can_order=True) == "Shop now"
     assert _browse_cta(bp, "product_commerce", "product", "b2c", can_order=False) == "See the range"
     assert _browse_cta(bp, "menu_commerce", "weighed_product", "b2c", can_order=False) == "See the menu"
+
+
+def test_the_website_lists_each_thing_once() -> None:
+    # Certification (salon): "Haircut" (no price) beside "Women's haircut" and
+    # "Men's haircut", and "Bridal makeup" in two groups.
+    from platform_core.interview.site_composer import one_of_each
+
+    items = [{"name": "Haircut", "category": "Salon services"},
+             {"name": "Bridal makeup", "price": "₹18000", "category": "Salon services"},
+             {"name": "Women's haircut", "price": "₹900", "category": "Haircuts"},
+             {"name": "Men's haircut", "price": "₹450", "category": "Haircuts"},
+             {"name": "Facial", "price": "₹2200", "category": "Skin & makeup"},
+             {"name": "Bridal makeup", "price": "₹18000", "category": "Skin & makeup"},
+             {"name": "Head massage", "category": "Spa"}]
+    names = [i["name"] for i in one_of_each(items)]
+    assert names == ["Bridal makeup", "Women's haircut", "Men's haircut", "Facial", "Head massage"]
