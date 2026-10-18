@@ -46,16 +46,19 @@ class ModuleService:
         entitlements: EntitlementSet,
         correlation_id: str | None = None,
     ) -> BusinessModuleState:
-        if not entitlements.is_entitled(module_id):
-            from platform_core.exceptions import EntitlementRequired
+        # Each refusal for its own reason, most basic first (certification:
+        # an unknown tool and a future one were both "Entitlement required").
+        from platform_core.catalog.modules import MODULES
+        from platform_core.entitlements.module_registry import ModuleRegistry
 
-            raise EntitlementRequired(module_id)
+        info = MODULES.get(module_id)
+        if info is None and ModuleRegistry.get(module_id) is None:
+            from platform_core.exceptions import ResourceNotFound
+
+            raise ResourceNotFound("Tool")
         # Honesty rule (Capability Universe §2 rule 7; Business OS Guide §4): a
         # module whose data, API, permissions and UI are not built yet can be
         # registered and recommended, but never switched on.
-        from platform_core.catalog.modules import MODULES
-
-        info = MODULES.get(module_id)
         if info is not None and (info.future or not info.built):
             from platform_core.exceptions import ValidationError
 
@@ -63,6 +66,10 @@ class ModuleService:
                 f"{info.label} is not available yet",
                 details={"field": "module_id", "module_id": module_id, "reason": "not_built"},
             )
+        if not entitlements.is_entitled(module_id):
+            from platform_core.exceptions import EntitlementRequired
+
+            raise EntitlementRequired(module_id)
 
         result = await session.execute(
             select(BusinessModuleState).where(

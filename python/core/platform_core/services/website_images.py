@@ -229,10 +229,17 @@ class WebsiteImageService:
             prior_brief=prior_brief, exclude=exclude,
         )
         if asset is None:
+            from platform_core.website.image_generation import picture_source
+
+            # Say what really happened: a search that found nothing fitting is
+            # not "image generation" (certification: the stock path said it was).
+            found_not_drawn = picture_source() == "stock"
             return {
                 "ok": False,
-                "reason": "generation_unavailable",
-                "detail": "Image generation did not return a picture. You can upload one instead.",
+                "reason": "no_fitting_photo" if found_not_drawn else "generation_unavailable",
+                "detail": "LOCAH could not find a photograph that fits this section right now. Try again later, "
+                          "or upload your own." if found_not_drawn else
+                          "Image generation did not return a picture. You can upload one instead.",
             }
         if row is not None and list_key is not None and index is not None:
             row["image_asset_id"] = asset["id"]
