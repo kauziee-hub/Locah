@@ -242,6 +242,33 @@ async def test_a_new_critical_defect_reverts_even_a_better_score(tmp_path: Path,
     assert levers["reverted"] == ["s-hero:variant"]
 
 
+async def test_with_two_judgments_before_and_after_are_both_means(
+        tmp_path: Path, levers: dict[str, list[Any]]) -> None:
+    calls: list[str] = []
+    found = iter([{"score": 4.6, "critical": 1},                                   # home as it stands, again
+                  {"score": 5.4, "critical": 1}, {"score": 5.0, "critical": 2},   # the hero fix, twice
+                  {"score": 5.3, "critical": 1}, {"score": 5.1, "critical": 1}])  # the statement fix, twice
+
+    async def score(folder: Path, journey: dict[str, Any], page: str, tag: str, category: str) -> dict[str, Any]:
+        calls.append(tag)
+        return next(found)
+
+    async with repair.Repairer(tmp_path, JOURNEY, "hotel", score=score, levers={"variant"}, judgments=2) as fixer:
+        async def draft() -> dict[str, Any]:
+            return {"pages": [PAGE]}
+
+        fixer.site.draft = draft
+        critique = {"page_weighted": {"home": 5.0}, "defects": [
+            _defect("No photographs of the rooms anywhere", layer="input", severity="critical"),
+            _defect("The hero is flat"), _defect("The statement feels like a template")]}
+        done = await fixer.round(critique, 2)
+    # The baseline is judged once more (5.0 and 4.6 → 4.8), each fix twice.
+    assert calls == ["r2-0-base", "r2-0-0", "r2-0-1", "r2-1-0", "r2-1-1"]
+    assert [(a["section"], a["before"], a["after"], a["readings"], a["critical_after"], a["kept"]) for a in done] == [
+        ("hero", 4.8, 5.2, [5.4, 5.0], 2, False),       # better, but one reading found a new critical defect
+        ("statement", 4.8, 5.2, [5.3, 5.1], 1, True)]   # 5.2 ≥ 4.8 + 0.25
+
+
 # ----------------------------------------------------------------- the critic, between rounds
 
 

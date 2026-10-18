@@ -307,10 +307,16 @@ class Repairer:
     fix already tried (a fix is never tried twice across rounds)."""
 
     def __init__(self, folder: Path, journey: dict[str, Any], category: str, *,
-                 levers: Collection[str] = ALL_LEVERS, score: Scorer = score_page) -> None:
+                 levers: Collection[str] = ALL_LEVERS, score: Scorer = score_page, judgments: int = 1) -> None:
         self.folder, self.journey, self.category = folder, journey, category
         self.levers = frozenset(levers)
         self.score = score
+        # The critic wobbles by more than the keep margin (the same page,
+        # unchanged, moves ±0.3–0.9): with judgments > 1 a fix is judged that
+        # many times, and its page's starting score is judged again once per
+        # round, both read as the mean — before and after measured alike.
+        self.judgments = max(1, judgments)
+        self.rebased: set[str] = set()
         self.tried: set[str] = set()
         self.attempts: list[dict[str, Any]] = []
         self.ws = Workspace(owner_token(journey["owner_id"], journey["owner_email"]),
@@ -343,10 +349,18 @@ class Repairer:
             self._judged = critique
             self.page_scores = {k: float(v) for k, v in (critique.get("page_weighted") or {}).items()}
             self.page_critical = critical_by_page(critique)
+            self.rebased = set()
         page_scores, page_critical = self.page_scores, self.page_critical
         out: list[dict[str, Any]] = []
         for n, fix in enumerate(plan(critique, await self.site.draft(), per_round, self.tried, self.levers)):
             self.tried.add(fix["key"])
+            if self.judgments > 1 and fix["page"] not in self.rebased and fix["page"] in page_scores:
+                # The page as it stands, judged again before anything changes.
+                self.rebased.add(fix["page"])
+                again = await self._judge(fix["page"], f"r{round_no}-{n}-base", self.judgments - 1)
+                if again["score"] is not None:
+                    page_scores[fix["page"]] = round(
+                        (page_scores[fix["page"]] + again["score"] * (self.judgments - 1)) / self.judgments, 3)
             attempt: dict[str, Any] = {
                 "round": round_no, "page": fix["page"], "lever": fix["lever"],
                 "section": fix["section"].get("section_type_id"),
@@ -359,7 +373,7 @@ class Repairer:
                 continue
             before = page_scores.get(fix["page"])
             critical_before = page_critical.get(fix["page"], 0)
-            after = await self.score(self.folder, self.journey, fix["page"], f"r{round_no}-{n}", self.category)
+            after = await self._judge(fix["page"], f"r{round_no}-{n}", self.judgments)
             # Better by the margin, and no NEW critical defect: a page whose
             # critical defects are the owner's (no photographs at all) can still
             # be made better; one the fix broke cannot.
@@ -367,6 +381,8 @@ class Repairer:
                       and after["score"] >= before + KEEP_MARGIN and after["critical"] <= critical_before)
             attempt.update(change=fix.get("change"), before=before, after=after["score"],
                            critical_before=critical_before, critical_after=after["critical"], kept=better)
+            if self.judgments > 1:
+                attempt["readings"] = after["readings"]
             if better:
                 page_scores[fix["page"]] = float(after["score"])
                 page_critical[fix["page"]] = int(after["critical"])
@@ -375,6 +391,17 @@ class Repairer:
             out.append(attempt)
         self.attempts += out
         return out
+
+    async def _judge(self, page: str, tag: str, times: int) -> dict[str, Any]:
+        """The page judged ``times`` times: the mean score, the most critical
+        defects any judgment found, and every reading."""
+        readings = [await self.score(self.folder, self.journey, page, tag if times == 1 else f"{tag}-{i}",
+                                     self.category) for i in range(times)]
+        scores = [float(r["score"]) for r in readings if r.get("score") is not None]
+        criticals = [int(r["critical"]) for r in readings if r.get("critical") is not None]
+        return {"score": round(sum(scores) / len(scores), 3) if len(scores) == times else None,
+                "critical": max(criticals) if len(criticals) == times else None,
+                "readings": [r.get("score") for r in readings]}
 
 
 def critical_by_page(critique: Mapping[str, Any]) -> dict[str, int]:

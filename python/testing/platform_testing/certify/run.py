@@ -1,7 +1,8 @@
 """One business through the whole certification, step by step.
 
     uv run python -m platform_testing.certify.run <run_dir> <scenario> <variant> [--reuse] [--no-critic] [--fast]
-                                                    [--repair [--rounds 3] [--per-round 3] [--no-photos]]
+                                                    [--repair [--rounds 3] [--per-round 3] [--no-photos]
+                                                     [--judgments 1]]
 
   journey   the owner, from "Create Business" to a published site (journey.py)
   setup     the owner's Workspace afternoon: the kept tools made operational
@@ -24,7 +25,9 @@ journey costs model calls and photo quota). --repair starts from the latest
 critique.json (the site as it is now judged) and costs model calls; with
 --no-photos it uses no lever that spends photo quota (no new photograph, no
 rewrite: a scoped rewrite searches photos for every empty slot) — layout
-variants and hiding a repeat only. Run against the certification stack only
+variants and hiding a repeat only. --judgments N judges each candidate fix N
+times and its page's starting score again, keeping on the means (the critic
+wobbles by more than the keep margin). Run against the certification stack only
 (tools/certify/stack).
 """
 
@@ -116,7 +119,7 @@ def rerender(folder: Path, url: str, pages: Collection[str], round_no: int) -> l
 
 
 async def repair_rounds(folder: Path, journey: dict[str, Any], critique: dict[str, Any], category: str, *,
-                        max_rounds: int, per_round: int, levers: Collection[str]) -> dict[str, Any]:
+                        max_rounds: int, per_round: int, levers: Collection[str], judgments: int = 1) -> dict[str, Any]:
     """The bounded repair loop on the live site (repair.until_verdict with the
     real levers, renderer and critic); writes repair.json."""
     from platform_core.website.ai_provider import get_ai_provider
@@ -125,11 +128,11 @@ async def repair_rounds(folder: Path, journey: dict[str, Any], critique: dict[st
 
     provider = get_ai_provider()
     url = str(journey.get("public_url") or "")
-    report: dict[str, Any] = {"site_key": journey.get("site_key"), "levers": sorted(levers),
+    report: dict[str, Any] = {"site_key": journey.get("site_key"), "levers": sorted(levers), "judgments": judgments,
                               "score_before": critique.get("weighted_score"),
                               "page_before": critique.get("page_weighted"), "rounds": [], "attempts": []}
     try:
-        async with repair_step.Repairer(folder, journey, category, levers=levers) as fixer:
+        async with repair_step.Repairer(folder, journey, category, levers=levers, judgments=judgments) as fixer:
             async def fix_round(current: dict[str, Any], round_no: int) -> list[dict[str, Any]]:
                 attempts: list[dict[str, Any]] = await fixer.round(current, round_no, per_round)
                 return attempts
@@ -163,7 +166,7 @@ async def repair_rounds(folder: Path, journey: dict[str, Any], critique: dict[st
 
 async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False, critic: bool = True,
               repair: bool = False, render: bool = True, max_rounds: int = 3, per_round: int = 3,
-              photos: bool = True) -> dict[str, Any]:
+              photos: bool = True, judgments: int = 1) -> dict[str, Any]:
     from platform_testing.certify import customer as customer_step
     from platform_testing.certify import journey as journey_step
     from platform_testing.certify import setup as setup_step
@@ -245,7 +248,8 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
 
             levers = ALL_LEVERS if photos else ALL_LEVERS - PHOTO_QUOTA_LEVERS
             looped = await repair_rounds(folder, journey, crit, found.kind or found.category_key,
-                                         max_rounds=max_rounds, per_round=per_round, levers=levers)
+                                         max_rounds=max_rounds, per_round=per_round, levers=levers,
+                                         judgments=judgments)
             rep = looped["report"]
             summary["steps"]["repair"] = {
                 "ok": "error" not in rep, "error": rep.get("error"), "rounds_used": rep.get("rounds_used"),
@@ -270,7 +274,7 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
 
 def _cli(args: list[str]) -> tuple[list[str], dict[str, Any]]:
     """Positional arguments and options (``--rounds N``, ``--per-round N`` take a value)."""
-    valued = {"--rounds": "max_rounds", "--per-round": "per_round"}
+    valued = {"--rounds": "max_rounds", "--per-round": "per_round", "--judgments": "judgments"}
     positional: list[str] = []
     options: dict[str, Any] = {}
     i = 0
@@ -294,7 +298,8 @@ if __name__ == "__main__":  # pragma: no cover — a tool
     argv, opts = _cli(sys.argv[1:])
     if len(argv) != 3:
         raise SystemExit("usage: python -m platform_testing.certify.run <run_dir> <scenario> <variant> "
-                         "[--reuse] [--no-critic] [--fast] [--repair [--rounds 3] [--per-round 3] [--no-photos]]")
+                         "[--reuse] [--no-critic] [--fast] [--repair [--rounds 3] [--per-round 3] [--no-photos] "
+                         "[--judgments 1]]")
     out = asyncio.run(run(Path(argv[0]), argv[1], argv[2], **opts))
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     print(json.dumps(out, indent=1, ensure_ascii=False)[:6000])
