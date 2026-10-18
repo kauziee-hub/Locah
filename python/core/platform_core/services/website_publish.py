@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -445,9 +446,21 @@ class WebsitePublishService:
                 # WhatsApp and an email, exactly as the owner published them.
                 "contact": contact,
                 # Where and when to find them, from the main location today
-                # (no address for a digital-only business).
-                "place": {k: v for k, v in place.items()
-                          if k != "address" or capabilities.get("show_address", True)},
+                # (no address for a digital-only business) — and the same
+                # location as facts a machine reads: the week's hours, the
+                # address in parts, the map pin and the town people search by
+                # (search-engine markup, page titles, the "open now" line).
+                "place": {**{k: v for k, v in place.items()
+                             if k != "address" or capabilities.get("show_address", True)},
+                          **await _place_facts(
+                              session, business.id, show_address=bool(capabilities.get("show_address", True)),
+                              cover_line=next((str((s.content or {}).get("eyebrow") or "") for p, s in placed
+                                               if (p.slug == "home" or p.page_type == "home")
+                                               and s.section_type_id == "hero"), ""))},
+                # What the business is, in the platform's words for its trade
+                # ("Biryani shop", playbook "restaurant"). A description for
+                # markup and titles only: it never grants or activates anything.
+                "trade": _public_trade(business),
             },
             "capabilities": capabilities,
             # §12.2 "Order on WhatsApp": the business's connected number, when
@@ -463,21 +476,154 @@ class WebsitePublishService:
         }
 
 
-async def _live_place(session: AsyncSession, business_id: uuid.UUID) -> dict[str, str]:
-    """Address, opening hours and phone of the main location, for the contact
-    section. Only what is saved; a field with nothing saved is left out."""
+async def _main_location(session: AsyncSession, business_id: uuid.UUID) -> Any:
+    """The business's main location: the primary one, else the first made."""
     from platform_core.models import BusinessLocation
-    from platform_core.place_words import address_text, hours_text
 
-    loc = (await session.execute(select(BusinessLocation).where(
+    return (await session.execute(select(BusinessLocation).where(
         BusinessLocation.business_id == business_id, BusinessLocation.deleted_at.is_(None),
         BusinessLocation.status == "active").order_by(BusinessLocation.is_primary.desc(),
                                                        BusinessLocation.created_at))).scalars().first()
+
+
+async def _live_place(session: AsyncSession, business_id: uuid.UUID) -> dict[str, str]:
+    """Address, opening hours and phone of the main location, for the contact
+    section. Only what is saved; a field with nothing saved is left out."""
+    from platform_core.place_words import address_text, hours_text
+
+    loc = await _main_location(session, business_id)
     if loc is None:
         return {}
     place = {"address": address_text(loc.address), "hours_summary": hours_text(loc.hours),
              "phone": (loc.phone or "").strip()}
     return {k: v for k, v in place.items() if v}
+
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _text(value: Any) -> str:
+    """A saved address field as text: words, or a number written as one (a PIN)."""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, (str, int)):
+        return str(value).strip()
+    return ""
+
+
+def _saved_week(hours: Any) -> dict[str, list[list[str]]]:
+    """The location's week as saved: {"mon": [["09:00", "13:00"], ...]}. A day
+    with no spans is left out (closed); a span that is not HH:MM–HH:MM is
+    dropped rather than guessed at."""
+    from platform_core.place_words import DAYS
+
+    if not isinstance(hours, dict):
+        return {}
+    week: dict[str, list[list[str]]] = {}
+    for day in DAYS:
+        spans = hours.get(day)
+        if not isinstance(spans, list):
+            continue
+        clean = [[str(span[0]), str(span[1])] for span in spans
+                 if isinstance(span, (list, tuple)) and len(span) == 2
+                 and all(isinstance(t, str) and _HHMM.match(t) for t in span) and span[0] < span[1]]
+        if clean:
+            week[day] = clean
+    return week
+
+
+def _address_parts(address: dict[str, Any]) -> dict[str, str]:
+    """The saved address in the parts a postal address has. The street keeps
+    the owner's own lines; the area is the neighbourhood people say."""
+    def first(*keys: str) -> str:
+        return next((t for t in (_text(address.get(k)) for k in keys) if t), "")
+
+    street = ", ".join(dict.fromkeys(
+        t for t in (_text(address.get(k)) for k in ("line1", "line_1", "line2", "line_2", "street")) if t))
+    parts = {"street": street, "area": first("locality", "area"), "city": first("city", "district"),
+             "state": first("state"), "postal_code": first("postal_code", "pincode", "pin"),
+             "country": first("country")}
+    return {k: v for k, v in parts.items() if v}
+
+
+def _saved_pin(loc: Any, address: dict[str, Any]) -> dict[str, float] | None:
+    """The map pin the owner set — never a town centre standing in for one."""
+    lat, lng = getattr(loc, "latitude", None), getattr(loc, "longitude", None)
+    if lat is None or lng is None:
+        lat, lng = address.get("lat"), address.get("lng")
+    if lat is None or lng is None:
+        return None
+    try:
+        lat_f, lng_f = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat_f <= 90 and -180 <= lng_f <= 180) or (lat_f == 0 and lng_f == 0):
+        return None
+    return {"lat": lat_f, "lng": lng_f}
+
+
+async def _place_facts(
+    session: AsyncSession, business_id: uuid.UUID, *, show_address: bool, cover_line: str = "",
+) -> dict[str, Any]:
+    """The main location as facts a machine can read, beside its words.
+
+    - ``hours``: the saved week (see ``_saved_week``), with the location's
+      ``timezone``; absent when no hours are saved.
+    - ``address_parts`` (street / area / city / state / postal_code / country)
+      and ``geo`` ``{"lat", "lng"}`` when the owner set the pin. Neither for a
+      digital-only business.
+    - ``locality``: the town people search by ("Anna Nagar, Chennai") — the
+      saved address's area and city, else the known town the address or the
+      site's cover line names. The city alone for a digital-only business.
+
+    Only what is saved or said; an unknown stays unknown.
+    """
+    from platform_core.geo.india_places import place_from_address
+    from platform_core.place_words import address_text
+
+    loc = await _main_location(session, business_id)
+    out: dict[str, Any] = {}
+    week = _saved_week(loc.hours if loc is not None else None)
+    if week:
+        out["hours"] = week
+        out["timezone"] = str(loc.timezone or "")
+    address: dict[str, Any] = loc.address if loc is not None and isinstance(loc.address, dict) else {}
+    parts = _address_parts(address)
+    if show_address:
+        if any(parts.get(k) for k in ("street", "area", "city", "postal_code")):
+            out["address_parts"] = parts
+        pin = _saved_pin(loc, address) if loc is not None else None
+        if pin:
+            out["geo"] = pin
+    area, city = parts.get("area", ""), parts.get("city", "")
+    if not city:
+        named = place_from_address(address_text(address)) if address else None
+        if named is not None:
+            area, city = area or (named.locality or ""), named.city
+    locality = ", ".join(x for x in (area if show_address else "", city) if x)
+    if not locality:
+        line = cover_line.strip()
+        named = place_from_address(line) if 0 < len(line) <= 48 else None
+        if named is not None:
+            locality = line if show_address else named.city
+    if locality:
+        out["locality"] = locality
+    return out
+
+
+def _public_trade(business: Any) -> dict[str, str] | None:
+    """The business's trade from the platform taxonomy: category, subcategory,
+    the taxonomy's label for it and its playbook. None when it is not known."""
+    from platform_core.catalog.taxonomy import resolve
+
+    found = resolve(business.category_key, business.subcategory_key)
+    if found is None:
+        return None
+    category, sub = found
+    trade = {"category": category.key, "label": sub.label, "playbook": sub.playbook}
+    if business.subcategory_key and sub.key == business.subcategory_key:
+        trade["subcategory"] = sub.key
+    return trade
 
 
 def _navigation(
