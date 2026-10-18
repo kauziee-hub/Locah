@@ -1120,6 +1120,13 @@ _DOING: tuple[tuple[re.Pattern[str], str, float], ...] = (
     (re.compile(r"\b(?:sell|selling)\b[^.]{0,30}\b(?:plots?|layouts?)\b", re.I), "plots", 0.8),
     (re.compile(r"\b(?:supply|supplies|supplying|manufactur\w*)\b[^.]{0,60}\b(?:factories|industr\w*|"
                 r"plants?|oems?|fasteners|valves|bearings|pipes|fittings)\b", re.I), "industrial_supplier", 0.8),
+    # "Free after-school learning centres for children, scholarships for girls.
+    # Need online donations and volunteers" is an education charity, not a
+    # school (certification: the NGO was asked which fee plans it sells).
+    (re.compile(r"\b(?:free|scholarships?)\b[^.]{0,60}\b(?:learning|tuition|classes|education|study|children|"
+                r"girls|kids)\b[^.]*(?:\.[^.]*){0,2}\b(?:donat\w*|donors?|volunteers?|fundrais\w*)\b", re.I),
+     "education_ngo", 0.82),
+    (re.compile(r"\b(?:donations?|donors?|fundrais\w*|volunteers?)\b", re.I), "charity", 0.74),
 )
 # "…a physiotherapy centre with a small gym": what comes after "with a small"
 # is the lesser part of the business.

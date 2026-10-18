@@ -285,3 +285,24 @@ def test_a_name_that_ends_in_its_trade_still_says_what_kind_of_business_it_is() 
     bp.messages = [Message(role="user", text=gym)]
     _update_category(bp, gym)
     assert bp.category is not None and bp.category.subcategory_key == "gym"
+
+
+def test_an_education_charity_asking_for_donations_and_volunteers_is_not_refused() -> None:
+    # Certification: the NGO's first reply was "That request is not supported
+    # today" (online donations — a built module — and volunteer sign-ups, which
+    # the enquiry form takes), and it was read as a school selling fee plans.
+    from platform_core.catalog.taxonomy import infer_from_text
+    from platform_core.interview.capabilities import _gaps
+    from platform_core.interview.models import CapabilityIntent
+
+    said = ("Thozhi Learning Trust, Kannagi Nagar, Chennai. Free after-school learning centres for children, "
+            "scholarships for girls. Need online donations and volunteer sign-ups.")
+    assert infer_from_text(said) == ("education_ngo", 0.82)
+    assert infer_from_text("After-school tuition for class 10 students in Adyar")[0] != "education_ngo"  # type: ignore[index]
+    bp = BusinessBlueprint(business_id=uuid.uuid4())
+    bp.requested_capabilities = [
+        CapabilityIntent(intent="donations", original_request="Need online donations"),
+        CapabilityIntent(intent="volunteer_signups", original_request="volunteer sign-ups"),
+        CapabilityIntent(intent="live_drone_delivery", original_request="drone delivery"),
+    ]
+    assert [g.normalized_intent for g in _gaps(bp)] == ["live_drone_delivery"]

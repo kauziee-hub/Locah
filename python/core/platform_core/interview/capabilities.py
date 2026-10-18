@@ -50,6 +50,7 @@ INTENTS = {
     "crm": ("customer-relationships", "Keep customer records", r"\b(customer (?:records|list|history)|crm)\b"),
     "loyalty": ("loyalty", "Reward repeat customers", r"\b(loyalty|rewards?|points)\b"),
     "invoicing": ("invoicing", "Send invoices", r"\b(invoices?|invoicing|bills?|gst bill)\b"),
+    "donations": ("donations", "Take donations for your causes", r"\b(donat\w*|donors?|fundrais\w*)\b"),
 }
 
 # The model names what an owner wants in its own words ("pickup", "courier",
@@ -70,6 +71,12 @@ _ALIASES = {
     "membership": "memberships", "subscriptions": "memberships",
     "stock": "inventory", "invoice": "invoicing", "billing": "invoicing",
     "review": "reviews", "whatsapp_messaging": "messaging", "sms": "messaging",
+    # An NGO's "online donations" is the Donations tool, and volunteers sign up
+    # through the enquiry form (both were answered "not supported today").
+    "donate": "donations", "donation": "donations", "online_donations": "donations",
+    "fundraising": "donations", "donor_management": "donations",
+    "volunteer_signups": "enquiries", "volunteer_signup": "enquiries", "volunteers": "enquiries",
+    "volunteer": "enquiries", "volunteering": "enquiries",
 }
 
 
@@ -103,7 +110,7 @@ def canonical_intent(intent: str) -> str:
 LABELS = {module: label for module, label, _ in INTENTS.values()}
 CUSTOMER_FACING = frozenset(
     {"offerings-catalog", "orders", "bookings", "leads", "quotes", "memberships",
-     "payments", "fulfilment", "reviews", "loyalty"}
+     "payments", "fulfilment", "reviews", "loyalty", "donations"}
 )
 
 # Classification aliases extend registry data; never grant tools or branch workflow.
