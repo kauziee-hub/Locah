@@ -538,7 +538,8 @@ def compose_site(
     if booking:
         primary = (copy_cta(bp) or _BOOK_LABEL.get(str(dims.get("primary_action", "")), "Book now"), "/book")
     elif browse:
-        default = _browse_cta(bp, arche, str(dims.get("offering", "")), str(dims.get("audience", "")))
+        default = _browse_cta(bp, arche, str(dims.get("offering", "")), str(dims.get("audience", "")),
+                              can_order="orders" in active_modules)
         label = copy_cta(bp)
         # A label that names a channel ("Order on WhatsApp") must not scroll to
         # the menu: that button is the browse one; Call and WhatsApp sit beside it.
@@ -865,15 +866,20 @@ _BOOK_LABEL = {
 }
 
 
-def _browse_cta(bp: BusinessBlueprint, arche: str, offering: str, audience: str) -> str:
-    """The button that takes a visitor to what the business offers, in its own terms."""
+def _browse_cta(bp: BusinessBlueprint, arche: str, offering: str, audience: str, *, can_order: bool = True) -> str:
+    """The button that takes a visitor to what the business offers, in its own terms.
+
+    "Shop now" only where the site sells online: a bakery that takes orders
+    by call or WhatsApp invites a visitor to see its range or menu."""
     from platform_core.interview.playbooks import playbook_for
 
     label = playbook_for(bp).browse_label
+    look = "See the menu" if arche == "menu_commerce" else "See the range"
+    shop = "Shop now" if can_order else look
     by_offering = {
-        "menu": "See the menu", "weighed_product": "Shop now", "plan": "See plans", "property": "View projects",
+        "menu": "See the menu", "weighed_product": shop, "plan": "See plans", "property": "View projects",
         "portfolio": "See the work", "stay": "See the rooms", "b2b_catalogue": "See the range",
-        "product": "See the range" if audience == "b2b" else "Shop now",
+        "product": "See the range" if audience == "b2b" else shop,
     }
     if offering in by_offering:
         return by_offering[offering]

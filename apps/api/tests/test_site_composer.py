@@ -590,3 +590,13 @@ def test_an_inner_page_does_not_reopen_on_the_home_pictures(monkeypatch: Any) ->
     for section in about:
         if section["section_type_id"] == "media_text":
             assert not {r.get("image_asset_id") for r in section["content"]["items"]} & on_home
+
+
+def test_shop_now_only_where_the_site_sells_online() -> None:
+    # Certification: a bakery taking orders by call and WhatsApp had "Shop now".
+    from platform_core.interview.site_composer import _browse_cta
+
+    bp = meat()
+    assert _browse_cta(bp, "product_commerce", "product", "b2c", can_order=True) == "Shop now"
+    assert _browse_cta(bp, "product_commerce", "product", "b2c", can_order=False) == "See the range"
+    assert _browse_cta(bp, "menu_commerce", "weighed_product", "b2c", can_order=False) == "See the menu"
