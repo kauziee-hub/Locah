@@ -249,6 +249,30 @@ _SOLD_AS_PASS = re.compile(r"\b(packs?|pass(es)?|membership|monthly|quarterly|an
 _CLASS_WORDS = re.compile(r"\b(class(es)?|courses?|workshops?|batch(es)?)\b", re.I)
 
 
+# A trade that sells by weight (meat, fish, produce): its goods priced per kg or
+# litre are weighed products — packs to choose, stock in grams — or the counter
+# cannot weigh them in and an order for "1" takes one unit of stock.
+_PER_WEIGHT = re.compile(r"\b(kg|kgs|kilo\w*|g|gm|gms|grams?)\b", re.I)
+_PER_VOLUME = re.compile(r"\b(l|ltr|ltrs|litres?|liters?|ml)\b", re.I)
+_HALF_MINIMUM = re.compile(r"\b(half|1/2|0\.5|500\s*g)\b[^.]{0,20}\b(kg|kilo|minimum|upwards|onwards)", re.I)
+
+
+def _weighed_payload(unit: str, said: str) -> dict[str, Any] | None:
+    """Kind fields for an item of a sold-by-weight trade, or None when its unit
+    says it is counted (per piece, per dozen)."""
+    if unit and not (_PER_WEIGHT.search(unit) or _PER_VOLUME.search(unit)):
+        return None
+    if _PER_VOLUME.search(unit):
+        packs = [{"label": "500 ml", "qty": 500}, {"label": "1 litre", "qty": 1000}]
+        return {"offering_type": "weighed_product", "stock_unit": "ml", "unit_of_measure": "per litre",
+                "attributes": {"price_per": "litre"}, "sell_units": packs}
+    packs = [{"label": "500 g", "qty": 500}, {"label": "1 kg", "qty": 1000}]
+    if not _HALF_MINIMUM.search(said):
+        packs.insert(0, {"label": "250 g", "qty": 250})
+    return {"offering_type": "weighed_product", "stock_unit": "g", "unit_of_measure": "per kg",
+            "attributes": {"price_per": "kg"}, "sell_units": packs}
+
+
 def _row_kind(trade_kind: str, title: str, chapter: str) -> str:
     """The catalogue kind for one item of a trade whose kind is ``trade_kind``."""
     if trade_kind not in {"membership_plan", "accommodation"}:
@@ -1050,7 +1074,7 @@ class BusinessInterviewService:
         actor_id: UUID,
         correlation_id: str,
     ) -> None:
-        """Apply an explicitly accepted proposal as private, unpriced drafts.
+        """Apply an explicitly accepted proposal as drafts (hidden until made live).
 
         Names were checked against the owner's words when added to the Website
         draft. Website descriptions are marketing copy, not operational facts,
@@ -1086,6 +1110,10 @@ class BusinessInterviewService:
 
         # Read only when a row has a chapter to file under.
         categories: dict[str, Any] | None = None
+        # "half kg minimum", "by the kg" — how the owner said they sell it.
+        said_units = " ".join(filter(None, [
+            (bp.discovery.get("offerings.units") or TargetState()).quote,
+            (bp.discovery.get("offerings.structure") or TargetState()).quote]))
         for row in _setup_details(bp):
             name = row.get("title", "")
             if not name or name.casefold() in applied:
@@ -1093,9 +1121,15 @@ class BusinessInterviewService:
             if name.casefold() not in known:
                 row_kind = _row_kind(kind, name, row.get("category", "")) if kind else ""
                 payload: dict[str, Any] = {
-                    "title": name, "status": "draft", "visibility": "private", "price_type": "enquiry",
+                    # Hidden by being a draft. Public, like every other way an
+                    # item is added: "Live — shown to customers" in the editor
+                    # changes the status only, and a live item left private
+                    # showed nobody anything (owner lab: a meat shop's eight live
+                    # items, and no ordering on its website).
+                    "title": name, "status": "draft", "visibility": "public", "price_type": "enquiry",
                     **({"offering_type": row_kind} if row_kind else {}),
                 }
+                weighed = _weighed_payload(row.get("unit", ""), said_units) if offer_kind == "weighed_product" else None
                 amount = _first_amount(row.get("price", ""))
                 if amount:
                     # A price the owner gave (in the chat or typed in the panel).
@@ -1105,6 +1139,11 @@ class BusinessInterviewService:
                         payload["price_type"] = "starting_from"
                     elif row.get("unit"):
                         payload["unit_of_measure"] = row["unit"][:40]
+                if weighed:
+                    # Priced per kg/litre, sold in packs, counted in grams/ml.
+                    payload.update(weighed)
+                    if payload.get("price_type") == "starting_from":
+                        payload["price_type"] = "fixed"
                 if row.get("description"):
                     payload["description"] = row["description"][:240]
                 # The menu's own chapters become the catalogue's categories.
@@ -1129,7 +1168,7 @@ class BusinessInterviewService:
                 if (offer_kind in {"service", "class"} or row_kind in {"service", "class_session"}) and minutes:
                     attributes["duration_minutes"] = int(minutes.group(1))
                 if attributes:
-                    payload["attributes"] = attributes
+                    payload["attributes"] = {**payload.get("attributes", {}), **attributes}
                 await OfferingService.create_offering(
                     session,
                     business_id=business.id,

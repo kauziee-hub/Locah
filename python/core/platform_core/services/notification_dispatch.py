@@ -72,6 +72,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         resource_type="order",
         resource_id_key="order_id",
         location_id_key="location_id",
+        body_keys=("after.order_number", "after.total_amount", "after.items"),
     ),
     "order.cancelled": NotificationRule(
         notification_type="order.cancelled",
@@ -81,6 +82,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         resource_type="order",
         resource_id_key="order_id",
         location_id_key="location_id",
+        body_keys=("after.order_number", "after.total_amount", "after.items"),
     ),
     "order.completed": NotificationRule(
         notification_type="order.completed",
@@ -89,6 +91,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         resource_type="order",
         resource_id_key="order_id",
         location_id_key="location_id",
+        body_keys=("after.order_number", "after.total_amount", "after.items"),
     ),
     # --- Bookings -------------------------------------------------------
     "booking.created": NotificationRule(
@@ -197,6 +200,27 @@ def _dig(payload: dict[str, Any], path: str) -> Any:
     return current
 
 
+def _body(rule: NotificationRule, payload: dict[str, Any]) -> str | None:
+    """The line under the title that says which one: "ORD-754794E1 · ₹320 ·
+    2 items" — read from the event (a "New order placed" with nothing else
+    made the owner open each to find out)."""
+    parts: list[str] = []
+    for key in rule.body_keys:
+        value = _dig(payload, key)
+        if value in (None, "", []):
+            continue
+        if key.endswith("_amount"):
+            try:
+                parts.append(f"₹{float(value):,.0f}")
+            except (TypeError, ValueError):
+                continue
+        elif isinstance(value, list):
+            parts.append(f"{len(value)} item{'' if len(value) == 1 else 's'}")
+        else:
+            parts.append(str(value))
+    return " · ".join(parts)[:300] or None
+
+
 def _as_uuid(value: Any) -> uuid.UUID | None:
     if isinstance(value, uuid.UUID):
         return value
@@ -247,6 +271,7 @@ class NotificationDispatcher:
             "business_id": business_id,
             "notification_type": rule.notification_type,
             "title": rule.title,
+            "body": _body(rule, payload),
             "category": rule.category,
             "severity": rule.severity,
             "resource_type": rule.resource_type,

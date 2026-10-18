@@ -163,9 +163,11 @@ async def test_setup_offerings_creates_private_unpriced_drafts_only_after_approv
     assert [call.kwargs["payload"]["title"] for call in create.await_args_list] == [
         "Chicken", "Mutton"
     ]
+    # Drafts: hidden until the owner makes each live. Public like any other
+    # item, so "Live — shown to customers" really shows them.
     assert all(
         call.kwargs["payload"]["status"] == "draft"
-        and call.kwargs["payload"]["visibility"] == "private"
+        and call.kwargs["payload"]["visibility"] == "public"
         and "price_amount" not in call.kwargs["payload"]
         for call in create.await_args_list
     )
@@ -222,7 +224,42 @@ async def test_setup_offerings_files_each_trade_under_a_kind_that_can_be_booked_
         kinds[(category, sub)] = create.await_args_list[0].kwargs["payload"].get("offering_type")
     assert kinds[("fitness", "gym")] == "membership_plan"
     assert kinds[("beauty", "makeup_artist")] == "service"
-    assert kinds[("fresh_grocery", "meat_shop")] in {"product", None}
+    # A meat shop sells by weight: packs to choose, stock in grams.
+    assert kinds[("fresh_grocery", "meat_shop")] == "weighed_product"
+
+
+@pytest.mark.asyncio
+async def test_a_meat_shop_s_per_kg_items_are_weighed_with_packs_and_its_counted_items_are_not(monkeypatch):
+    # Owner lab, meat shop: "Chicken curry cut 240/kg" became a product counted
+    # in pieces — the counter by weight could not weigh it in, and an order for
+    # "1" would take one piece of stock.
+    from platform_core.interview.models import CatalogueGroup, CatalogueItem, CategorySeed
+
+    bp = blueprint()
+    bp.category = CategorySeed(category_key="fresh_grocery", subcategory_key="meat_shop")
+    bp.completion_state.status = "built"
+    bp.completion_state.confirmed = True
+    bp.approved_modules = ["offerings-catalog"]
+    bp.discovery["offerings.units"] = TargetState(status="answered", quote="By weight - half a kg upwards.")
+    bp.taxonomy.groups = [CatalogueGroup(name="Chicken", items=[
+        CatalogueItem(name="Chicken curry cut", price="240", unit="per kg"),
+        CatalogueItem(name="Country eggs", price="8", unit="per piece")])]
+    bp.website_draft.offerings = [OfferingDraft(name="Chicken curry cut"), OfferingDraft(name="Country eggs")]
+    create = AsyncMock()
+    monkeypatch.setattr(OfferingService, "list_for_business", AsyncMock(return_value=[]))
+    monkeypatch.setattr(OfferingService, "create_offering", create)
+    import platform_core.services.category as category_module
+    monkeypatch.setattr(category_module.CategoryService, "list_for_business", AsyncMock(return_value=[]))
+    monkeypatch.setattr(category_module.CategoryService, "create_category", AsyncMock(return_value=MagicMock(id=uuid4())))
+    await Service.setup_offerings(AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(),
+                                  correlation_id=str(uuid4()))
+    made = {c.kwargs["payload"]["title"]: c.kwargs["payload"] for c in create.await_args_list}
+    curry = made["Chicken curry cut"]
+    assert curry["offering_type"] == "weighed_product" and curry["stock_unit"] == "g"
+    assert curry["attributes"]["price_per"] == "kg" and str(curry["price_amount"]) == "240"
+    # "half a kg upwards": no 250 g pack.
+    assert [p["label"] for p in curry["sell_units"]] == ["500 g", "1 kg"]
+    assert made["Country eggs"]["offering_type"] != "weighed_product"
 
 
 def test_a_plan_or_stay_trade_files_what_is_booked_one_at_a_time_as_bookable():
@@ -278,7 +315,7 @@ async def test_setup_offerings_needs_explicit_module_choice(monkeypatch):
 @pytest.mark.asyncio
 async def test_switching_the_catalogue_on_later_is_also_the_owners_choice(monkeypatch):
     """Not picked during onboarding, switched on in the Workspace afterwards:
-    the owner may still bring in what they named, as private drafts."""
+    the owner may still bring in what they named, as drafts."""
     bp = blueprint()
     bp.completion_state.status = "built"
     bp.completion_state.confirmed = True
@@ -293,7 +330,7 @@ async def test_switching_the_catalogue_on_later_is_also_the_owners_choice(monkey
         AsyncMock(), Business(id=bp.business_id), bp, actor_id=uuid4(), correlation_id=str(uuid4()),
     )
     assert [c.kwargs["payload"]["title"] for c in create.await_args_list] == ["Haircut", "Facial"]
-    assert all(c.kwargs["payload"]["visibility"] == "private" for c in create.await_args_list)
+    assert all(c.kwargs["payload"]["status"] == "draft" for c in create.await_args_list)
 
 
 @pytest.mark.asyncio

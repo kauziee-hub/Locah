@@ -433,3 +433,15 @@ def test_notifications_reachable_without_any_optional_module(
         )
         assert counted.status_code == 200, counted.text
         assert "unread_count" in counted.json()["data"]
+
+
+def test_an_order_notification_says_which_order() -> None:
+    """Owner lab, meat shop: "New order placed" and nothing else — the owner had
+    to open each one to know which order it was."""
+    from platform_core.services.notification_dispatch import NOTIFICATION_RULES, _body
+
+    payload = {"order_id": "o-1", "after": {"order_number": "ORD-754794E1", "total_amount": 320,
+                                            "items": [{"title": "Chicken boneless — 500 g"},
+                                                      {"title": "Chicken curry cut — 500 g"}]}}
+    assert _body(NOTIFICATION_RULES["order.created"], payload) == "ORD-754794E1 · ₹320 · 2 items"
+    assert _body(NOTIFICATION_RULES["order.created"], {"after": {}}) is None

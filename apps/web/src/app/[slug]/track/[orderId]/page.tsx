@@ -107,7 +107,8 @@ export default async function TrackOrderPage({
             {job ? (
               <>
                 <dt>{modeWords(t)[job.mode] ?? job.mode}</dt>
-                <dd>{jobWords(t)[job.customer_status] ?? job.customer_status}</dd>
+                {/* A pickup that is done was collected, not delivered. */}
+                <dd>{job.mode === 'pickup' && job.customer_status === 'delivered' ? t('Collected') : jobWords(t)[job.customer_status] ?? job.customer_status}</dd>
               </>
             ) : null}
           </dl>

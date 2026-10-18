@@ -78,6 +78,9 @@ export function OfferingEditor({
       title: title.trim(),
       description: description.trim() || null,
       status,
+      // "Live — shown to customers" means shown: an item made live is public
+      // (drafts from the conversation used to stay private and invisible).
+      ...(status === 'active' ? { visibility: 'public' } : {}),
       attributes,
       hsn_sac: taxCode.trim() || null,
       tax_rate: taxRate === '' ? null : Number(taxRate),
