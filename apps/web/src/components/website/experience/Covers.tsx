@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { Words } from '@/lib/site-words'
 import { srcSetFor } from '../picture'
 import { GlLiving } from './gl/GlLiving'
-import { splitHeadline, type HeroParts, type Pic } from './HeroScenes'
+import { balanceWords, splitHeadline, type HeroParts, type Pic } from './HeroScenes'
 
 /**
  * Covers: first screens composed like a designer's cover, each with its own
@@ -142,7 +142,13 @@ export function Cover({
 
   if (variant === 'window') {
     const headline = parts.headline.trim()
-    const [first, second] = splitHeadline(headline, parts.accent)
+    let [first, second] = splitHeadline(headline, parts.accent)
+    // One word over the picture and the rest below it reads as a broken page
+    // ("Kansa," | photo | "brass, copper and clay for your kitchen"): the
+    // window's two lines are balanced by words, the accent marked where it falls.
+    if (second && Math.min(first.length, second.length) < Math.max(first.length, second.length) * 0.45) {
+      ;[first, second] = balanceWords(headline)
+    }
     const secondAt = second ? headline.indexOf(second, Math.max(0, first.length - 1)) : -1
     const accentAt = parts.accent ? headline.indexOf(parts.accent.trim()) : -1
     const accentEnd = accentAt >= 0 ? accentAt + parts.accent.trim().length : -1

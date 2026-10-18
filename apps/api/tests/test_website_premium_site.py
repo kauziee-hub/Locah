@@ -390,6 +390,12 @@ def test_a_statement_never_quotes_an_owner_in_another_language_as_english() -> N
                                               quote="Our recipes are from my grandmother's Karaikudi kitchen.")
     said = statement_for(bp, WebsiteCopy(), "")
     assert said and said["highlight"] and said["highlight"] in said["text"]
+    # Never the hero's own subline set again at display size.
+    hero = ["Recipes from my grandmother's Karaikudi kitchen", "Our recipes come from my grandmother's kitchen."]
+    assert statement_for(bp, WebsiteCopy(), "", avoid=hero) is None
+    told = statement_for(bp, WebsiteCopy(statement="Our recipes are from my grandmother's Karaikudi kitchen."), "",
+                         avoid=hero)
+    assert told is None
 
 
 def test_a_gym_shows_its_plans_once() -> None:

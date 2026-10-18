@@ -128,13 +128,31 @@ _SMALL = frozenset("a an the of to in on at for and or but is are was we our my 
                    "from by as be every all".split())
 
 
-def statement_for(bp: BusinessBlueprint, copy: WebsiteCopy, story_body: str) -> dict[str, str] | None:
-    """One sentence as a centrepiece: governed copy, else the owner's own line."""
-    text = copy.statement
-    highlight = copy.statement_highlight
+def _says_again(text: str, said: list[str]) -> bool:
+    """Most of ``text``'s words were already said in one of ``said``."""
+    words = {w for w in re.findall(r"[a-z]+", text.casefold()) if w not in _SMALL}
+    if not words:
+        return False
+    for other in said:
+        theirs = {w for w in re.findall(r"[a-z]+", other.casefold()) if w not in _SMALL}
+        if theirs and len(words & theirs) >= 0.7 * len(words):
+            return True
+    return False
+
+
+def statement_for(bp: BusinessBlueprint, copy: WebsiteCopy, story_body: str,
+                  avoid: list[str] | None = None) -> dict[str, str] | None:
+    """One sentence as a centrepiece: governed copy, else the owner's own line.
+
+    Never the hero said again (``avoid``: its headline and subline) — a full
+    screen of type that repeats the first one says nothing new.
+    """
+    said = [a for a in (avoid or []) if a]
+    text = copy.statement if copy.statement and not _says_again(copy.statement, said) else ""
+    highlight = copy.statement_highlight if text else ""
     if not text:
         candidates = [*_owner_lines(bp), *[s for s in _sentences(story_body)[:1] if _english(s)]]
-        text = next((c for c in candidates if 6 <= len(c.split()) <= 34), "")
+        text = next((c for c in candidates if 6 <= len(c.split()) <= 34 and not _says_again(c, said)), "")
         if text and not re.search(r"[.!?]$", text):
             text += "."
     if not text:
@@ -498,7 +516,9 @@ def build(
     contact_section = first_of("contact")
 
     hero_picture = (hero or {}).get("content", {}).get("image_asset_id")
-    statement = statement_for(bp, copy, str((story or {}).get("content", {}).get("body", "")))
+    hero_words = (hero or {}).get("content", {})
+    statement = statement_for(bp, copy, str((story or {}).get("content", {}).get("body", "")),
+                              avoid=[str(hero_words.get("headline") or ""), str(hero_words.get("subheadline") or "")])
     pillars = pillars_for(bp, copy, ordering, badges, visiting)
     faqs = faqs_for(bp, ordering=ordering, visiting=visiting, contact=contact, address=address, booking=booking)
     rows = media_rows_for(bp, copy, trade_label=trade_label, ordering=ordering, pictures=pictures,

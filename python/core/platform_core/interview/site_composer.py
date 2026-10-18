@@ -886,6 +886,8 @@ def compose_site(
     pages = site.pages
     # The art direction's rhythm may have reordered home's middle around it.
     _band_after_first_section(pages[0]["sections"])
+    for page in pages:
+        _one_title_each(page["sections"])
     pages[0]["seo_description"] = (hero.get("subheadline") or facts.get("description", ""))[:300]
     from platform_core.interview.semantic_design import validate as validate_semantics
 
@@ -1144,6 +1146,33 @@ def served_list(bp: BusinessBlueprint) -> list[str]:
 
 def _plain_text(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (text or "").casefold()).strip()
+
+
+# A second section with a title the page already used takes one of these
+# (certification: a retreat's home had "Good to know" over its pillars and
+# again over its visiting facts).
+_ALTERNATE_TITLES: dict[str, tuple[str, ...]] = {
+    "fulfilment_strip": ("Before you come", "How it works"),
+    "pillars": ("What we stand on", "Why people come"),
+    "feature_grid": ("How it works", "What we stand on"),
+    "faq": ("Questions, answered",),
+}
+
+
+def _one_title_each(sections: list[dict[str, Any]]) -> None:
+    """No two sections on one page under the same title."""
+    seen: set[str] = set()
+    for section in sections:
+        content = section.get("content") or {}
+        title = str(content.get("title") or "").strip()
+        if not title:
+            continue
+        if title.casefold() in seen:
+            alternate = next((a for a in _ALTERNATE_TITLES.get(str(section.get("section_type_id")), ())
+                              if a.casefold() not in seen), None)
+            if alternate:
+                content["title"] = title = alternate
+        seen.add(title.casefold())
 
 
 def _unshown_picture(bp: BusinessBlueprint, shown: set[str | None]) -> str | None:

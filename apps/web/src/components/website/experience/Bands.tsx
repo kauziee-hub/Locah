@@ -17,7 +17,9 @@ export function Marquee({ items, variant, label }: { items: string[]; variant: s
     <ul className="fx-marquee__list" aria-hidden={hidden || undefined}>
       {/* Repeated so the band is always wider than the screen. */}
       {[...words, ...words].map((word, i) => (
-        <li key={i}>{word}</li>
+        <li key={i} data-repeat={hidden || i >= words.length ? '' : undefined} data-end={!hidden && i === words.length - 1 ? '' : undefined}>
+          {word}
+        </li>
       ))}
     </ul>
   )

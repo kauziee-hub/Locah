@@ -294,6 +294,12 @@ export function splitHeadline(headline: string, accent: string): [string, string
   if (accent && text.endsWith(accent) && text.length > accent.length + 2) {
     return [text.slice(0, text.length - accent.length).trim(), accent]
   }
+  return balanceWords(text)
+}
+
+/** A headline in two lines of near-equal length, broken between words. */
+export function balanceWords(headline: string): [string, string] {
+  const text = headline.trim()
   const words = text.split(/\s+/)
   if (words.length < 2) return [text, '']
   let best = 1

@@ -2045,6 +2045,21 @@ html.lenis.lenis-smooth {
   line-height: 1;
   color: color-mix(in srgb, currentColor 16%, transparent);
 }
+/* A card with no picture is as tall as its words: a screen-high box around
+   one line read as a broken page (a learning trust's programmes; on a phone a
+   full-viewport void with the numeral cut off). Its number sits beside it. */
+.fx-stack__card:has(> .fx-stack__big) {
+  min-height: 0;
+}
+.fx-stack__card:has(> .fx-stack__big) .fx-stack__big {
+  place-items: end;
+  font-size: clamp(3.5rem, 2rem + 5vw, 7rem);
+}
+@media (max-width: 899px) {
+  .fx-stack__card:has(> .fx-stack__big) .fx-stack__big {
+    display: none;
+  }
+}
 
 /* ========================================================== story layouts */
 
@@ -2251,6 +2266,55 @@ html.lenis.lenis-smooth {
 @keyframes fx-marquee {
   to {
     translate: -50% 0;
+  }
+}
+/* Still (reduced motion, motion off, no script, a crawler): each word once,
+   wrapping and centred — never a band frozen mid-word at the screen's edge. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-marquee__track {
+    width: auto;
+    transform: none;
+    justify-content: center;
+    padding-inline: clamp(1rem, 0.5rem + 2vw, 3rem);
+  }
+  .fx-marquee__list {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 0.35em;
+    padding-right: 0;
+    font-size: clamp(1.4rem, 1rem + 2vw, 2.8rem);
+  }
+  .fx-marquee__list li[data-repeat] {
+    display: none;
+  }
+  .fx-marquee__list li[data-end]::after {
+    content: none;
+  }
+}
+[data-locah-site]:not([data-fx='on']) .fx-marquee__track {
+  width: auto;
+  transform: none;
+  justify-content: center;
+  padding-inline: clamp(1rem, 0.5rem + 2vw, 3rem);
+}
+[data-locah-site]:not([data-fx='on']) .fx-marquee__list {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 0.35em;
+  padding-right: 0;
+  font-size: clamp(1.4rem, 1rem + 2vw, 2.8rem);
+}
+[data-locah-site]:not([data-fx='on']) .fx-marquee__list li[data-repeat] {
+  display: none;
+}
+[data-locah-site]:not([data-fx='on']) .fx-marquee__list li[data-end]::after {
+  content: none;
+}
+/* Moving: the band fades in and out at the screen's edges. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-fx='on'] .fx-marquee {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   }
 }
 

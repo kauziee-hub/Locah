@@ -650,3 +650,13 @@ def test_a_learning_trust_that_runs_classes_is_not_built_as_a_gym() -> None:
     )
     assert derive_archetype(trust, "other") != "membership_fitness"
     assert derive_archetype(gym(), "other") == "membership_fitness"  # a gym still is one
+
+
+def test_no_two_sections_on_a_page_share_a_title() -> None:
+    from platform_core.interview.site_composer import _one_title_each
+
+    page = [{"section_type_id": "pillars", "content": {"title": "Good to know"}},
+            {"section_type_id": "about", "content": {"title": "Our story"}},
+            {"section_type_id": "fulfilment_strip", "content": {"title": "Good to know"}}]
+    _one_title_each(page)
+    assert [s["content"]["title"] for s in page] == ["Good to know", "Our story", "Before you come"]
