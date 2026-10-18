@@ -917,6 +917,12 @@
 .fx-statement--giant .fx-statement__inner {
   text-align: center;
 }
+/* The giant line is its own whitespace: with an airy rhythm's full padding on
+   both sides it left a screen of nothing under it (certification: "dead zone
+   under the hero"). */
+[data-locah-site] .ls-section.fx-statement--giant {
+  padding-block: clamp(3.5rem, 2rem + 5vw, 7rem);
+}
 .fx-statement--giant .fx-statement__text {
   margin-inline: auto;
 }

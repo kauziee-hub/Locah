@@ -286,6 +286,33 @@ const metricsJs = (deviceWidth) => String.raw`(() => {
 
 const HIDE_DEV_CHROME = `(() => { if (!document.getElementById('__certify_hide')) { const s = document.createElement('style'); s.id = '__certify_hide'; s.textContent = 'nextjs-portal{display:none!important}'; document.head.appendChild(s); } return true; })()`
 
+// A full-page shot lays the page out at its whole height, so a bar fixed to
+// the bottom of the screen lands wherever the capture puts it — over some
+// section mid-page — and a critic reads that as a layout collision. For the
+// shot the bar is set once, at the end of the page, where a visitor who has
+// scrolled to the bottom sees it; UNPIN_BARS puts the page back.
+const PIN_BARS = `(() => {
+  document.querySelectorAll('[data-certify-clone]').forEach((n) => n.remove());
+  let pinned = 0;
+  for (const bar of document.querySelectorAll('nav.ls-mobile-bar')) {
+    const cs = getComputedStyle(bar);
+    if (cs.position !== 'fixed' || cs.display === 'none') continue;
+    const clone = bar.cloneNode(true);
+    clone.setAttribute('data-certify-clone', '');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.style.setProperty('position', 'relative', 'important');
+    (bar.closest('[data-locah-site]') || document.body).appendChild(clone);
+    bar.style.setProperty('visibility', 'hidden', 'important');
+    pinned++;
+  }
+  return pinned;
+})()`
+const UNPIN_BARS = `(() => {
+  document.querySelectorAll('[data-certify-clone]').forEach((n) => n.remove());
+  document.querySelectorAll('nav.ls-mobile-bar').forEach((b) => b.style.removeProperty('visibility'));
+  return true;
+})()`
+
 const AXE_RUN = `(async () => {
   const r = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] }, resultTypes: ['violations'] });
   return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, help: v.help,
@@ -919,7 +946,9 @@ for (let qi = 0; qi < queue.length; qi++) {
       })
       if (!m.has_site_root) v.note = 'no [data-locah-site] root on this page'
       await evaluate(HIDE_DEV_CHROME)
+      await evaluate(PIN_BARS).catch(() => 0)
       const shot = await fullShot(path.join(OUT, png), vpName)
+      await evaluate(UNPIN_BARS).catch(() => true)
       Object.assign(v, { png, ...shot })
       if (args.axe && AXE_ON.has(vpName)) {
         try {

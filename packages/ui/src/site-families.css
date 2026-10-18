@@ -521,8 +521,8 @@
    width over that many letters — never wider than a 390px screen. */
 .ls-foot__statement {
   max-width: 1120px;
-  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto -0.08em;
-  padding: 0.12em 0 0;
+  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto 0;
+  padding: 0.12em 0 0.1em;
   overflow: hidden;
   white-space: nowrap;
   font-family: var(--site-display-font);
@@ -531,7 +531,9 @@
     clamp(3rem, 1rem + 9vw, 11rem),
     calc(min(100vw - 2 * clamp(1.25rem, 0.5rem + 3vw, 3rem), 1120px) / (var(--name-len, 12) * 0.58))
   );
-  line-height: 0.78;
+  /* The whole name, descenders included: cropped by the page's edge it read as
+     a layout that ran out of room (certification critique). */
+  line-height: 0.95;
   letter-spacing: -0.03em;
   text-transform: var(--site-display-case, none);
   color: color-mix(in srgb, var(--site-ink) 92%, transparent);
@@ -540,7 +542,7 @@
    name out of the column and turn wrapping back on; a condensed face is
    fitted at its condensed width. */
 [data-locah-site] .ls-foot__statement {
-  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto -0.08em;
+  margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto 0;
   white-space: nowrap;
   text-wrap: nowrap;
   font-stretch: var(--site-display-stretch, 100%);

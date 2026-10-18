@@ -1236,9 +1236,13 @@
   display: grid;
   gap: 2rem;
 }
+/* Columns side by side on a wide screen. (It read `1.4fr repeat(auto-fit, …)`:
+   a flexible track beside an auto-repeat is invalid CSS, so browsers dropped
+   the rule and every footer stacked in one narrow column at the left.) */
 @media (min-width: 820px) {
   .ls-foot__inner {
-    grid-template-columns: 1.4fr repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    column-gap: clamp(2rem, 1rem + 3vw, 4rem);
   }
 }
 .ls-foot__name {
@@ -1276,6 +1280,13 @@
 .ls-foot__place a {
   max-width: 28ch;
   overflow-wrap: anywhere;
+}
+/* The page ends above the phone's fixed bar: the footer's last line is never
+   under it (a statement footer already makes this room for itself). */
+@media (max-width: 760px) {
+  .ls-foot--with-bar:not(:has(> .ls-foot__statement)) {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }
 .ls-foot__bar {
   max-width: 1120px;

@@ -638,7 +638,7 @@ export function WebsitePageView({
               <p className="ls-foot__heading">{t('Your visit')}</p>
               {canOrder ? <CommerceCart slug={slug} variant="footer-link" /> : null}
               {hasAccount && !previewToken ? (
-                <a href={`/${slug}/account`}>{canOrder || canBook ? t('My orders and bookings') : t('My account')}</a>
+                <a href={`/${slug}/account`}>{canOrder && canBook ? t('My orders and bookings') : canBook ? t('My bookings') : canOrder ? t('My orders') : t('My account')}</a>
               ) : null}
               {visitLinks.map((item) => (
                 <Link key={item.href} href={item.href}>

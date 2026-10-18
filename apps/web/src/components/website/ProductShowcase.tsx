@@ -830,15 +830,34 @@ export function ProductShowcase({
   const pictured = kind === 'plan' ? [] : shown.filter((item) => item.image)
   const cards = pictured.length > 0 ? pictured : shown
   const rest = pictured.length > 0 ? shown.filter((item) => !item.image) : []
+  // Nothing in the range has a photograph yet (a clinic's doctors, a
+  // consultant's services): the cards are set in type — a numbered index,
+  // the name large — never a row of empty picture plates (certification:
+  // a critic read them as images that failed to load). A menu keeps its
+  // plates: a dish without a photo is still a dish on a plate.
+  const typeset = pictured.length === 0 && kind !== 'menu'
   return (
     <section id={anchor} className={`ls-section ls-showcase ls-grid-${kind} ${ground}`}>
       <div className="ls-inner">
         {head}
         {chips}
-        <ul className={`ls-product-grid ls-product-grid--${kind}`} data-count={cards.length} data-reveal-group="">
-          {cards.map((item) => (
-            <li key={`${item.category}-${item.name}`} className="ls-card ls-card--product" data-tilt="">
-              {kind !== 'plan' ? (
+        <ul
+          className={`ls-product-grid ls-product-grid--${kind}${typeset ? ' ls-product-grid--typeset' : ''}`}
+          data-count={cards.length}
+          data-reveal-group=""
+        >
+          {cards.map((item, index) => (
+            <li
+              key={`${item.category}-${item.name}`}
+              className={`ls-card ls-card--product${typeset ? ' ls-card--typeset' : ''}`}
+              data-tilt=""
+            >
+              {typeset && kind !== 'plan' ? (
+                <span className="ls-card__index" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+              ) : null}
+              {kind !== 'plan' && !typeset ? (
                 // A project's card already says its name: its plate stays a quiet drawing.
                 <Picture
                   image={item.image}

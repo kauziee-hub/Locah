@@ -977,6 +977,54 @@
     grid-template-columns: minmax(0, 420px);
   }
 }
+/* A range with no photographs yet, set in type: an index numeral, the name in
+   the display face, the price on its own line — a printed service list, not
+   cards waiting for pictures. */
+[data-locah-site] .ls-card.ls-card--typeset,
+[data-locah-site][data-cardstyle] .ls-card.ls-card--typeset {
+  position: relative;
+  padding-top: 1.1rem;
+  border: 0;
+  border-top: 2px solid var(--site-ink);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* Two or four services fill the row: a printed list runs the full measure. */
+@media (min-width: 900px) {
+  .ls-product-grid--typeset[data-count='2'] {
+    max-width: none;
+  }
+  .ls-product-grid--typeset[data-count='4'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ls-card--typeset .ls-card__index {
+  padding: 0 1.2rem;
+  font-family: var(--site-display-font, inherit);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: var(--site-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ls-card--typeset .ls-card__title {
+  font-family: var(--site-display-font, inherit);
+  font-size: clamp(1.45rem, 1.1rem + 1.2vw, 2.1rem);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+.ls-card--typeset .ls-card__row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.ls-card--typeset .ls-price {
+  align-items: flex-start;
+}
+.ls-card--typeset .ls-card__text {
+  -webkit-line-clamp: 5;
+  font-size: 0.98rem;
+}
 .ls-product-grid--plan .ls-card {
   padding-top: 0.4rem;
 }
