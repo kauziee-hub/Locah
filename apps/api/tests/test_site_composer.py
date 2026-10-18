@@ -565,3 +565,28 @@ def test_pickup_only_no_delivery_never_shows_home_delivery():
     assert "delivery" not in kinds
     assert "pickup" in kinds
     assert "Home delivery" not in hero_badges(bp, "cafe")
+
+
+def test_an_inner_page_does_not_reopen_on_the_home_pictures(monkeypatch: Any) -> None:
+    # Certification (bakery): the About page opened on the home hero and its
+    # rows re-showed the home photographs — "the same page twice".
+    import platform_core.interview.site_composer as composer
+    from platform_core.interview.site_pages import _pictures_in
+
+    monkeypatch.setattr(composer, "picture_for", lambda bp, key: f"pic-{key}")
+    bp = meat()
+    copy = WebsiteCopy(about_title="Our story", about_body=(
+        "My father opened the shop in 1998. We still cut every order by hand, the way he did. "
+        "Every morning the meat comes in fresh from farms near Chennai."),
+        statement="Cut by hand since 1998, fresh every morning.")
+    pages = {p["slug"]: p for p in compose(bp, copy)["pages"]}
+    assert "about" in pages
+    on_home = _pictures_in(pages["home"]["sections"])
+    about = pages["about"]["sections"]
+    about_hero = next(s for s in about if s["section_type_id"] == "hero")
+    assert about_hero["content"].get("image_asset_id") not in on_home | {None}
+    story = next(s for s in about if s["section_type_id"] == "about")
+    assert story["content"].get("image_asset_id") == "pic-story"  # the story keeps its own picture
+    for section in about:
+        if section["section_type_id"] == "media_text":
+            assert not {r.get("image_asset_id") for r in section["content"]["items"]} & on_home

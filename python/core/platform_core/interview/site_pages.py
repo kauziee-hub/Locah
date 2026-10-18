@@ -359,6 +359,20 @@ class Site:
     notes: list[str] = field(default_factory=list)
 
 
+def _pictures_in(sections: list[dict[str, Any]]) -> set[str]:
+    """Every picture a list of sections shows (its own, its items', its categories')."""
+    found: set[str] = set()
+    for section in sections:
+        content = section.get("content") or {}
+        if content.get("image_asset_id"):
+            found.add(str(content["image_asset_id"]))
+        for key in ("items", "categories"):
+            for row in content.get(key) or []:
+                if isinstance(row, dict) and row.get("image_asset_id"):
+                    found.add(str(row["image_asset_id"]))
+    return found
+
+
 def _section(type_id: str, variant: str, content: dict[str, Any]) -> dict[str, Any]:
     return {"section_type_id": type_id, "layout_variant": variant, "content": content, "is_visible": True}
 
@@ -682,19 +696,33 @@ def build(
                       "seo_title": f"{trade_label} — {name}"[:160],
                       "seo_description": str(full["content"].get("subtitle") or "")[:300]})
 
+    # Pictures the home page already shows. An inner page that opens on the
+    # home hero and re-shows every home photo reads as the same page twice
+    # (certification: the bakery's About page repeated all of them).
+    on_home = _pictures_in(home_out)
+
+    def unseen(*candidates: str | None) -> str | None:
+        return next((c for c in candidates if c and c not in on_home), None)
+
     # ---- about
     if about_page and story:
         content = story["content"]
-        # The page opens on the business's name; the story below keeps its own title.
-        about_sections = [_page_hero("About", name, copy.about_intro or "",
-                                     hero_picture or pictures.get("process")),
-                          story]
+        # The page opens on the business's name, over a picture the home page
+        # has not shown — or in type; the story below keeps its own title and
+        # its own picture (the story lives here; home only teases it).
+        story_picture = content.get("image_asset_id")
+        about_hero_picture = unseen(*(p for p in (pictures.get("story"), pictures.get("process"),
+                                                  pictures.get("detail")) if p != story_picture))
+        about_sections = [_page_hero("About", name, copy.about_intro or "", about_hero_picture), story]
         if statement_section and statement_section not in home_out:
             about_sections.append(statement_section)
         if rows_section:
-            pictured_rows = sum(1 for r in rows if r.get("image_asset_id"))
+            shown = on_home | {story_picture, about_hero_picture}
+            fresh_rows = [{k: v for k, v in r.items() if not (k == "image_asset_id" and v in shown)}
+                          for r in rows]
+            pictured_rows = sum(1 for r in fresh_rows if r.get("image_asset_id"))
             about_sections.append(_section("media_text", "sticky" if pictured_rows >= 2 else "alternating",
-                                           {"items": rows}))
+                                           {"items": fresh_rows}))
         if pillars_section:
             # What the business stands on lives here, once — numbered beside a
             # picture or as a ruled strip, never a grid of icon cards.
@@ -720,7 +748,8 @@ def build(
         sub = copy.visit_intro or " · ".join(p for p in (address, hours) if p)
         visit_sections = [_page_hero(str(place["content"].get("title") or "Visit us"),
                                      "Come and see us" if address else "Get in touch", sub,
-                                     pictures.get("story") or hero_picture), place]
+                                     unseen(pictures.get("story"), pictures.get("process"),
+                                            pictures.get("detail"))), place]
         if how and not range_page:
             visit_sections.append(_section("fulfilment_strip", "icons", {**how["content"]}))
         everything = faq_section(faqs, "split", "Questions, answered")
