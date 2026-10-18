@@ -1395,14 +1395,15 @@
   .ls-board__media {
     min-height: 200px;
   }
+  /* One fact a row, its badge beside it: two columns of 170px clipped an
+     address and the hours mid-word, and an odd third card stood alone. */
   .ls-facts__list {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.7rem;
   }
   .ls-fact {
-    flex-direction: column;
     padding: 1rem;
-    gap: 0.6rem;
+    gap: 0.8rem;
   }
   .ls-story__media {
     aspect-ratio: 4 / 3;

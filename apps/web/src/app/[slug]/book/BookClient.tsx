@@ -244,6 +244,13 @@ export default function BookClient({
   const grouped = (Object.keys(GROUP) as Mode[]).map((m) => [m, choices.filter((c) => c.mode === m)] as const).filter(([, cs]) => cs.length)
   const showProvider = (mode === 'appointment' || mode === 'site_visit') && providers.length > 0
   const readyForContact = Boolean(picked)
+  // The step a waiting button leads to: what to book, else when.
+  const goToStep = () => {
+    const target = document.querySelector<HTMLElement>(
+      choice ? '.ls-book__days, .ls-book__form input[type="date"]' : '#what-h')
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target?.querySelector<HTMLElement>('button, input')?.focus({ preventScroll: true })
+  }
 
   // The whole flow is visible from the start — what, when, who you are — and
   // what is being booked is summed up beside it (certification: a Book page
@@ -404,13 +411,13 @@ export default function BookClient({
             // Where the booking is confirmed, shown before it can be: the whole
             // way to a booking is visible from the first screen.
             <div className="ls-book__last ls-book__pending">
-              <span className="ls-meta">{t('Your name and phone number')}</span>
-              <button type="button" className="ls-btn ls-checkout__place" disabled aria-describedby="book-time-first">
-                {t('Confirm booking')}
+              {/* A confident button that names the next step and takes the
+                  guest there — never one that looks dead (certification: a
+                  faded fill read as live, a dashed outline as disabled). */}
+              <button type="button" className="ls-btn ls-checkout__place" onClick={goToStep}>
+                {timed ? t('Pick a time to book') : t('Pick your dates to book')}
               </button>
-              <small id="book-time-first" className="ls-meta">
-                {timed ? t('Choose a day and a time first.') : t('Choose your dates first.')}
-              </small>
+              <small className="ls-meta">{t('Then your name and phone number — and it is booked.')}</small>
             </div>
           ) : null}
 
@@ -446,11 +453,12 @@ export default function BookClient({
               <span className="ls-book__n" aria-hidden="true">3</span>
               {t('Your name and phone number')}
             </span>
-            {/* Where the booking is confirmed, shown from the start. */}
-            <button type="button" className="ls-btn ls-checkout__place" disabled aria-describedby="book-first">
-              {t('Confirm booking')}
+            {/* Where the booking is confirmed, shown from the start — as the
+                step it waits for, and a way to it. */}
+            <button type="button" className="ls-btn ls-checkout__place" onClick={goToStep}>
+              {t('Choose what to book')}
             </button>
-            <small id="book-first" className="ls-meta">{t('Choose what you would like to book first.')}</small>
+            <small className="ls-meta">{t('Choose what you would like to book first.')}</small>
           </li>
         </ol>
       ) : null}

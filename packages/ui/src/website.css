@@ -2606,15 +2606,9 @@
   gap: 0.75rem;
   justify-items: start;
 }
-/* Not yet: an outline, never a faded fill a visitor reads as live (on a dark
-   site a half-strength olive still looked pressable). */
-[data-locah-site] :is(.ls-book__last, .ls-book__pending) .ls-btn[disabled] {
-  opacity: 1;
+[data-locah-site] .ls-book__last .ls-btn[disabled] {
+  opacity: 0.55;
   cursor: not-allowed;
-  background: transparent;
-  color: var(--site-muted);
-  border: 1px dashed color-mix(in srgb, var(--site-ink) 30%, transparent);
-  box-shadow: none;
 }
 [data-locah-site] .ls-book__facts dd {
   margin: 0;
