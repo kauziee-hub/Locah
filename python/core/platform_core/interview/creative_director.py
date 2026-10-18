@@ -229,6 +229,12 @@ _PREPARED_FOOD = re.compile(
     r"snacks|cakes?|bakery|kitchen|dishes|menu|catering)\b", re.I)
 
 
+_FITNESS_TRADES = frozenset({"gym", "studio"})
+_FITNESS_WORDS = re.compile(
+    r"\b(gym|fitness|workouts?|strength|crossfit|yoga|pilates|zumba|aerobics|martial arts?|karate|taekwondo|"
+    r"boxing|kickboxing|mma|calisthenics|personal train\w*|powerlifting|weightlifting|bodybuilding|"
+    r"spin(?:ning)? class\w*)\b", re.I)
+
 _FOOD_PROFILES = frozenset({"bold_food_commerce", "editorial_home_food"})
 _FOOD_WORDS = re.compile(
     r"\b(food|meals?|dishes|menu|biryani|curry|bakery|bakes|breads?|cakes?|sweets|snacks|cafe|café|coffee|tea|"
@@ -274,7 +280,11 @@ def derive_archetype(bp: BusinessBlueprint, business_type: str | None = None) ->
     if playbook_for(bp).portfolio and known not in {"real_estate_developer"}:
         # Work is what a photographer's or designer's visitor comes to see.
         return "project_portfolio"
-    if "has_memberships" in seen or "runs_classes" in seen:
+    # Plans and a class timetable make a fitness site — for a fitness trade. An
+    # after-school learning trust "runs classes" too, and was built (and
+    # photographed) as a gym: barbell racks for 420 children's lessons.
+    if ("has_memberships" in seen or "runs_classes" in seen) and (
+            known in _FITNESS_TRADES or (known in {"other", "coach"} and _FITNESS_WORDS.search(said))):
         return "membership_fitness"
     if "serves_businesses" in seen and "quote_led" in seen:
         return "b2b_rfq"

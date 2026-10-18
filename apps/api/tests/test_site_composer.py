@@ -634,3 +634,19 @@ def test_the_owner_talking_about_customers_is_never_site_copy() -> None:
     for said in ("Book a table on WhatsApp", "Walk-ins welcome, but book for Friday nights",
                  "We take bookings by phone", "Book a consultation before you come"):
         assert not _ABOUT_CUSTOMERS.search(said), said
+
+
+def test_a_learning_trust_that_runs_classes_is_not_built_as_a_gym() -> None:
+    # Certification run7: an after-school learning NGO "runs classes", was given
+    # the fitness archetype, and every photograph was searched as a gym floor.
+    trust = _bp(
+        "Thozhi Learning Trust",
+        {"offerings": "free after-school learning classes for children and scholarships for girls",
+         "description": "An education NGO running after-school learning centres", "locations": "Kannagi Nagar"},
+        [("runs_classes", "after-school learning classes"), ("membership_led", "volunteer sign-ups")],
+        {},
+        [CatalogueGroup(name="Programmes", items=[CatalogueItem(name="After-school classes"),
+                                                  CatalogueItem(name="Scholarships for girls")])],
+    )
+    assert derive_archetype(trust, "other") != "membership_fitness"
+    assert derive_archetype(gym(), "other") == "membership_fitness"  # a gym still is one
