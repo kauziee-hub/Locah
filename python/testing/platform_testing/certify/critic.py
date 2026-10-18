@@ -50,7 +50,7 @@ import asyncio
 import io
 import json
 import math
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -64,7 +64,9 @@ from platform_testing.certify.gate import (
     weighted_score,
 )
 
-CRITIC_VERSION = "certify-critic-v1"
+# v2: the page context lists the draft's visible sections, so a defect's section
+# number means something (v1 critiques never listed them).
+CRITIC_VERSION = "certify-critic-v2"
 PURPOSE = "image.site_critique"  # routes to the provider's vision model pin, if any
 
 CROSS_DIMENSIONS: tuple[str, ...] = ("consistency", "originality")
@@ -89,6 +91,8 @@ MAX_CROSS_PAGES = 12
 
 LCP_LIMIT_MS = 4000
 CLS_LIMIT = 0.1
+OUTPUT_TOKENS = 8000
+RETRY_OUTPUT_TOKENS = 16384  # the budget the site generator itself uses with this provider
 
 
 class VisionProvider(Protocol):
@@ -335,20 +339,33 @@ def _page_slug(page: Mapping[str, Any]) -> str:
 
 
 def _payload_pages(manifest: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """``{slug: [{index, type, layout}]}`` from a composed payload, wherever the
-    manifest carries one (``payload.pages`` or ``pages`` with sections)."""
+    """``{slug: [{index, type, layout, title}]}`` from a composed payload or the
+    owner's draft, wherever the manifest carries one (``payload.pages``,
+    ``pages`` or ``draft.pages`` with sections). Hidden sections are not on the
+    page, so they are not listed, and ``index`` counts the visible ones in page
+    order: the number the critic gives a defect is the one the repair loop reads
+    back (repair.attribute)."""
     out: dict[str, list[dict[str, Any]]] = {}
-    for holder in (manifest.get("payload"), manifest):
+    for holder in (manifest.get("payload"), manifest, manifest.get("draft")):
         if not isinstance(holder, Mapping):
             continue
         for page in holder.get("pages") or []:
             if not isinstance(page, Mapping) or not isinstance(page.get("sections"), list):
                 continue
-            rows = []
-            for i, s in enumerate(page["sections"]):
-                if isinstance(s, Mapping):
-                    rows.append({"index": i, "type": str(s.get("section_type_id") or s.get("type") or ""),
-                                 "layout": str(s.get("layout_variant") or s.get("layout") or "")})
+            rows: list[dict[str, Any]] = []
+            for s in page["sections"]:
+                if not isinstance(s, Mapping) or s.get("is_visible") is False:
+                    continue
+                row: dict[str, Any] = {"index": len(rows),
+                                       "type": str(s.get("section_type_id") or s.get("type") or ""),
+                                       "layout": str(s.get("layout_variant") or s.get("layout") or "")}
+                content = s.get("content") if isinstance(s.get("content"), Mapping) else {}
+                assert isinstance(content, Mapping)
+                title = next((str(content.get(k)).strip() for k in ("title", "headline", "eyebrow")
+                              if str(content.get(k) or "").strip()), "")
+                if title:
+                    row["title"] = title[:80]
+                rows.append(row)
             out.setdefault(_page_slug(page), rows)
     return out
 
@@ -589,9 +606,43 @@ def similarity_defects(similar_to: list[Any] | None, round_no: int) -> list[dict
 
 # ----------------------------------------------------------------- the critique
 
+Carried = dict[str, tuple[dict[str, float], float, list[dict[str, Any]], Any]]
+
+
+def _carried_pages(carry: Mapping[str, Any] | None, rejudge: Collection[str] | None) -> Carried:
+    """slug -> (scores, weighted, vision defects, raw) for each page ``carry``
+    judged in full and ``rejudge`` does not name; nothing without ``rejudge``."""
+    if carry is None or rejudge is None:
+        return {}
+    page_scores = carry.get("page_scores")
+    raw = carry.get("raw")
+    raws = raw.get("pages") if isinstance(raw, Mapping) else None
+    out: Carried = {}
+    for slug, scores in (page_scores.items() if isinstance(page_scores, Mapping) else []):
+        if slug in rejudge or not isinstance(scores, Mapping) \
+                or any(d not in scores for d in PAGE_DIMENSIONS):
+            continue  # touched, or never judged in full: judged now
+        clean = {d: float(scores[d]) for d in PAGE_DIMENSIONS}
+        # A section number from an older critic, never shown the list, is dropped.
+        renumber = {} if carry.get("version") == CRITIC_VERSION else {"section": -1}
+        found = [dict(d, carried=True, **renumber) for d in carry.get("defects") or []
+                 if isinstance(d, Mapping) and d.get("page") == slug and d.get("source") == "vision"
+                 and ":page:" in str(d.get("id") or "")]
+        out[str(slug)] = (clean, round(weighted_score(clean, PAGE_DIMENSIONS), 2), found,
+                          raws.get(slug, []) if isinstance(raws, Mapping) else [])
+    return out
+
+
 def _merge_lower(first: dict[str, float], second: dict[str, float]) -> dict[str, float]:
     keys = set(first) | set(second)
     return {k: min(v for v in (first.get(k), second.get(k)) if v is not None) for k in keys}
+
+
+def _cut_off(exc: Exception) -> bool:
+    """The answer ran out of room: the reasoning used the whole budget ("empty
+    content (length)") or the JSON stopped half-way ("non-JSON output")."""
+    text = str(exc)
+    return isinstance(exc, RuntimeError) and ("(length)" in text or "non-JSON" in text)
 
 
 async def _call(provider: VisionProvider, context: dict[str, Any], images: list[bytes],
@@ -600,12 +651,22 @@ async def _call(provider: VisionProvider, context: dict[str, Any], images: list[
     config: dict[str, Any] = {"purpose": PURPOSE, "system_prompt": system,
                               # A long page (14 defects) plus the model's reasoning outran 3000
                               # tokens: the home page came back cut off ("length").
-                              "max_output_tokens": 8000, "temperature": 0.1}
+                              "max_output_tokens": OUTPUT_TOKENS, "temperature": 0.1}
     if model:
         config["model"] = model
-    raw = await provider.generate_structured_with_images(
-        json.dumps(context, separators=(",", ":"), ensure_ascii=False),
-        [_image_input(b) for b in images], schema, config, timeout_seconds)
+    prompt = json.dumps(context, separators=(",", ":"), ensure_ascii=False)
+    try:
+        raw = await provider.generate_structured_with_images(
+            prompt, [_image_input(b) for b in images], schema, config, timeout_seconds)
+    except Exception as exc:
+        # run7: two home pages lost their judgment when the reasoning alone used
+        # all 8000 tokens. Asked once more with room to answer; any other
+        # failure (and a second cut-off) is the page's reported error.
+        if not _cut_off(exc):
+            raise
+        raw = await provider.generate_structured_with_images(
+            prompt, [_image_input(b) for b in images], schema,
+            config | {"max_output_tokens": RETRY_OUTPUT_TOKENS}, timeout_seconds)
     return raw if isinstance(raw, dict) else {}
 
 
@@ -642,13 +703,20 @@ async def critique_site(
     provider: VisionProvider, site_dir: Path, manifest: dict[str, Any], *, category: str,
     round_no: int, model: str | None = None, similar_to: list[Any] | None = None,
     references_dir: Path | None = None, timeout_seconds: int = 150, write: bool = True,
-    concurrency: int = 2,
+    concurrency: int = 2, carry: Mapping[str, Any] | None = None,
+    rejudge: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """Judge every rendered page of one site; the critique.json contract.
 
     ``similar_to``: look-alike sites from the distinctness check (see
     `similar_from_distinct`); falls back to ``manifest["similar_to"]``.
-    ``concurrency``: page calls in flight at once (results keep page order)."""
+    ``concurrency``: page calls in flight at once (results keep page order).
+    ``carry`` + ``rejudge``: a repair round re-rendered only the pages in
+    ``rejudge``; every other page the earlier critique ``carry`` judged in full
+    keeps that judgment (its scores and its own vision defects; ``carried``
+    lists it) instead of being judged again: its screenshots did not change,
+    and judging an untouched page again would only add the critic's variance.
+    The site-wide call and the render defects are always made afresh."""
     site_dir = Path(site_dir)
     render = json.loads((site_dir / "render.json").read_text(encoding="utf-8"))
     ref_ids = references.refs_for(category)
@@ -664,6 +732,7 @@ async def critique_site(
         ref_rows.append(row)
     sections = _payload_pages(manifest)
     business = _business(manifest)
+    kept = _carried_pages(carry, rejudge)
     art = _art_direction(manifest)
     pages = [p for p in render.get("pages") or [] if isinstance(p, Mapping)]
     known = {_page_slug(p) for p in pages}
@@ -716,6 +785,8 @@ async def critique_site(
         m_tiles = mobile_tiles(mobile) if mobile is not None else []
         if desktop is not None:
             thumbs.append((slug, fit(desktop, THUMB_BOX)))
+        if slug in kept:
+            continue  # unchanged since ``carry`` judged it
         d_note = " (columns read left to right)" if d_cols > 1 else ""
         listing = [{"image": i + 1,
                     "shows": f"desktop ({desktop_vp}) tile {i + 1}/{len(d_tiles)}{d_note}"}
@@ -735,11 +806,14 @@ async def critique_site(
         async def call(context: dict[str, Any] = context, images: list[bytes] = images) -> dict[str, Any]:
             return await _call(provider, context, images, PAGE_SCHEMA, PAGE_PROMPT, model, timeout_seconds)
 
-        def parse(answer: dict[str, Any], slug: str = slug,
-                  desktop_vp: str = desktop_vp) -> tuple[dict[str, float], list[dict[str, Any]]]:
-            return (parse_scores(answer, PAGE_DIMENSIONS),
-                    parse_defects(answer, page=slug, desktop_vp=desktop_vp or "laptop",
-                                  round_no=round_no, known_pages=known, prefix="page"))
+        def parse(answer: dict[str, Any], slug: str = slug, desktop_vp: str = desktop_vp,
+                  listed: int = len(sections.get(slug, []))) -> tuple[dict[str, float], list[dict[str, Any]]]:
+            found = parse_defects(answer, page=slug, desktop_vp=desktop_vp or "laptop",
+                                  round_no=round_no, known_pages=known, prefix="page")
+            for d in found:  # an index the context never listed names no section
+                if not 0 <= d["section"] < listed:
+                    d["section"] = -1
+            return parse_scores(answer, PAGE_DIMENSIONS), found
 
         def near(scores: dict[str, float]) -> bool:
             gap = abs(weighted_score(scores, PAGE_DIMENSIONS) - PASS_SCORE)
@@ -774,6 +848,20 @@ async def critique_site(
         page_scores[slug] = scores
         page_weighted[slug] = round(weighted_score(scores, PAGE_DIMENSIONS), 2)
         defects += found
+
+    carried: list[str] = []
+    order = [_page_slug(p) for p in pages]
+    for slug, (kept_scores, kept_weighted, kept_defects, kept_raw) in kept.items():
+        if slug not in order:
+            continue  # no longer rendered
+        carried.append(slug)
+        page_scores[slug], page_weighted[slug] = kept_scores, kept_weighted
+        raw["pages"][slug] = kept_raw
+        defects += kept_defects
+        if slug in ((carry or {}).get("double_judged") or []):
+            double_judged.append(slug)
+    page_scores = {s: page_scores[s] for s in order if s in page_scores}
+    page_weighted = {s: page_weighted[s] for s in order if s in page_weighted}
 
     cross_scores: dict[str, float] = {}
     if thumbs:
@@ -837,6 +925,7 @@ async def critique_site(
         "complete": not errors and len(scores_out) == len(DIMENSIONS),
         "errors": errors,
         "double_judged": double_judged,
+        "carried": carried,
         "references": {"ids": list(ref_ids), "images": len(ref_images)},
         "raw": raw,
     }

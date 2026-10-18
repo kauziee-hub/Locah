@@ -3,12 +3,14 @@
     uv run python -m platform_testing.certify.report <out_dir> <run_dir> [<run_dir> ...]
 
 Reads every ``<run_dir>/sites/<scenario>--<variant>/`` (journey, setup,
-customer, browser flows, render, critique, gate) and writes into
+customer, browser flows, render, critique, gate, repair) and writes into
 ``<out_dir>``:
 
   report.json   one row per site (the latest run of each site wins)
   REPORT.md     the matrix, the gate verdicts, the owner requests, the
-                defects by layer, the technical gates and the photo audit
+                repair rounds (score before and after, every fix tried and
+                whether it was kept), the defects by layer, the technical
+                gates and the photo audit
   sheets/       one contact sheet per site (home on a laptop and a phone,
                 every other page as a thumbnail) — what the critic judged
 
@@ -51,6 +53,7 @@ def site_row(folder: Path) -> dict[str, Any]:
     render = _load(folder / "render.json")
     critique = _load(folder / "critique.json")
     gate = _load(folder / "gate.json")
+    repair = _load(folder / "repair.json")
     build = journey.get("build") or {}
     flows = {str(f.get("flow")): bool(f.get("ok")) for f in customer.get("flows") or []}
     for name in ("shop", "shop-mobile", "book", "book-mobile"):
@@ -104,6 +107,8 @@ def site_row(folder: Path) -> dict[str, Any]:
         "scores": critique.get("scores") or {},
         "page_scores": critique.get("page_weighted") or {},
         "critique_complete": critique.get("complete"),
+        "critique_errors": critique.get("errors") or [],
+        "critic_version": critique.get("version"),
         "defects": {"critical": sum(1 for d in defects if d.get("severity") == "critical"),
                     "major": sum(1 for d in defects if d.get("severity") == "major"),
                     "minor": sum(1 for d in defects if d.get("severity") == "minor")},
@@ -112,7 +117,18 @@ def site_row(folder: Path) -> dict[str, Any]:
         "top_defects": [f"{d.get('severity')}/{d.get('layer')} {d.get('page')}: {d.get('text')}"
                         for d in defects if d.get("severity") == "critical"][:6],
         "gate": gate.get("status") or ("not judged" if not critique else "unknown"),
+        "rounds_used": gate.get("rounds_used"),
+        "blocked_on": gate.get("blocked_on"),
         "owner_requests": gate.get("owner_requests") or [],
+        "repair": {
+            "score_before": repair.get("score_before"), "score_after": repair.get("score_after"),
+            "page_before": repair.get("page_before") or {}, "page_after": repair.get("page_after") or {},
+            "rounds": repair.get("rounds") or [], "rounds_used": repair.get("rounds_used"),
+            "levers": repair.get("levers") or [], "error": repair.get("error"),
+            "attempts": [{k: a.get(k) for k in ("round", "page", "section", "lever", "change", "before", "after",
+                                                 "critical_after", "kept", "why", "defect")}
+                         for a in repair.get("attempts") or []],
+        } if repair else None,
         "folder": str(folder),
     }
 
@@ -181,7 +197,13 @@ def markdown(rows: list[dict[str, Any]]) -> str:
                      f"{r['defects']['critical']}/{r['defects']['major']} |")
     lines += ["", "## Gate verdicts and owner requests", ""]
     for r in judged:
-        lines.append(f"### {r['site_key']} — {r['gate']} ({r['score']:.2f})")
+        score = f"{r['score']:.2f}" if isinstance(r["score"], (int, float)) else "—"
+        rounds = f", after {r['rounds_used']} round(s)" if r.get("rounds_used") else ""
+        lines.append(f"### {r['site_key']} — {r['gate']} ({score}{rounds})")
+        if r.get("critique_complete") is False:
+            lines.append("Critique incomplete: " + "; ".join(str(e) for e in r.get("critique_errors") or [])[:300])
+        if r.get("blocked_on"):
+            lines.append(f"Blocked on: {r['blocked_on']}")
         if r["page_scores"]:
             lines.append("Pages: " + ", ".join(f"{k} {v:.2f}" for k, v in r["page_scores"].items()))
         weakest = sorted(r["scores"].items(), key=lambda kv: kv[1])[:4]
@@ -195,6 +217,47 @@ def markdown(rows: list[dict[str, Any]]) -> str:
         for defect in r["top_defects"]:
             lines.append(f"- {defect}")
         lines.append("")
+    repaired = [r for r in rows if r.get("repair")]
+    if repaired:
+        lines += ["## Repair rounds", "",
+                  "Each fix is one lever on one section through the owner's own editing API, published, the "
+                  "page rendered and judged alone, and kept only when the page's score rises by at least 0.25 "
+                  "with no new critical defect (otherwise reverted). After a round, the touched pages are "
+                  "rendered again at every viewport and the site is judged again (untouched pages keep their "
+                  "judgment).", ""]
+        for r in repaired:
+            rep = r["repair"]
+            before, after = rep.get("score_before"), rep.get("score_after")
+            head = f"### {r['site_key']} — "
+            head += (f"{before:.2f} → {after:.2f}" if isinstance(before, (int, float))
+                     and isinstance(after, (int, float)) else f"{before} → {after}")
+            lines.append(head + f" ({r['gate']})")
+            if rep.get("levers"):
+                lines.append("Levers allowed: " + ", ".join(rep["levers"]))
+            if rep.get("error"):
+                lines.append(f"Loop error: {rep['error']}")
+            for rnd in rep.get("rounds") or []:
+                bits = [f"round {rnd.get('round')}: {rnd.get('attempts')} tried, {rnd.get('kept')} kept"]
+                if rnd.get("touched"):
+                    bits.append("re-judged " + ", ".join(rnd["touched"]))
+                if rnd.get("stopped"):
+                    bits.append(str(rnd["stopped"]))
+                if rnd.get("score_after") is not None:
+                    bits.append(f"site {rnd.get('score_before')} → {rnd.get('score_after')}")
+                lines.append("- " + "; ".join(bits))
+            if rep.get("attempts"):
+                lines += ["", "| Round | Page | Section | Lever | Change | Page before | After | Kept | Defect |",
+                          "|---|---|---|---|---|---|---|---|---|"]
+                for a in rep["attempts"]:
+                    change = a.get("change") or a.get("why") or ""
+                    defect = str(a.get("defect") or "").replace("|", "/")[:120]
+                    lines.append(f"| {a.get('round')} | {a.get('page')} | {a.get('section')} | {a.get('lever')} | "
+                                 f"{change} | {a.get('before')} | {a.get('after')} | "
+                                 f"{'yes' if a.get('kept') else 'no'} | {defect} |")
+            if rep.get("page_after"):
+                lines.append("")
+                lines.append("Pages after: " + ", ".join(f"{k} {v}" for k, v in rep["page_after"].items()))
+            lines.append("")
     lines += ["## Technical gates (all pages × viewports)", "",
               "| Site | Overflow | Broken images | Images w/o alt | Console errors | axe serious | "
               "Broken links | Max LCP laptop (ms) |",

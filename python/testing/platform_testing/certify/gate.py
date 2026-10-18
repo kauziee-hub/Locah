@@ -249,8 +249,13 @@ def owner_requests(critique: Mapping[str, Any]) -> list[dict[str, Any]]:
 # ----------------------------------------------------------------- the decision
 
 
-def decide(critique: Mapping[str, Any], *, rounds_used: int, max_rounds: int) -> dict[str, Any]:
-    """pass | repair | fail_closed, with the weighted score and every reason."""
+def decide(critique: Mapping[str, Any], *, rounds_used: int, max_rounds: int,
+           final: bool = False) -> dict[str, Any]:
+    """pass | repair | fail_closed, with the weighted score and every reason.
+
+    ``final``: no further round can change the site (the repair loop found no
+    automatic lever left), so a site that does not pass fails closed now, with
+    the rounds it actually used recorded — never a pass by default."""
     scores: Mapping[str, Any] = critique.get("scores") or {}
     defects = [d for d in critique.get("defects") or [] if isinstance(d, Mapping)]
     score = weighted_score(scores)
@@ -282,9 +287,11 @@ def decide(critique: Mapping[str, Any], *, rounds_used: int, max_rounds: int) ->
     }
     if not reasons:
         return result
-    if rounds_used < max_rounds:
+    if rounds_used < max_rounds and not final:
         result["status"] = "repair"
         return result
+    if rounds_used < max_rounds:
+        reasons.append(f"stopped after round {rounds_used} of {max_rounds}: no automatic repair left")
     details = owner_requests(critique)
     result["status"] = "fail_closed"
     result["owner_request_details"] = details
