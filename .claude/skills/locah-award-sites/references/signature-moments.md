@@ -26,25 +26,33 @@ Status column: **live** = in the renderer today; **build** = specified, to build
 
 ## WebGL — `experience/gl/` (raw WebGL2, no library, dynamic import)
 
-**`living` — the living photograph** (build). The cover's photo drawn on a
+**`living` — the living photograph** (live: `gl/living.ts`, `GlLiving.tsx`). The cover's photo drawn on a
 canvas laid exactly over its `<img>` (the img stays for SEO/fallback; it hides
 only once the first GL frame is painted). Uniforms: `u_progress` (scene `--p`),
 `u_velocity` (scroll velocity, smoothed), `u_pointer` + `u_hover`, `u_time`.
 Fragment: cover-fit UV; a soft *liquid* displacement around the pointer
-(radius ~0.25, decays over 600 ms); a vertical *stretch* with scroll velocity
+(radius ~0.34, lens push 0.26, ripple 0.0075 — tuned until a pixel diff showed a visible bend, ~31k px; decays over 600 ms); a vertical *stretch* with scroll velocity
 (max ~2% of height, eased back); chromatic split = velocity × 0.002; film grain
 (DNA texture grain); an arrival *dissolve* (noise threshold 0 → 1 over 1.2 s).
 DPR capped at 1.75. Only 1–2 instances per page. Respect the concept: quiet_luxury
-and calm_care → no chroma, half displacement; noir/kinetic → full.
+and calm_care → no chroma, half displacement; noir/kinetic → full. The pointer's
+colour fringe follows the brand's chroma, so a calm brand never gets a rainbow.
 
-**`ribbon` — the curved gallery** (build). A strip of the range's / gallery's
+**`ribbon` — the curved gallery** (live: `gl/ribbon.ts`, `useGlRibbon`). A strip of the range's / gallery's
 photos on a bent plane (cylinder radius ~3× viewport width) inside a pinned
 section; scroll moves the strip sideways, velocity bends it more and tilts the
 cards; hovered card un-bends and its caption rises in DOM. Fallback: the
 existing `rail` (CSS horizontal scroll). For ranges with ≥ 6 pictured items.
+The pinned rail's stage sits in a `.fx-rail__pin` exactly as tall as its travel
+(progress is measured over `--track`, not the section) so the range's other
+things never scroll up under the cards.
 
-**`dissolve` — image to image** (build). Story/visit photo pairs that
-cross-dissolve through noise as the section scrolls (`--p`).
+**`dissolve` — image to image** (live: `gl/dissolve.ts`, `GlDissolve.tsx`,
+`Story.tsx` `HeldPicture`). A story's held picture (sticky split, story split,
+about split) becomes another of the business's own as the story is read — a
+noise front over `--p` 0.35→0.75; a CSS crossfade without GL. Never name a
+component so it differs from its renderer only in case (Windows resolved
+`import('./dissolve')` to `Dissolve.tsx` itself).
 
 Device gate for all GL: WebGL2 present, `deviceMemory >= 4` (when known),
 not `saveData`, not reduced motion. One shared loader; contexts released on
@@ -54,26 +62,26 @@ unmount; `IntersectionObserver` pauses offscreen canvases.
 
 | Moment | Spec | Status |
 |---|---|---|
-| `ground_morph` | as each section crosses 50% of the viewport the page ground eases to that section's ground (`data-ground="ink|paper|accent|bg"`): one continuous colour story instead of slabs; root vars `--ground`/`--ground-ink`, 700 ms | build |
-| variable type | display faces with axes move on scroll: Fraunces `SOFT`/`WONK`, Archivo `wdth` 62→100, Instrument Sans `wdth` — the statement's weight/width scrubbed by `--p` | build |
+| `ground_morph` | as each section crosses 50% of the viewport the page ground eases to that section's ground: one continuous colour story instead of slabs, 700 ms. Only between `bg` and `alt` — an ink or accent ground under dark text is unreadable | live |
+| variable type | display faces with axes move on scroll: Fraunces `SOFT`/`WONK`, Archivo `wdth` 62→100, Instrument Sans `wdth` — the title's axis eased in as it arrives (`--vk`) | live |
 | line mask reveal | headings rise line by line behind a mask (`data-split`) | live |
 | statement read | long statement lit word by word as read (`data-split='read'`) | live |
 | image curtain | `data-reveal='mask'` clip-path open + 1.22→1 scale | live |
-| zoom-through | a statement/story photo scales to fill the viewport, then the next section slides over it (pinned, `--p`) | build |
+| zoom-through | a statement/story photo scales to fill the viewport, then the next section slides over it (`--p`, clip-path `--open`) | live |
 | pinned rail | horizontal travel of large cards while the section holds (`data-rail`) | live |
 | stacked cards | plans/services stick and stack | live |
 | marquee | the business's own words, velocity-skewed | live |
-| velocity skew | images skew ≤ 3° with `--mv` on expressive budgets | build |
+| velocity skew | images skew ≤ 2.6° with `--mv`; never on restrained budgets | live |
 
 ## Interaction
 
 | Moment | Spec | Status |
 |---|---|---|
-| contextual cursor | ring cursor grows over `[data-cursor-label]` and shows the label ("View", "Add", "Book", "Call"); blend difference on dark; fine pointers only; DNA `cursor` | build (dot exists) |
+| contextual cursor | ring cursor grows over `[data-cursor-label]` and shows the label ("View", "Add", "Book", "Call"); blend difference on dark; fine pointers only; DNA `cursor_label` | live |
 | hover image reveal | on menu/service lists, the item's photo follows the pointer (`hover_list`) | live |
 | magnetic buttons | primary CTAs pulled toward pointer (`data-magnetic`) | live |
 | tilt + light | cards lean, a light slides (`data-tilt`) | live |
-| page transitions | cross-document View Transitions: the site name and header persist, content fades/slides; `@view-transition { navigation: auto }` + `view-transition-name` on the wordmark | build |
+| page transitions | cross-document View Transitions: the site name and header persist, content fades/slides; `@view-transition { navigation: auto }` + `view-transition-name` on the wordmark; same-site links via `startViewTransition` | live |
 | intro | the business's name once per visit, curtain lifts (premium/heritage) | live |
 
 ## Conversion surfaces — see conversion-seo.md
@@ -93,6 +101,13 @@ list in the cover, booking summary card, WhatsApp prefilled per item/plan.
 | calm_care | ground_morph (soft), dissolve |
 | technical_grid | variable type (width), ledger rules, contextual cursor |
 | kinetic_sport | variable type (Archivo wdth), velocity skew, living (full) |
+
+**Material decides too.** A moment is only drawn where the pages have
+something to show it on (`site_composer.unshowable_moments`): `living` a cover
+photograph, `ribbon` six pictured things in a rail or bento, `dissolve` a
+story picture and another to become, `zoom_through` a statement over a photo,
+`velocity_skew` three leaning pictures. Otherwise the DNA draws again without
+it and nothing else about the brand changes.
 
 Budgets gate them: `restrained` → one signature, no velocity effects;
 `gentle` → one; `signature` → two; `expressive` → two plus velocity.
