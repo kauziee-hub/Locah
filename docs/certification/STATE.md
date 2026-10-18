@@ -22,11 +22,11 @@ come from `.env` through `provider_env.py` (never the hosted database).
 | 3c | Customer — guest order / book / join / enquire up to payment through the site's own public endpoints; owner sees it; browser order + booking on desktop and phone (`shop.mjs`, `book.mjs`) | done; all 12 normal scenarios pass (run2–run4, 2026-10-18 07:08) |
 | 4 | Render — 4 viewports, full page, technical gates (fixed phone bar pinned at the page end for the shot) | done, `tools/certify/render.mjs` |
 | 5 | Critic | done, `certify/critic.py` (vision call per page group); `certify/loop.py` renders + critiques chosen pages in minutes |
-| 6 | Repair | not built — the generator/renderer is being fixed from real critiques first (see below) |
+| 6 | Repair | done, `certify/repair.py` (defect → section → layer lever; kept only when the page's score rises ≥ 0.25, else reverted); first real run pending |
 | 7 | Gate | done, `certify/gate.py`; **publish enforcement wired** (`services/website_certification.py`, migration 20261018150000, `WEBSITE_CERTIFICATION=off/record/enforce`; the stack runs `record`); the harness records every verdict |
 | 8 | Distinctness | done, `certify/distinct.py`; not yet run on a 25-site set |
-| 9 | Edits & lifecycle | regenerate one section / page exists (`ce2369a`); the 12 owner-edit and module-lifecycle tests are not built |
-| 10 | Report | not built |
+| 9 | Edits & lifecycle | done, `certify/edits.py` — 13 owner edits read back from the PUBLIC site + module off/on + three distinct refusals; first run (clinic) found the refusal-order bug (`30ab177`) |
+| 10 | Report | done, `certify/report.py` → report.json, REPORT.md, contact sheets (`python -m platform_testing.certify.report certify-out/report certify-out/run*`) |
 
 ## Measured quality (vision critic, weighted /10, pass = 8.5)
 
@@ -59,6 +59,14 @@ come from `.env` through `provider_env.py` (never the hosted database).
 - Footers in columns, photo-less ranges set in type, room above the phone bar,
   "My bookings" / "My orders" (`edcc254`).
 - Publish gate (`0492958`).
+
+## Scores after the fixes (vision critic, weighted /10)
+
+| Site | run5 | run6 (new build) | run6b (re-render only) |
+|---|---|---|---|
+| bakery | 5.59 | 6.03 (home 6.88) | pending |
+| clinic | 4.47 | 4.70 | 5.02 |
+| salon | 4.39 | 4.02 | 5.24 |
 
 ## Open findings (next)
 
