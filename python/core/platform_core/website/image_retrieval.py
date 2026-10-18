@@ -287,6 +287,11 @@ _DEFAULT_AVOID = (
     "text, letters, numbers or logos", "watermarks or stock-site marks", "collage, split panels or frames",
     "brand names on products or equipment", "people, faces or hands",
 )
+# Trades whose work is done on people: their photographs show hair, skin,
+# hands and bodies at work (never a face as the subject).
+_PEOPLE_TRADE = re.compile(
+    r"\b(salons?|spas?|beauty|make-?up|bridal|barbers?|barbershops?|hair\w*|nails?|facials?|massages?|"
+    r"tattoos?|gyms?|fitness|yoga|pilates|dance|trainers?)\b", re.I)
 
 
 @dataclass(frozen=True)
@@ -449,8 +454,11 @@ def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, con
     if role in {"story", "process", "detail"} and str(get("archetype") or "") in _GOODS_ARCHETYPES:
         subject = goods_subject(role, bp, slot.subject)
     avoid: tuple[str, ...] = _DEFAULT_AVOID
-    if role in {"story", "process"}:
-        # The work is done by people: hands may be in the picture, faces stay incidental.
+    if role in {"story", "process"} or _PEOPLE_TRADE.search(" ".join([trade, business, *offers])):
+        # The work is done by people: hands may be in the picture, faces stay
+        # incidental. In a trade whose work is done ON people (hair, skin,
+        # training) that holds for every slot — a salon's photographs with no
+        # hair and no hands found nothing (certification: 1 of 7 slots).
         avoid = tuple(a for a in _DEFAULT_AVOID if not a.startswith("people")) + (
             "faces as the main subject",)
     return PhotoBrief(

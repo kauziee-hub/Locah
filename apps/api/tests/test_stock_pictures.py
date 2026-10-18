@@ -699,3 +699,38 @@ def test_the_build_keeps_why_each_photo_slot_was_or_was_not_filled() -> None:
     assert round_["pool"] == 31 and round_["rejected"] == 6 and "shortlist" not in round_
     assert len(round_["queries"]) == 3 and len(round_["queries"][1]) == 90
     assert len(round_["reasons"]) == 4
+
+
+def test_a_salon_is_not_photographed_on_a_butchers_board() -> None:
+    # Certification: a salon in the premium_dark family (whose base profile is
+    # a food one) had its photo searches written for "a hair strand on a
+    # butcher's wooden board", and every slot forbade people and hands — 1 of
+    # 7 photographs found.
+    from types import SimpleNamespace
+
+    from platform_core.interview.creative_director import REFERENCE_PROFILES, _image_style
+    from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, Fact
+    from platform_core.website.image_retrieval import brief_for_slot
+
+    salon = BusinessBlueprint(business_id=uuid4())
+    salon.known_facts = {"description": Fact(value="a salon in RS Puram", source="USER_STATEMENT",
+                                             confirmation="confirmed"),
+                         "offerings": Fact(value="Haircut, colour, facials and bridal makeup",
+                                           source="USER_STATEMENT", confirmation="confirmed")}
+    salon.taxonomy.groups = [CatalogueGroup(name="Hair"), CatalogueGroup(name="Facials")]
+    food = REFERENCE_PROFILES["bold_food_commerce"]
+    assert "butcher" not in _image_style(food, salon, "service_appointment")
+    meat = BusinessBlueprint(business_id=uuid4())
+    meat.known_facts = {"offerings": Fact(value="chicken, mutton and fish", source="USER_STATEMENT",
+                                          confirmation="confirmed")}
+    assert _image_style(food, meat, "product_commerce") == food.image_style
+
+    slot = SimpleNamespace(key="category:hair", purpose="category", section="product_showcase",
+                           subject="Hair — haircut and colour", truth_class="factual", aspect="4:3")
+    direction = {"hero": "editorial_split", "palette": {"mode": "dark", "primary": "#111", "accent": "#c9a"},
+                 "image_style": _image_style(food, salon, "service_appointment"), "archetype": "service_appointment"}
+    brief = brief_for_slot(slot, direction, "a local business offering hair and facials", bp=salon)
+    assert not any(a.startswith("people") for a in brief.avoid)
+    assert "faces as the main subject" in brief.avoid
+    shop = brief_for_slot(slot, direction, "a local shop selling brass and copper vessels")
+    assert "people, faces or hands" in shop.avoid

@@ -229,6 +229,29 @@ _PREPARED_FOOD = re.compile(
     r"snacks|cakes?|bakery|kitchen|dishes|menu|catering)\b", re.I)
 
 
+_FOOD_PROFILES = frozenset({"bold_food_commerce", "editorial_home_food"})
+_FOOD_WORDS = re.compile(
+    r"\b(food|meals?|dishes|menu|biryani|curry|bakery|bakes|breads?|cakes?|sweets|snacks|cafe|café|coffee|tea|"
+    r"restaurant|kitchen|meat|chicken|mutton|fish|seafood|prawns?|grocer\w*|vegetables?|fruits?|dairy|spices?|"
+    r"pickles?|podi|thokku|tiffin|catering)\b", re.I)
+
+
+def _image_style(profile: ReferenceProfile, bp: BusinessBlueprint, archetype: str) -> str:
+    """How this site's photographs look. A design family may stand on a food
+    profile (premium_dark, modern_commerce); its food styling — "a dark slate
+    or butcher's wooden board" — is for businesses that sell food. A salon in
+    that family had its hair photographs searched on butcher's boards."""
+    if profile.id not in _FOOD_PROFILES or archetype == "menu_commerce":
+        return profile.image_style
+    facts = {**bp.known_facts, **bp.unconfirmed_facts}
+    said = " ".join([facts[k].value for k in ("description", "offerings", "classification") if k in facts]
+                    + [g.name for g in bp.taxonomy.groups])
+    if _FOOD_WORDS.search(said):
+        return profile.image_style
+    return ("considered editorial photograph of this trade's own work, tools, materials and spaces — one clear "
+            "subject, uncluttered, honest light, no text")
+
+
 def derive_archetype(bp: BusinessBlueprint, business_type: str | None = None) -> SiteArchetype:
     """What the website is for, from how this business works."""
     from platform_core.interview.discovery import characteristics, profile_type
@@ -506,7 +529,7 @@ def direct(
         product_variant=variant.product_variant,
         story_variant=profile.story_variant,
         motion=variant.motion,
-        image_style=profile.image_style,
+        image_style=_image_style(profile, bp, archetype),
         repairs=repairs,
         family=family.key,
         variant=variant.key,
