@@ -710,6 +710,17 @@ _NAME_TA = re.compile(
 _NAME_TA_SAID = re.compile(
     r"\b(?i:kadai|shop|hotel|cafe|business|company|salon)\s+(?i:per|peru|name)\s+"
     r"(?P<name>[A-Z0-9][^,.;!?]{1,58}?)(?=\s*(?:[,.;!?]|$)|\s+(?i:dhaan|thaan))")
+# "Amber Room Salon in RS Puram, Coimbatore." — a capitalised name that ends in
+# its own trade word, then where it is. The trade word keeps "Fresh Chicken in
+# Chromepet daily" from passing as a name.
+_NAME_PLACE = re.compile(
+    r"^\s*(?!(?i:best|top|good|famous|popular|new|affordable|cheap|premium|quality|leading|number|no)\b)"
+    r"(?P<name>(?:[A-Z0-9][\w&'’.-]*\s+(?:&\s+|of\s+|and\s+)?){1,4}"
+    r"(?i:salon|parlour|bakery|bakes|bakehouse|kitchen|cafe|café|restaurant|mess|clinic|hospital|dental|"
+    r"studio|store|stores|shop|mart|traders|gym|club|fitness|academy|school|centre|center|hotel|stay|"
+    r"retreat|resort|homestay|trust|foundation|meats|consulting|associates|architects|interiors|spa|"
+    r"boutique|table|house|enterprises|agency))"
+    r"(?=\s+(?i:in|at|near|on)\s+[A-Z])")
 _NAME_END = re.compile(r"\s+(?:and|in|at|near|on|from|which|that|where|—|-|,)\b.*$", re.I)
 _NOT_A_NAME = re.compile(
     r"^(?:we|i|our|my|this|it|the|a|an|they|people|customers|yes|no|ok|hi|hello|mostly|mainly|"
@@ -752,7 +763,7 @@ def business_name(text: str) -> str:
         if re.match(r"^\s*(?:this is|i'?m|i am)\s+\S+\s*,\s*i\b", start, re.I):
             continue
         lead = _NAME_LEADS.match(start) or _NAME_RUNS.match(start) or _NAME_TA.match(start) \
-            or _NAME_TA_SAID.search(start)
+            or _NAME_TA_SAID.search(start) or _NAME_PLACE.match(start)
         candidate = lead.group("name") if lead else ""
         # "Haircut, facial and bridal makeup iruku" starts a list, not a name.
         if lead is not None and lead.re is _NAME_LEADS and re.match(

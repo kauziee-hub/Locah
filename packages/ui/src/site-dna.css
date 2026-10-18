@@ -920,14 +920,18 @@
 .fx-statement--giant .fx-statement__text {
   margin-inline: auto;
 }
+/* A photograph set into the line like an inset plate — wide and squared off,
+   so it reads as a picture of the place, never as an emoji (certification:
+   capsule-shaped thumbnails at type size were read as food emoji). */
 .fx-statement__pill {
   display: inline-block;
-  width: 1.9em;
-  height: 0.82em;
-  margin: 0 0.12em;
-  vertical-align: -0.04em;
-  border-radius: 999px;
+  width: 2.7em;
+  height: 0.9em;
+  margin: 0 0.14em;
+  vertical-align: -0.06em;
+  border-radius: 0.12em;
   overflow: hidden;
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent);
 }
 .fx-statement__pill img {
   width: 100%;
@@ -935,7 +939,7 @@
   object-fit: cover;
 }
 [data-fx='on'] .fx-statement__pill {
-  transform: scale(calc(0.6 + var(--lit) * 0.4));
+  transform: scale(calc(0.85 + var(--lit) * 0.15));
   transition: transform 200ms linear;
 }
 .fx-statement--split .fx-statement__inner {

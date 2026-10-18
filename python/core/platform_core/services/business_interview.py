@@ -1466,6 +1466,7 @@ class BusinessInterviewService:
         from platform_core.interview.media_director import (
             draw_missing,
             owner_photos,
+            photo_audit,
             pictures_expected,
             plan_media,
             record,
@@ -1506,10 +1507,12 @@ class BusinessInterviewService:
         plan_media(bp, direction)
         images_started = time.monotonic()
         actor = job.triggered_by or business.primary_owner_identity_id
+        audit: list[dict[str, Any]] = []
         if picture_source() == "stock":
             # Real photographs, found and checked slot by slot (website.image_retrieval).
             found = await retrieve_missing(bp, direction, trade)
             drawn = found
+            audit = photo_audit(found)
             images_ms = int((time.monotonic() - images_started) * 1000)
             drawn_ok = await place_found_pictures(
                 session, bp, found, business_id=job.business_id, actor_id=actor, generation_job_id=job.id)
@@ -1551,6 +1554,9 @@ class BusinessInterviewService:
                            for p in bp.media_plan],
             "media_drawn": drawn_ok, "media_failed": len(drawn) - drawn_ok,
             "creative_latency_ms": latency_ms, "image_latency_ms": images_ms,
+            # Why each photograph was (not) found, so an empty slot is explained
+            # without searching again (queries, pool, the judge's reasons).
+            "photo_audit": audit,
         }
         if provider is not None:
             job.ai_provider = provider.provider_name

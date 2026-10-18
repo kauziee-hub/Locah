@@ -811,6 +811,13 @@ def _capture_name(bp: BusinessBlueprint, ti: TurnIntelligence, text: str, answer
     return True
 
 
+# Words that name a trade on their own when a business's name ends in them.
+_KIND_WORDS = frozenset({
+    "salon", "parlour", "bakery", "clinic", "hospital", "dental", "pharmacy", "cafe", "café", "restaurant",
+    "gym", "hotel", "resort", "homestay", "spa", "boutique", "mess", "bakehouse", "creamery", "butchery",
+})
+
+
 def _update_category(bp: BusinessBlueprint, text: str) -> str:
     """Read what kind of business this is from what the owner says.
 
@@ -832,8 +839,13 @@ def _update_category(bp: BusinessBlueprint, text: str) -> str:
     # is a gym, not a powerlifting club, because the owner said "a gym".
     name = bp.identity["display_name"].value if "display_name" in bp.identity else ""
 
+    # …but a name that ends in the trade's own word ("Amber Room Salon",
+    # "Nalam Family Clinic") says it plainly: that word stays as evidence.
+    last = name.split()[-1].casefold() if name.split() else ""
+    kept = f" {last} " if last in _KIND_WORDS else " "
+
     def unnamed(words: str) -> str:
-        return re.sub(re.escape(name), " ", words, flags=re.I) if name and not bp.name_pending else words
+        return re.sub(re.escape(name), kept, words, flags=re.I) if name and not bp.name_pending else words
 
     text = unnamed(text)
     said_now = infer_from_text(text)

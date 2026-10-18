@@ -420,6 +420,25 @@ async def retrieve_missing(
     return [(by_key[brief.key], outcome) for brief, outcome in results]
 
 
+def photo_audit(found: list[tuple[Slot, Any]]) -> list[dict[str, Any]]:
+    """Each slot's search in brief — the queries tried, how many candidates came
+    back, what the judge said against them, what was chosen. Kept on the build
+    job: an empty slot is explained from it, not by spending quota again."""
+    rows: list[dict[str, Any]] = []
+    for slot, outcome in found:
+        rounds: list[dict[str, Any]] = []
+        for entry in (getattr(outcome, "log", None) or [])[:4]:
+            row: dict[str, Any] = {k: entry[k] for k in ("round", "pool", "by_source", "result", "rejected")
+                                   if k in entry}
+            row["queries"] = [str(q)[:90] for q in (entry.get("queries") or [])[:3]]
+            row["reasons"] = [str(r)[:160] for r in (entry.get("reasons") or [])[:4]]
+            if entry.get("selected"):
+                row["selected"] = str(entry["selected"])[:80]
+            rounds.append(row)
+        rows.append({"key": slot.key, "reason": str(getattr(outcome, "reason", "") or "")[:60], "rounds": rounds})
+    return rows
+
+
 def site_concept(bp: BusinessBlueprint, direction: CreativeDirection) -> str:
     """The design DNA concept the site will be composed with (noir editorial,
     warm craft, fresh market…), so its photographs are art-directed with it.

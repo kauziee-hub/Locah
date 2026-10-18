@@ -679,3 +679,23 @@ async def test_storage_being_down_leaves_the_slot_empty_instead_of_failing_the_b
     with pytest.raises(ValidationError):
         await MediaService.persist_found(_session(), business_id=uuid4(), actor_id=uuid4(), purpose="website",
                                          found=pixabay(9), alt_text="x", generated_for="category:x")
+
+
+def test_the_build_keeps_why_each_photo_slot_was_or_was_not_filled() -> None:
+    # Certification: most slots came back "none_qualified" and nothing said
+    # why without searching (and spending quota) again.
+    from types import SimpleNamespace
+
+    from platform_core.interview.media_director import photo_audit
+
+    outcome = SimpleNamespace(reason="none_qualified", log=[
+        {"round": 1, "queries": ["seafood thali on banana leaf", "x" * 200, "c", "d"], "pool": 31,
+         "by_source": {"unsplash": 20, "pixabay": 11}, "shortlist": ["a", "b"], "rejected": 6,
+         "reasons": ["shows a Thai curry, not a Konkan fish thali"] * 6},
+    ])
+    rows = photo_audit([(SimpleNamespace(key="category:seafood"), outcome)])
+    assert rows[0]["key"] == "category:seafood" and rows[0]["reason"] == "none_qualified"
+    round_ = rows[0]["rounds"][0]
+    assert round_["pool"] == 31 and round_["rejected"] == 6 and "shortlist" not in round_
+    assert len(round_["queries"]) == 3 and len(round_["queries"][1]) == 90
+    assert len(round_["reasons"]) == 4

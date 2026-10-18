@@ -248,3 +248,40 @@ def test_the_name_is_heard_after_a_greeting_or_an_introduction(said: str, name: 
     from platform_core.interview.reader import business_name
 
     assert business_name(said) == name
+
+
+@pytest.mark.parametrize(("said", "name"), [
+    ("Amber Room Salon in RS Puram, Coimbatore. Haircut, colour, facials and bridal makeup.", "Amber Room Salon"),
+    ("Hearth & Honey Bakery in Aundh, Pune. Breads, baguettes, cookies.", "Hearth & Honey Bakery"),
+    ("Fresh Chicken in Chromepet daily", ""),
+    ("Best Salon in Coimbatore for brides", ""),
+    ("Haircut in RS Puram", ""),
+])
+def test_a_name_that_ends_in_its_trade_is_heard_before_the_place(said: str, name: str) -> None:
+    # Certification: the salon opened with its name and place and was still
+    # asked "What's the salon called?".
+    from platform_core.interview.reader import business_name
+
+    assert business_name(said) == name
+
+
+def test_a_name_that_ends_in_its_trade_still_says_what_kind_of_business_it_is() -> None:
+    # Certification: once "Amber Room Salon" was heard as the name, the name was
+    # taken out before reading the kind, and "bridal makeup" made the salon a
+    # makeup artist's portfolio. A trade word ending the name stays as evidence.
+    from platform_core.interview.models import Message
+    from platform_core.interview.orchestrator import _update_category
+
+    said = "Amber Room Salon in RS Puram, Coimbatore. Haircut, colour, facials and bridal makeup."
+    bp = BusinessBlueprint(business_id=uuid.uuid4(), identity={
+        "display_name": Fact(value="Amber Room Salon", source="USER_STATEMENT", confirmation="confirmed")})
+    bp.messages = [Message(role="user", text=said)]
+    _update_category(bp, said)
+    assert bp.category is not None and bp.category.subcategory_key == "salon"
+
+    gym = "Grit Barbell Club, a gym in Anna Nagar."
+    bp = BusinessBlueprint(business_id=uuid.uuid4(), identity={
+        "display_name": Fact(value="Grit Barbell Club", source="USER_STATEMENT", confirmation="confirmed")})
+    bp.messages = [Message(role="user", text=gym)]
+    _update_category(bp, gym)
+    assert bp.category is not None and bp.category.subcategory_key == "gym"
