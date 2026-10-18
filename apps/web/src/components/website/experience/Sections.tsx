@@ -127,11 +127,12 @@ export function Statement({
       </section>
     )
   }
-  // giant — the words as large as the screen allows, with small pictures set
-  // between them like type ornaments (only pictures the page already shows).
+  // giant — the words as large as the screen allows, and nothing else: the
+  // small pictures once set between them read as emoji and as images that
+  // failed to load, and squeezed the line on a phone (three certification
+  // critiques), so the sentence stands in type alone.
   const words = text.split(/\s+/)
-  const pills = pictures.slice(0, 2)
-  const at = [Math.max(1, Math.floor(words.length / 3)), Math.max(2, Math.floor((words.length * 2) / 3))]
+  void pictures
   return (
     <section className={`ls-section fx-statement fx-statement--giant ${ground}`} data-progress="">
       <div className="fx-statement__inner">
@@ -142,16 +143,9 @@ export function Statement({
         ) : null}
         <p className="fx-statement__text" data-split="read">
           {words.map((word, i) => {
-            const pill = pills[at.indexOf(i)]
             const marked = highlight && highlight.split(/\s+/).includes(word.replace(/[.,!?]$/, ''))
             return (
               <span key={i}>
-                {pill && words.length > 6 ? (
-                  <span className="fx-statement__pill" aria-hidden="true">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={pill.url} srcSet={srcSetFor(pill.url)} alt="" loading="lazy" />
-                  </span>
-                ) : null}
                 <span className={marked ? 'fx-mark' : undefined}>{word}</span>{' '}
               </span>
             )

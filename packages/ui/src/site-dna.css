@@ -196,7 +196,20 @@
    phone breaks rather than pushing the page sideways. */
 [data-locah-site] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text, .fx-cta__title) {
   font-synthesis: none;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+}
+/* A word breaks only on a phone, where it can really be wider than the screen.
+   Elsewhere `text-wrap: balance` narrows the line to even the lines out, and a
+   breakable word was split to fit that narrower line ("Perungudi OM / R" —
+   certification). On a phone the lines are evened with `pretty` instead,
+   which never narrows the line below the column. */
+@media (max-width: 599px) {
+  [data-locah-site] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text, .fx-cta__title) {
+    overflow-wrap: break-word;
+  }
+  [data-locah-site][data-locah-site] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) {
+    text-wrap: pretty;
+  }
 }
 /* Fraunces at display size: its optical size follows the type (font-optical-
    sizing), half-soft corners, and the upright never wonky. */
@@ -2158,10 +2171,14 @@
   margin: 0;
   max-width: 18ch;
   font-family: var(--site-display-font);
-  font-size: calc(clamp(2.4rem, 1.2rem + 5.2vw, 6.4rem) * var(--site-display-scale, 1));
+  /* 2rem on a phone: at 2.4rem a display face's long word ran past the screen
+     and the section (overflow hidden, for the drifting photo) clipped it. */
+  font-size: calc(clamp(2rem, 1.1rem + 5.2vw, 6.4rem) * var(--site-display-scale, 1));
   line-height: calc(var(--site-display-leading, 0.95) + 0.05);
   letter-spacing: calc(var(--site-display-tracking, -0.035em) * 0.8);
   color: #fff;
+  /* White type over a photograph keeps its contrast where the picture is light. */
+  text-shadow: 0 1px 24px rgb(0 0 0 / 0.35);
 }
 .fx-statement--image .ls-eyebrow {
   color: rgba(255, 255, 255, 0.82);

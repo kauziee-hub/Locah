@@ -2297,8 +2297,33 @@
 
 /* The site's own pages in the bar; with them there, the back link would be a
    second exit beside the first. */
-.ls-frame__nav {
-  display: none;
+/* On a phone the site's pages are a scrolling row under the name — a booking
+   or checkout page with only a wordmark read as a dead end (certification). */
+@media (max-width: 759px) {
+  .ls-frame__bar {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .ls-frame__nav {
+    display: flex;
+    order: 3;
+    width: 100%;
+    gap: 1.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  [data-locah-site] .ls-frame__nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    color: var(--site-muted);
+    text-decoration: none;
+  }
+  [data-locah-site] .ls-frame__nav ~ a.ls-frame__back {
+    display: none;
+  }
 }
 @media (min-width: 760px) {
   .ls-frame__nav {
@@ -2500,11 +2525,47 @@
   margin: 0.5rem 0 0;
 }
 [data-locah-site] .ls-book__facts dt {
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--site-muted);
+  color: color-mix(in srgb, var(--site-ink) 72%, var(--site-bg));
   padding-top: 0.15rem;
+}
+/* A choice is a small card: what it is, how long, what it costs. */
+[data-locah-site] .ls-chip.ls-book__choice {
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+  min-width: min(100%, 13rem);
+  padding: 0.75rem 1rem;
+  border-radius: var(--site-radius);
+  text-align: left;
+}
+[data-locah-site] .ls-book__choice-name {
+  font-weight: 700;
+  font-size: 1rem;
+}
+[data-locah-site] .ls-book__choice-meta {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--site-ink) 72%, var(--site-bg));
+}
+[data-locah-site] .ls-book__choice.is-on .ls-book__choice-meta {
+  color: inherit;
+}
+[data-locah-site] .ls-book__choice-text {
+  font-size: 0.82rem;
+  font-weight: 400;
+  opacity: 0.85;
+  max-width: 28ch;
+}
+[data-locah-site] .ls-book__next li.ls-book__last {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+[data-locah-site] .ls-book__last .ls-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 [data-locah-site] .ls-book__facts dd {
   margin: 0;

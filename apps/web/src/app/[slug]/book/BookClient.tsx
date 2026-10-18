@@ -22,7 +22,10 @@ import { useWords } from '@/components/website/SiteWords'
  */
 
 type Mode = 'appointment' | 'table' | 'class_session' | 'accommodation' | 'rental' | 'site_visit' | 'event_date'
-type Choice = { key: string; mode: Mode; title: string; offeringId: string | null; minutes: number; price: number | null }
+type Choice = {
+  key: string; mode: Mode; title: string; offeringId: string | null; minutes: number; price: number | null
+  description?: string | null
+}
 type Picked = { starts_at: string; ends_at: string; label: string; full?: boolean; resourceId?: string | null }
 
 const SLOT_MODES: Mode[] = ['appointment', 'table', 'class_session', 'site_visit']
@@ -74,6 +77,7 @@ export default function BookClient({
   const choices = useMemo<Choice[]>(() => {
     const list: Choice[] = options.offerings.map((o) => ({
       key: o.id, mode: o.mode as Mode, title: o.title, offeringId: o.id, minutes: o.minutes, price: o.price_amount,
+      description: o.description,
     }))
     if (options.table) list.unshift({ key: 'table', mode: 'table', title: t('Reserve a table'), offeringId: null, minutes: 90, price: null })
     return list
@@ -260,12 +264,20 @@ export default function BookClient({
             <div key={m} className="ls-book__group">
               <p className="ls-meta">{t(GROUP[m])}</p>
               <div className="ls-choice">
-                {cs.map((c) => (
-                  <button key={c.key} type="button" onClick={() => setChoiceKey(c.key)} aria-pressed={c.key === choiceKey}
-                    className={`ls-chip${c.key === choiceKey ? ' is-on' : ''}`}>
-                    {c.title}{c.price !== null ? ` · ₹${c.price}` : ''}
-                  </button>
-                ))}
+                {cs.map((c) => {
+                  // Each choice says what it is, how long it takes and what it
+                  // costs — not a pill of a name and a price (certification).
+                  const meta = [SLOT_MODES.includes(c.mode) && c.minutes ? t('{n} min', { n: c.minutes }) : '',
+                    c.price !== null ? `₹${c.price}` : ''].filter(Boolean).join(' · ')
+                  return (
+                    <button key={c.key} type="button" onClick={() => setChoiceKey(c.key)} aria-pressed={c.key === choiceKey}
+                      className={`ls-chip ls-book__choice${c.key === choiceKey ? ' is-on' : ''}`}>
+                      <span className="ls-book__choice-name">{c.title}</span>
+                      {meta ? <span className="ls-book__choice-meta">{meta}</span> : null}
+                      {c.description ? <span className="ls-book__choice-text">{c.description}</span> : null}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ))}
@@ -411,11 +423,18 @@ export default function BookClient({
         <ol className="ls-book__next">
           <li className="ls-bill__card">
             <span className="ls-book__n" aria-hidden="true">2</span>
-            {timed ? t('Pick a day and a time') : t('Pick your dates')}
+            {timed ? t('Choose a day and a time') : t('Choose your dates')}
           </li>
-          <li className="ls-bill__card">
-            <span className="ls-book__n" aria-hidden="true">3</span>
-            {t('Your name and number, and it is booked')}
+          <li className="ls-bill__card ls-book__last">
+            <span>
+              <span className="ls-book__n" aria-hidden="true">3</span>
+              {t('Your name and phone number')}
+            </span>
+            {/* Where the booking is confirmed, shown from the start. */}
+            <button type="button" className="ls-btn ls-checkout__place" disabled aria-describedby="book-first">
+              {t('Confirm booking')}
+            </button>
+            <small id="book-first" className="ls-meta">{t('Choose what you would like to book first.')}</small>
           </li>
         </ol>
       ) : null}

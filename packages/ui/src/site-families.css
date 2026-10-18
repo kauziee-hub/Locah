@@ -522,7 +522,9 @@
 .ls-foot__statement {
   max-width: 1120px;
   margin: clamp(2.5rem, 2rem + 3vw, 4.5rem) auto 0;
-  padding: 0.12em 0 0.1em;
+  /* Room under the line for descenders (g, y, p): the box clips (overflow
+     hidden, for the one-line fit) and cut them mid-glyph. */
+  padding: 0.12em 0 0.24em;
   overflow: hidden;
   white-space: nowrap;
   font-family: var(--site-display-font);
