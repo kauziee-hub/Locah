@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { srcSetFor } from '../picture'
 import { AuroraCanvas } from './AuroraCanvas'
+import { GlLiving } from './gl/GlLiving'
 
 /**
  * Hero scenes: the first screen of a site as a moment, not a banner.
@@ -113,6 +114,8 @@ export function HeroScene({
           <div className="fx-zoom__frame">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={lead.url} srcSet={srcSetFor(lead.url)} alt={lead.alt_text || ''} fetchPriority="high" />
+            {/* The living photograph (design DNA signature) may take this one over. */}
+            <GlLiving />
             <div className="fx-zoom__scrim" aria-hidden="true" />
             <div className="ls-hero__inner fx-zoom__copy fx-zoom__copy--light" aria-hidden="true" {...INERT}>
               <Copy parts={light} late />
@@ -225,6 +228,7 @@ export function HeroScene({
         <div className="fx-depth__bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={lead.url} srcSet={srcSetFor(lead.url)} alt="" fetchPriority="high" />
+          <GlLiving />
         </div>
         <div className="ls-hero__inner fx-depth__copy">
           <Copy parts={parts} />

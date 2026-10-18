@@ -79,6 +79,33 @@ const DNA_VALUES: Record<string, readonly string[]> = {
   photo: ['macro', 'warm', 'full', 'clean'],
   // The motion director's budget: how much may move (motion.ts reads it too).
   budget: ['restrained', 'gentle', 'signature', 'expressive'],
+  // The page's signature moment and, on a signature or expressive budget, a
+  // second one (the flourish). living / ribbon / dissolve mount WebGL
+  // (experience/gl); the rest are motion.ts + site-dna.css.
+  signature: [
+    'living', 'ribbon', 'dissolve', 'ground_morph', 'variable_type', 'zoom_through', 'cursor_label', 'velocity_skew',
+    'none',
+  ],
+  flourish: [
+    'living', 'ribbon', 'dissolve', 'ground_morph', 'variable_type', 'zoom_through', 'cursor_label', 'velocity_skew',
+    'none',
+  ],
+}
+
+/** The signature moments a site draws (its signature and its flourish). */
+export type Moment =
+  | 'living'
+  | 'ribbon'
+  | 'dissolve'
+  | 'ground_morph'
+  | 'variable_type'
+  | 'zoom_through'
+  | 'cursor_label'
+  | 'velocity_skew'
+
+/** Whether the site's DNA drew this moment, as its signature or its flourish. */
+export function hasMoment(dna: SiteDna, moment: Moment): boolean {
+  return dna.signature === moment || dna.flourish === moment
 }
 
 export type SiteDna = Partial<Record<keyof typeof DNA_VALUES, string>>

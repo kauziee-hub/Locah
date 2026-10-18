@@ -23,6 +23,22 @@
  * and, on the site root, --scroll (page progress) and --mv (scroll velocity,
  * for marquees), plus data-scrolled / data-nav-away for the header.
  *
+ * The design DNA's signature moments (data-signature / data-flourish) that are
+ * scroll and pointer choreography run here too; site-dna.css draws them:
+ *
+ *   ground_morph   each section declares its ground (data-ground: bg, alt,
+ *                  ink, accent — read from its own class and the DNA's invert);
+ *                  as one crosses the middle of the screen the page's ground
+ *                  (data-ground-now → --ground / --ground-ink) eases to it
+ *   variable_type  section titles and the statement carry --vk: 0 → 1 as they
+ *                  arrive, which their face's axes (width, softness, weight)
+ *                  follow; their height is held so nothing below moves
+ *   cursor_label   the pointer's ring says what a click does (View, Add, Book,
+ *                  Call) — from data-cursor-label, or read from the target
+ *
+ * zoom_through and velocity_skew are CSS alone (data-scene's --p, the root's
+ * --mv); living, ribbon and dissolve are WebGL (./gl).
+ *
  * Smooth scrolling (Lenis, MIT) is used on desktop pointers only, never on
  * touch, and never for the calm motion language.
  */
@@ -34,6 +50,56 @@ type Lang = 'silk' | 'snap' | 'float' | 'calm'
 export type MotionHandle = { stop: () => void }
 
 const clamp = (v: number, lo = 0, hi = 1) => (v < lo ? lo : v > hi ? hi : v)
+
+/** Display faces loaded with an axis to move on (site-fonts.ts; design_dna.MOVING_FACES). */
+const MOVING_FACES = new Set([
+  'fraunces', 'archivo', 'instrumentsans', 'bricolage', 'intertight', 'spacegrotesk', 'bigshoulders', 'newsreader',
+  'bodoni', 'manrope', 'outfit',
+])
+const GROUND_TOKENS = { bg: '--site-bg', alt: '--site-bg-alt', ink: '--site-ink', accent: '--site-primary' } as const
+type Ground = keyof typeof GROUND_TOKENS
+
+/** [r, g, b, a] (0–255, a 0–1) from a computed colour: rgb(), rgba() or color(srgb …). */
+function channels(color: string): [number, number, number, number] | null {
+  const nums = color.match(/-?[\d.]+/g)?.map(Number)
+  if (!nums || nums.length < 3) return null
+  const unit = color.startsWith('color(') ? 255 : 1
+  return [nums[0] * unit, nums[1] * unit, nums[2] * unit, nums.length > 3 ? nums[3] : 1]
+}
+
+function luminance([r, g, b]: [number, number, number, number]): number {
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+}
+
+/** The page's own sections (and its footer), each one's ground read from what
+ *  it already is: its class, the DNA's invert, its computed background. */
+function declareGrounds(root: HTMLElement): { hosts: HTMLElement[]; inferred: HTMLElement[] } {
+  const probe = document.createElement('span')
+  probe.setAttribute('aria-hidden', 'true')
+  probe.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none'
+  root.appendChild(probe)
+  const tokens: Array<[Ground, string]> = []
+  for (const [ground, token] of Object.entries(GROUND_TOKENS) as Array<[Ground, string]>) {
+    probe.style.backgroundColor = `var(${token})`
+    tokens.push([ground, getComputedStyle(probe).backgroundColor])
+  }
+  probe.remove()
+  const hosts = Array.from(root.querySelectorAll<HTMLElement>('main section, footer.ls-foot')).filter(
+    (el) => !el.parentElement?.closest('section')
+  )
+  const inferred: HTMLElement[] = []
+  for (const host of hosts) {
+    if (host.dataset.ground) continue
+    const own = getComputedStyle(host).backgroundColor
+    const rgba = channels(own)
+    // A section with no background of its own sits on the page's ground.
+    const ground = !rgba || rgba[3] < 0.05 ? 'bg' : tokens.find(([, value]) => value === own)?.[0]
+    if (!ground) continue // its own colour (a picture band, a gradient): it keeps it
+    host.dataset.ground = ground
+    inferred.push(host)
+  }
+  return { hosts: hosts.filter((h) => h.dataset.ground), inferred }
+}
 
 export function splitWords(el: HTMLElement): number {
   if (el.dataset.splitDone) return Number(el.style.getPropertyValue('--wn')) || 0
@@ -108,6 +174,39 @@ export function start(root: HTMLElement): MotionHandle {
   let stopped = false
 
   root.setAttribute('data-fx-live', '')
+  // The signature moments this site drew (design DNA).
+  const moments = new Set([root.dataset.signature, root.dataset.flourish].filter(Boolean))
+
+  /* -------------------------------------------------------- ground morph */
+  if (moments.has('ground_morph')) {
+    // Read every section's own ground first: once the morph is live the
+    // sections take the page's ground, and their own is no longer computable.
+    const { hosts, inferred } = declareGrounds(root)
+    if (hosts.length > 1) {
+      root.setAttribute('data-ground-now', hosts[0].dataset.ground || 'bg')
+      const groundIO = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const ground = (entry.target as HTMLElement).dataset.ground
+            // The ground travels between the page's light grounds only: an ink
+            // or accent band keeps its own slab, or the words of the sections
+            // beside it would sit dark on dark while it passes.
+            if (entry.isIntersecting && (ground === 'bg' || ground === 'alt')) root.setAttribute('data-ground-now', ground)
+          }
+        },
+        // A line across the middle of the screen.
+        { rootMargin: '-49% 0px -49% 0px', threshold: 0 }
+      )
+      hosts.forEach((host) => groundIO.observe(host))
+      root.setAttribute('data-ground-live', '')
+      cleanups.push(() => {
+        groundIO.disconnect()
+        root.removeAttribute('data-ground-live')
+        root.removeAttribute('data-ground-now')
+        inferred.forEach((host) => host.removeAttribute('data-ground'))
+      })
+    }
+  }
 
   /* ------------------------------------------------------------ reveals */
   const revealIO = new IntersectionObserver(
@@ -189,6 +288,46 @@ export function start(root: HTMLElement): MotionHandle {
   mutations.observe(root, { childList: true, subtree: true })
   cleanups.push(() => mutations.disconnect())
 
+  /* ------------------------------------------------------- variable type */
+  // Section titles and the statement move on their face's axes as they
+  // arrive (--vk 0 → 1). A moving line is never wider than its still self,
+  // and its still height is held, so the text below never shifts.
+  const moving =
+    moments.has('variable_type') && MOVING_FACES.has(root.dataset.display || '')
+      ? Array.from(root.querySelectorAll<HTMLElement>('main :is(.ls-title, .fx-statement__text, .fx-cta__title)')).filter(
+          (el) => !el.closest('.ls-hero')
+        )
+      : []
+  const movingSet = new Set<Element>(moving)
+  function holdType() {
+    if (stopped || !moving.length) return
+    root.removeAttribute('data-vt-live')
+    moving.forEach((el) => el.style.removeProperty('min-height'))
+    const heights = moving.map((el) => el.getBoundingClientRect().height)
+    moving.forEach((el, i) => {
+      el.style.minHeight = `${heights[i].toFixed(1)}px`
+      el.setAttribute('data-vt', '')
+    })
+    root.setAttribute('data-vt-live', '')
+    schedule()
+  }
+  if (moving.length) {
+    moving.forEach((el) => progressIO.observe(el))
+    // Measured in the real face, not the fallback it is drawn in while loading.
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts
+    ;(fonts ? fonts.ready : Promise.resolve()).then(holdType, holdType)
+    cleanups.push(() => {
+      root.removeAttribute('data-vt-live')
+      moving.forEach((el) => {
+        el.style.removeProperty('min-height')
+        el.style.removeProperty('--vk')
+        el.removeAttribute('data-vt')
+      })
+    })
+  }
+  let holdTimer = 0
+  cleanups.push(() => window.clearTimeout(holdTimer))
+
   /* --------------------------------------------------------------- rails */
   const rails = Array.from(root.querySelectorAll<HTMLElement>('[data-rail]'))
   function measureRails() {
@@ -227,12 +366,21 @@ export function start(root: HTMLElement): MotionHandle {
       const rect = el.getBoundingClientRect()
       let p: number
       if (el.hasAttribute('data-scene') || el.hasAttribute('data-rail-pinned')) {
-        const span = rect.height - vh
+        // A pinned rail travels its --track; what follows its pin is not travel.
+        const travel = el.hasAttribute('data-rail-pinned') ? parseFloat(el.style.getPropertyValue('--track')) : NaN
+        const span = travel > 0 ? travel : rect.height - vh
         p = span > 0 ? clamp(-rect.top / span) : clamp(1 - rect.top / vh)
         // Copy that arrives late in a scene can be pressed once it is there.
         el.toggleAttribute('data-late', p > 0.5)
       } else {
         p = clamp(1 - (rect.top + rect.height) / (vh + rect.height))
+      }
+      if (movingSet.has(el)) {
+        // Settled just below the middle of the screen, eased (smoothstep).
+        const k = clamp(p / 0.42)
+        if (el.hasAttribute('data-vt')) el.style.setProperty('--vk', (k * k * (3 - 2 * k)).toFixed(3))
+        // A title is not a scene: its section's --p stays its section's.
+        if (!el.matches(PROGRESS)) continue
       }
       el.style.setProperty('--p', p.toFixed(4))
     }
@@ -258,6 +406,10 @@ export function start(root: HTMLElement): MotionHandle {
   const onResize = () => {
     vh = window.innerHeight
     measureRails()
+    if (moving.length) {
+      window.clearTimeout(holdTimer)
+      holdTimer = window.setTimeout(holdType, 220)
+    }
     schedule()
   }
   window.addEventListener('scroll', onScroll, { passive: true })
@@ -377,14 +529,63 @@ export function start(root: HTMLElement): MotionHandle {
     follower.alt = ''
     follower.setAttribute('aria-hidden', 'true')
     root.appendChild(follower)
-    // A dot that trails the pointer and grows over anything pressable — only
-    // where the design asked for it.
-    const dot = root.dataset.cursor === 'dot' ? document.createElement('span') : null
+    // A ring that trails the pointer, grows over anything pressable and says
+    // what a click does there — only where the design asked for it (the DNA's
+    // cursor, or the cursor_label moment, which also reads the label from the
+    // target itself: a pictured link is "View", an add button "Add").
+    const labelled = moments.has('cursor_label')
+    const dot = root.dataset.cursor === 'dot' || labelled ? document.createElement('span') : null
+    const dotLabel = document.createElement('span')
+    let cursorWords: Record<string, string> = {}
+    try {
+      cursorWords = JSON.parse(root.dataset.cursorWords || '{}') as Record<string, string>
+    } catch {
+      cursorWords = {}
+    }
     if (dot) {
-      dot.className = 'fx-cursor'
+      dot.className = labelled ? 'fx-cursor fx-cursor--label' : 'fx-cursor'
       dot.setAttribute('aria-hidden', 'true')
+      dotLabel.className = 'fx-cursor__label'
+      dot.appendChild(dotLabel)
       root.appendChild(dot)
       root.setAttribute('data-cursor-live', '')
+    }
+    const wordFor = (key: string) => cursorWords[key] || ''
+    const labelFor = (target: Element | null, pressable: Element | null): string => {
+      const own = target?.closest<HTMLElement>('[data-cursor-label]')
+      if (own) return wordFor(own.dataset.cursorLabel || '') || own.dataset.cursorLabel || ''
+      if (!labelled || !pressable) return ''
+      if (pressable.matches('.ls-order')) return wordFor('add')
+      const href = pressable.getAttribute('href') || ''
+      if (href.startsWith('tel:')) return wordFor('call')
+      if (/wa\.me|^whatsapp:/.test(href)) return wordFor('chat')
+      if (/\/book(?:[/?#]|$)/.test(href)) return wordFor('book')
+      if (pressable.matches('a') && pressable.querySelector('img')) return wordFor('view')
+      return ''
+    }
+    // Over a dark ground or a photograph the ring inverts what is under it.
+    let groundEl: Element | null = null
+    let groundAt = 0
+    let groundDark = false
+    const darkUnder = (target: Element | null): boolean => {
+      if (!target) return false
+      if (target.closest('img, picture, video, canvas, .fx-statement--image')) return true
+      const host = target.closest('section, footer, header, .ls-utility') || root
+      const now = performance.now()
+      if (host === groundEl && now - groundAt < 400) return groundDark
+      groundEl = host
+      groundAt = now
+      let el: Element | null = host
+      while (el) {
+        const rgba = channels(getComputedStyle(el).backgroundColor)
+        if (rgba && rgba[3] > 0.5) {
+          groundDark = luminance(rgba) < 0.42
+          return groundDark
+        }
+        el = el === root ? null : el.parentElement
+      }
+      groundDark = root.dataset.palette === 'dark'
+      return groundDark
     }
     let fx = 0
     let fy = 0
@@ -410,11 +611,25 @@ export function start(root: HTMLElement): MotionHandle {
       } else {
         follower.classList.remove('is-on')
       }
-      if (dot) dot.classList.toggle('is-big', Boolean(target?.closest('a, button, summary, [data-tilt]')))
+      if (dot) {
+        const pressable = target?.closest('a, button, summary, label, [data-tilt], [data-cursor-label]') || null
+        const label = labelFor(target, pressable)
+        if (dotLabel.textContent !== label) dotLabel.textContent = label
+        dot.classList.add('is-on')
+        dot.classList.toggle('is-big', Boolean(pressable))
+        dot.classList.toggle('is-label', Boolean(label))
+        dot.classList.toggle('is-dark', darkUnder(target))
+      }
       if (!chase) chase = window.requestAnimationFrame(ease)
     }
+    // Out of the window, the ring goes with the pointer.
+    const onOut = (event: PointerEvent) => {
+      if (!event.relatedTarget) dot?.classList.remove('is-on')
+    }
     window.addEventListener('pointermove', onTrack, { passive: true })
+    document.addEventListener('pointerout', onOut)
     cleanups.push(
+      () => document.removeEventListener('pointerout', onOut),
       () => window.removeEventListener('pointermove', onTrack),
       () => chase && window.cancelAnimationFrame(chase),
       () => follower.remove(),

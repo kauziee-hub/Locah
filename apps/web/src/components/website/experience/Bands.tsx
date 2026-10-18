@@ -113,35 +113,37 @@ export function CategoryScene({
   if (variant === 'rail') {
     return (
       <section id={anchor} className={`ls-section fx-rail ${alt ? 'ls-section--alt' : ''}`} data-rail="">
-        <div className="fx-rail__stage">
-          <div className="fx-rail__head">
-            {head}
-            <span className="fx-rail__count" aria-hidden="true">
-              {String(rows.length).padStart(2, '0')}
-            </span>
-          </div>
-          <div className="fx-rail__track" data-rail-track="">
-            <ul className="fx-rail__list" data-reveal-group="">
-              {rows.map((row, i) => (
-                <li key={row.name} className="fx-rail__card" data-tilt="">
-                  <span className="fx-rail__index">{String(i + 1).padStart(2, '0')}</span>
-                  <div className="fx-rail__media">
-                    {row.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={row.image.url} srcSet={srcSetFor(row.image.url)} alt={row.image.alt_text || row.name} loading="lazy" />
-                    ) : (
-                      <span className="ls-picture__plate" aria-hidden="true">
-                        <span>{row.name}</span>
-                      </span>
-                    )}
-                  </div>
-                  <div className="fx-rail__body">{copy(row)}</div>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="fx-rail__bar" aria-hidden="true">
-            <span />
+        <div className="fx-rail__pin">
+          <div className="fx-rail__stage">
+            <div className="fx-rail__head">
+              {head}
+              <span className="fx-rail__count" aria-hidden="true">
+                {String(rows.length).padStart(2, '0')}
+              </span>
+            </div>
+            <div className="fx-rail__track" data-rail-track="">
+              <ul className="fx-rail__list" data-reveal-group="">
+                {rows.map((row, i) => (
+                  <li key={row.name} className="fx-rail__card" data-tilt="">
+                    <span className="fx-rail__index">{String(i + 1).padStart(2, '0')}</span>
+                    <div className="fx-rail__media">
+                      {row.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={row.image.url} srcSet={srcSetFor(row.image.url)} alt={row.image.alt_text || row.name} loading="lazy" />
+                      ) : (
+                        <span className="ls-picture__plate" aria-hidden="true">
+                          <span>{row.name}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="fx-rail__body">{copy(row)}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="fx-rail__bar" aria-hidden="true">
+              <span />
+            </div>
           </div>
         </div>
       </section>

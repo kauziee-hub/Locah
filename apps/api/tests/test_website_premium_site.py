@@ -66,6 +66,73 @@ def test_every_drawn_face_accent_edge_and_grade_has_its_css() -> None:
             for value in getattr(concept, trait):
                 assert f"[data-{trait}='{value}']" in css, (concept.key, trait, value)
         assert f"[data-photo='{concept.photo}']" in css, (concept.key, concept.photo)
+        for moment in concept.signatures:
+            assert f"[data-signature='{moment}']" in css, (concept.key, moment)
+
+
+def test_each_brand_gets_its_own_signature_moment_within_its_budget() -> None:
+    from platform_core.interview.design_dna import SIGNATURES
+
+    pairs: dict[str, set[tuple[str, str]]] = {}
+    for family in ("premium_dark", "modern_commerce", "monumental", "playful_editorial", "editorial_warm"):
+        for i in range(40):
+            dna = choose_dna(BUTCHER, family=family, archetype="product_commerce", motion="silk", seed=f"{family}-{i}")
+            assert dna.signature in SIGNATURES or dna.signature == "none"
+            assert dna.signature in BY_KEY[dna.concept].signatures or dna.signature == "none"
+            # A restrained or gentle brand gets one moment; a second is never the first again.
+            if dna.budget in {"restrained", "gentle"}:
+                assert dna.flourish == "none", dna
+            else:
+                assert dna.flourish != dna.signature, dna
+            if dna.signature == "variable_type" or dna.flourish == "variable_type":
+                from platform_core.interview.design_dna import MOVING_FACES
+
+                assert dna.display in MOVING_FACES, dna
+            pairs.setdefault(dna.concept, set()).add((dna.signature, dna.flourish))
+    # Businesses of one concept do not all share one moment.
+    for concept, seen in pairs.items():
+        if len(BY_KEY[concept].signatures) > 1:
+            assert len(seen) >= 2, (concept, seen)
+
+
+def test_a_moment_is_only_drawn_where_the_pages_can_show_it() -> None:
+    from dataclasses import replace
+
+    from platform_core.interview.site_composer import unshowable_moments
+
+    def section(kind: str, variant: str, **content: Any) -> dict[str, Any]:
+        return {"section_type_id": kind, "layout_variant": variant, "content": content, "is_visible": True}
+
+    pictured = [{"name": f"Cut {i}", "image_asset_id": f"item-{i}"} for i in range(6)]
+    rich = [{"sections": [
+        section("hero", "arch", image_asset_id="hero"),
+        section("product_showcase", "bento", items=pictured),
+        section("about", "sticky_split", image_asset_id="story"),
+        section("statement", "image", text="Cut to order.", image_asset_id="process"),
+    ]}]
+    assert unshowable_moments(rich) == frozenset()
+    bare = [{"sections": [
+        section("hero", "kinetic"),
+        section("product_showcase", "bento", items=pictured[:3]),
+        section("about", "text_only"),
+        section("statement", "giant", text="Cut to order."),
+    ]}]
+    # Three pictures still lean with the scroll; nothing else has material.
+    assert unshowable_moments(bare) == {"living", "ribbon", "dissolve", "zoom_through"}
+    # A story's picture alone on its page has nothing to become.
+    alone = [{"sections": [section("about", "story_split", image_asset_id="story")]}]
+    assert "dissolve" in unshowable_moments(alone)
+
+    # Drawn again without them, the rest of the brand stays exactly as it was.
+    unable = frozenset({"living", "ribbon", "dissolve", "zoom_through", "velocity_skew"})
+    for family in ("premium_dark", "modern_commerce", "monumental", "playful_editorial", "editorial_warm"):
+        for i in range(40):
+            seed = f"{family}-{i}"
+            free = choose_dna(BUTCHER, family=family, archetype="product_commerce", motion="silk", seed=seed)
+            bound = choose_dna(BUTCHER, family=family, archetype="product_commerce", motion="silk", seed=seed,
+                               concept=free.concept, unable=unable)
+            assert bound.signature not in unable and bound.flourish not in unable, bound
+            assert replace(bound, signature=free.signature, flourish=free.flourish) == free
 
 
 def test_an_accent_is_only_ever_set_in_a_style_its_face_really_has() -> None:

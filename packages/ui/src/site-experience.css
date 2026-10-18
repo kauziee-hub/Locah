@@ -1719,10 +1719,14 @@ html.lenis.lenis-smooth {
   transform-origin: 0 50%;
   transform: scaleX(var(--p, 0));
 }
-/* Pinned: the section holds while the cards travel past. */
+/* Pinned: the stage holds while the cards travel past. Its pin is exactly
+   that tall, so whatever follows in the section (the range's other things,
+   its chooser) starts only once the cards have arrived — never under them. */
 [data-fx='on'] .fx-rail[data-rail-pinned] {
-  height: calc(100vh + var(--track) * 1px);
   padding: 0;
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__pin {
+  height: calc(100vh + var(--track) * 1px);
 }
 [data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__stage {
   position: sticky;
@@ -1730,8 +1734,19 @@ html.lenis.lenis-smooth {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Below the site's bar, and never centred past its own top: a stage taller
+     than the screen loses its foot, not its title. */
+  justify-content: safe center;
+  padding-top: var(--fx-nav-h);
   overflow: hidden;
+}
+/* The pictures give way first, so the title, the price and the button all
+   fit one screen. */
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__media {
+  max-height: max(220px, min(48vh, 440px, calc(100vh - 580px)));
+}
+[data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__head {
+  margin-bottom: clamp(0.85rem, 0.4rem + 1.1vw, 1.6rem);
 }
 [data-fx='on'] .fx-rail[data-rail-pinned] .fx-rail__track {
   overflow: visible;

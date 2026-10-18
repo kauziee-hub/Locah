@@ -9,6 +9,7 @@ import { useWords } from './SiteWords'
 import type { Words } from '@/lib/site-words'
 import { OfferingCard } from './OfferingCard'
 import { money as formatMoney, soldOut, type PublicOffering } from './offering-view'
+import { useGlRibbon } from './experience/gl/GlRibbon'
 
 /**
  * The things a visitor chooses between — dishes, cuts, plans, projects,
@@ -195,6 +196,7 @@ export function ProductShowcase({
   const [added, setAdded] = useState('')
   const [choosing, setChoosing] = useState<PublicOffering | null>(null)
   const sheet = useRef<HTMLDialogElement>(null)
+  const ribbonRef = useRef<HTMLElement>(null)
   const canOrder = Boolean(capabilities?.order)
   // The catalogue is ready: show the business's real items and prices (the
   // Offerings module's public read contract), whether or not ordering is on.
@@ -260,6 +262,14 @@ export function ProductShowcase({
   const shown = useMemo(
     () => (active === 'All' ? shownItems : shownItems.filter((item) => item.category === active)),
     [active, shownItems]
+  )
+  // The curved gallery (design DNA signature `ribbon`, experience/gl/ribbon):
+  // a rail or a bento of six or more pictures drawn on a bent plane. The
+  // markup below is never replaced — it is the fallback and stays in the DOM.
+  useGlRibbon(
+    ribbonRef,
+    variant === 'rail' || variant === 'bento' ? variant : null,
+    shown.map((item) => item.image?.url || '').join('|')
   )
 
   function quickAdd(row: PublicOffering) {
@@ -463,40 +473,42 @@ export function ProductShowcase({
     const riding = pictured.length >= 3 ? pictured : shown
     const waiting = pictured.length >= 3 ? shown.filter((item) => !item.image) : []
     return (
-      <section id={anchor} className={`ls-section fx-rail ${ground}`} data-rail="">
-        <div className="fx-rail__stage">
-          <div className="fx-rail__head">
-            {head}
-            <span className="fx-rail__count" aria-hidden="true">
-              {String(riding.length).padStart(2, '0')}
-            </span>
-          </div>
-          {chips ? <div className="fx-rail__head">{chips}</div> : null}
-          <div className="fx-rail__track" data-rail-track="">
-            <ul className="fx-rail__list" data-reveal-group="">
-              {riding.map((item, i) => (
-                <li key={`${item.category}-${item.name}`} className="fx-rail__card" data-tilt="">
-                  <span className="fx-rail__index">{String(i + 1).padStart(2, '0')}</span>
-                  <Picture image={item.image} name={item.name} className="fx-rail__media" />
-                  <div className="fx-rail__body">
-                    {item.category ? <span className="fx-rail__kicker">{item.category}</span> : null}
-                    <div className="fx-rail__row">
-                      <h3>
-                        {item.name} <Diet value={item.diet} t={t} />
-                      </h3>
-                      <Price item={item} />
+      <section ref={ribbonRef} id={anchor} className={`ls-section fx-rail ${ground}`} data-rail="">
+        <div className="fx-rail__pin">
+          <div className="fx-rail__stage">
+            <div className="fx-rail__head">
+              {head}
+              <span className="fx-rail__count" aria-hidden="true">
+                {String(riding.length).padStart(2, '0')}
+              </span>
+            </div>
+            {chips ? <div className="fx-rail__head">{chips}</div> : null}
+            <div className="fx-rail__track" data-rail-track="">
+              <ul className="fx-rail__list" data-reveal-group="">
+                {riding.map((item, i) => (
+                  <li key={`${item.category}-${item.name}`} className="fx-rail__card" data-tilt="">
+                    <span className="fx-rail__index">{String(i + 1).padStart(2, '0')}</span>
+                    <Picture image={item.image} name={item.name} className="fx-rail__media" />
+                    <div className="fx-rail__body">
+                      {item.category ? <span className="fx-rail__kicker">{item.category}</span> : null}
+                      <div className="fx-rail__row">
+                        <h3>
+                          {item.name} <Diet value={item.diet} t={t} />
+                        </h3>
+                        <Price item={item} />
+                      </div>
+                      {item.description ? <p>{item.description}</p> : null}
+                      <div>{action(item)}</div>
                     </div>
-                    {item.description ? <p>{item.description}</p> : null}
-                    <div>{action(item)}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="fx-rail__bar" aria-hidden="true">
+              <span />
+            </div>
+            {basket}
           </div>
-          <div className="fx-rail__bar" aria-hidden="true">
-            <span />
-          </div>
-          {basket}
         </div>
         {waiting.length ? (
           <div className="ls-inner fx-rail__rest">
@@ -596,7 +608,7 @@ export function ProductShowcase({
     // The largest cell is always a picture when there is one to give it.
     const ordered = [...shown.filter((item) => item.image), ...shown.filter((item) => !item.image)]
     return (
-      <section id={anchor} className={`ls-section ${ground}`}>
+      <section ref={ribbonRef} id={anchor} className={`ls-section ${ground}`}>
         <div className="ls-inner">
           {head}
           {chips}

@@ -10,7 +10,7 @@ import { withPreviewToken } from './preview-links'
 import { siteWords, type SiteLang, type Words } from '@/lib/site-words'
 import { HeroScene, sceneFor, type HeroParts, type Pic } from './experience/HeroScenes'
 import { COVERS, Cover, coverFor, type CoverContext } from './experience/Covers'
-import { StorySection } from './experience/Story'
+import { HeldPicture, StorySection } from './experience/Story'
 import { CategoryScene, CtaGiant, Marquee } from './experience/Bands'
 import { FaqSection, MediaText, PageHero, Pillars, Statement } from './experience/Sections'
 
@@ -365,6 +365,7 @@ export function SectionRenderer({
   lang = 'en',
   pictures = [],
   cover,
+  dissolve = false,
 }: {
   section: Section
   lang?: SiteLang
@@ -375,6 +376,9 @@ export function SectionRenderer({
   /** What a cover may draw on besides the hero's own words: the place and
    *  the range's best priced things (WebsitePageView gathers them). */
   cover?: CoverFacts
+  /** The site's design DNA drew `dissolve`: a story's held picture turns
+   *  into another of the business's own as it is read. */
+  dissolve?: boolean
   /** Position on the page — used only to alternate section grounds. */
   index?: number
   /** The business's live capabilities, so a section never offers an action the
@@ -592,6 +596,7 @@ export function SectionRenderer({
             image={image}
             pictures={pictures}
             alt={alt}
+            dissolve={dissolve}
           />
         )
       }
@@ -600,8 +605,7 @@ export function SectionRenderer({
           <section id={anchor} className={`ls-section ls-story ${alt ? 'ls-section--alt' : ''}`} data-progress="">
             <div className="ls-inner ls-story__grid">
               <div className="ls-story__media" data-reveal="mask">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} loading="lazy" />
+                <HeldPicture image={image} pictures={pictures} alt={title} dissolve={dissolve} sizes="(min-width: 901px) 44vw, 100vw" />
               </div>
               <div className="ls-story__copy">
                 <p className="ls-eyebrow" data-reveal="fade">
@@ -646,12 +650,19 @@ export function SectionRenderer({
       }
 
       return (
-        <section className={`ls-section ls-about--${variant} ${alt ? 'ls-section--alt' : ''}`}>
+        <section
+          className={`ls-section ls-about--${variant} ${alt ? 'ls-section--alt' : ''}`}
+          {...(dissolve ? { 'data-progress': '' } : {})}
+        >
           <div className="ls-inner">
             <div className="ls-about__split">
               <div className="ls-about__media" data-reveal="mask">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} />
+                {dissolve ? (
+                  <HeldPicture image={image} pictures={pictures} alt={title} dissolve sizes="(min-width: 901px) 50vw, 100vw" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={image.url} srcSet={srcSetFor(image.url)} alt={image.alt_text || title} />
+                )}
               </div>
               <div>
                 <Heading eyebrow={t('About')} title={title} />
@@ -1138,25 +1149,27 @@ export function SectionRenderer({
         // A run of the owner's pictures, held in place while it travels.
         return (
           <section className={`ls-section fx-rail fx-gallery-rail ${alt ? 'ls-section--alt' : ''}`} data-rail="">
-            <div className="fx-rail__stage">
-              {c.title ? (
-                <div className="fx-rail__head">
-                  <div className="ls-head">
-                    <h2 className="ls-title" data-split="">
-                      {str(c.title)}
-                    </h2>
+            <div className="fx-rail__pin">
+              <div className="fx-rail__stage">
+                {c.title ? (
+                  <div className="fx-rail__head">
+                    <div className="ls-head">
+                      <h2 className="ls-title" data-split="">
+                        {str(c.title)}
+                      </h2>
+                    </div>
                   </div>
+                ) : null}
+                <div className="fx-rail__track" data-rail-track="">
+                  <ul className="fx-rail__list">
+                    {images.map((img, i) => (
+                      <li key={i} className="fx-gallery-rail__item">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} srcSet={srcSetFor(img.url)} alt={img.alt_text || ''} loading="lazy" />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ) : null}
-              <div className="fx-rail__track" data-rail-track="">
-                <ul className="fx-rail__list">
-                  {images.map((img, i) => (
-                    <li key={i} className="fx-gallery-rail__item">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} srcSet={srcSetFor(img.url)} alt={img.alt_text || ''} loading="lazy" />
-                    </li>
-                  ))}
-                </ul>
               </div>
             </div>
           </section>

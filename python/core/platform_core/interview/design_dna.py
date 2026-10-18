@@ -25,6 +25,14 @@ layer of decisions — an art director's, made in order:
    how much may move. The budget is the motion director's brief: a restrained
    brand gets one moving moment, an expressive one may move everywhere — never
    every card animated because it can be.
+4. **the signature moment** — the one thing a visitor remembers and would
+   describe to a friend (the living photograph, the curved ribbon of the
+   range, a ground that changes colour as you read, type that moves on its
+   axes, a photograph you zoom through, a cursor that says what a click does,
+   pictures that lean with the speed of the scroll). Each concept owns its
+   list, preferred first; the draw is seeded by the business; the budget
+   decides how many: restrained and gentle brands get one, signature and
+   expressive brands a second one (the flourish), never the same twice.
 
 Every value maps to rules in packages/ui/src/site-dna.css (and the budget to
 the motion runtime); the renderer drops anything else.
@@ -36,11 +44,22 @@ import hashlib
 from dataclasses import asdict, dataclass
 from typing import Any
 
-DNA_VERSION = "dna-v2"
+DNA_VERSION = "dna-v3"
 
 SERIF = frozenset({"dmserif", "bodoni", "youngserif", "italiana", "fraunces", "playfair", "cormorant", "newsreader",
                    "instrumentserif"})
 BUDGETS = ("restrained", "gentle", "signature", "expressive")
+# The signature moments (references/signature-moments.md). living, ribbon and
+# dissolve are WebGL over a real <img> (experience/gl); the rest are scroll
+# and pointer choreography (experience/motion.ts + site-dna.css).
+SIGNATURES = ("living", "ribbon", "dissolve", "ground_morph", "variable_type", "zoom_through", "cursor_label",
+              "velocity_skew")
+# Display faces loaded with an axis the type can move on (site-fonts.ts):
+# width (Archivo, Instrument Sans, Bricolage), Fraunces's SOFT and WONK, or
+# weight. A static face (Young Serif, DM Serif, Plex, Instrument Serif) has
+# nothing to move, so variable type is never drawn for it.
+MOVING_FACES = frozenset({"fraunces", "archivo", "instrumentsans", "bricolage", "intertight", "spacegrotesk",
+                          "bigshoulders", "newsreader", "bodoni", "manrope", "outfit"})
 
 
 @dataclass(frozen=True)
@@ -61,6 +80,8 @@ class DesignDna:
     space: str = "regular"
     photo: str = "clean"
     budget: str = "gentle"
+    signature: str = "none"
+    flourish: str = "none"
 
     def theme(self) -> dict[str, Any]:
         return {"version": DNA_VERSION, **asdict(self)}
@@ -87,6 +108,7 @@ class Concept:
     space: str
     photo: str
     budget: str
+    signatures: tuple[str, ...] = ()  # the signature moments it may draw, preferred first
 
 
 CONCEPTS: tuple[Concept, ...] = (
@@ -101,6 +123,9 @@ CONCEPTS: tuple[Concept, ...] = (
         ("grain", "none"), ("rays",), ("slant", "none"), ("sharp", "underline"), ("overlay", "bar"),
         ("flat", "bordered"), ("rect", "slant"), ("dot", "none"), ("bold", "bands"),
         "regular", "macro", "signature",
+        # the living photograph at full strength, a ribbon of the range, pictures that
+        # lean with the scroll, the ground turning to ink.
+        signatures=("living", "ribbon", "velocity_skew", "ground_morph"),
     ),
     Concept(
         "warm_craft",
@@ -112,6 +137,8 @@ CONCEPTS: tuple[Concept, ...] = (
         ("paper", "pattern"), ("kolam", "arcs", "checks"), ("none", "ticket"), ("soft", "pill"),
         ("centered", "bar"), ("elevated", "offset", "bordered"), ("arch", "rounded"), ("none",),
         ("bands", "calm"), "regular", "warm", "gentle",
+        # paper warming to crust and back, Fraunces softening as it is read, a gentle living photo.
+        signatures=("ground_morph", "variable_type", "living"),
     ),
     Concept(
         "quiet_luxury",
@@ -122,6 +149,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("bodoni", "instrumentserif", "cormorant", "newsreader"), ("italic", "plain"), ("manrope", "instrumentsans"),
         ("none",), ("arcs",), ("none",), ("underline", "outline"), ("centered", "overlay"),
         ("flat",), ("rect",), ("none", "dot"), ("calm", "bands"), "airy", "full", "restrained",
+        signatures=("dissolve", "zoom_through", "living"),
     ),
     Concept(
         "fresh_market",
@@ -133,6 +161,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("none", "grain"), ("waves", "rays"), ("none",), ("pill", "soft"),
         ("floating", "bar"), ("elevated", "glass"), ("rounded",), ("none",), ("bold", "calm"),
         "regular", "clean", "expressive",
+        signatures=("ribbon", "cursor_label"),
     ),
     Concept(
         "playful_pop",
@@ -142,6 +171,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("bricolage", "fraunces", "youngserif"), ("italic", "script"), ("dm", "outfit"),
         ("dots", "pattern"), ("checks", "waves"), ("wave", "curve"), ("pill",), ("floating",),
         ("offset",), ("blob", "rounded"), ("none",), ("bold",), "regular", "clean", "expressive",
+        signatures=("variable_type", "cursor_label", "velocity_skew"),
     ),
     Concept(
         "calm_care",
@@ -152,6 +182,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("newsreader", "fraunces", "instrumentsans", "manrope"), ("plain", "italic"), ("manrope", "dm"),
         ("none", "paper"), ("waves",), ("none",), ("soft", "pill"), ("bar", "floating", "centered"),
         ("elevated", "flat"), ("rounded", "arch"), ("none",), ("calm",), "airy", "clean", "restrained",
+        signatures=("ground_morph", "dissolve"),
     ),
     Concept(
         "technical_grid",
@@ -161,6 +192,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("intertight", "spacegrotesk", "plex"), ("plain", "tone", "caps"), ("plex", "dm"),
         ("grid",), ("rays",), ("none", "slant"), ("sharp",), ("bar",), ("bordered",), ("rect",), ("none",),
         ("bands",), "dense", "clean", "gentle",
+        signatures=("variable_type", "cursor_label"),
     ),
     Concept(
         "kinetic_sport",
@@ -170,6 +202,7 @@ CONCEPTS: tuple[Concept, ...] = (
         ("bigshoulders", "archivo"), ("caps",), ("instrumentsans", "dm"),
         ("grain", "none"), ("rays",), ("slant",), ("sharp",), ("overlay", "bar"), ("bordered", "offset"),
         ("slant", "rect"), ("dot", "none"), ("bold",), "regular", "macro", "expressive",
+        signatures=("variable_type", "velocity_skew", "living"),
     ),
 )
 BY_KEY = {c.key: c for c in CONCEPTS}
@@ -195,6 +228,32 @@ def _ranked(values: tuple[str, ...]) -> list[tuple[str, float]]:
     return [(v, float(len(values) - i) + 1) for i, v in enumerate(values)]
 
 
+def signature_moments(concept: Concept, *, display: str, budget: str, calm: bool, seed: str,
+                      unable: frozenset[str] = frozenset()) -> tuple[str, str]:
+    """This brand's signature moment and, when its budget allows a second, the flourish.
+
+    From the concept's own list, preferred first, seeded by the business. A
+    face with no axis cannot move on one; a restrained brand never gets
+    pictures that lean with the scroll; a calm brand never a cursor show.
+    Restrained and gentle brands get one moment; signature and expressive
+    brands a second, never the same one twice. `unable`: the moments this
+    site has nothing to show on (no cover photograph to make live, too few
+    pictured things for a ribbon) — never drawn.
+    """
+    options = [s for s in concept.signatures
+               if s not in unable
+               and not (s == "variable_type" and display not in MOVING_FACES)
+               and not (s == "velocity_skew" and budget == "restrained")
+               and not (s == "cursor_label" and calm)]
+    if not options:
+        return "none", "none"
+    signature = _draw(_ranked(tuple(options)), seed, "signature")
+    rest = tuple(s for s in options if s != signature)
+    if budget in {"restrained", "gentle"} or not rest:
+        return signature, "none"
+    return signature, _draw(_ranked(rest), seed, "flourish")
+
+
 def concept_weights(dims: dict[str, Any], family: str) -> dict[str, float]:
     """How well each concept suits this business on this family."""
     said = {f"{k}={v}" for k, v in dims.items() if isinstance(v, str)}
@@ -206,7 +265,7 @@ def concept_weights(dims: dict[str, Any], family: str) -> dict[str, float]:
 
 
 def choose_dna(dims: dict[str, Any], *, family: str, archetype: str, motion: str, seed: str,
-               concept: str | None = None) -> DesignDna:
+               concept: str | None = None, unable: frozenset[str] = frozenset()) -> DesignDna:
     personality = str(dims.get("personality") or "friendly")
     mode = str(dims.get("service_mode") or "none")
     trust = str(dims.get("trust") or "normal")
@@ -235,6 +294,8 @@ def choose_dna(dims: dict[str, Any], *, family: str, archetype: str, motion: str
         headline = "italic" if serif else "plain"
     cursor = "none" if calm or personality == "calm" else _draw(_ranked(chosen.cursor), seed, "cursor")
     budget = "restrained" if calm else chosen.budget
+    signature, flourish = signature_moments(chosen, display=display, budget=budget,
+                                            calm=calm or personality == "calm", seed=seed, unable=unable)
 
     del archetype  # the family's palette already carries it
     return DesignDna(
@@ -245,4 +306,5 @@ def choose_dna(dims: dict[str, Any], *, family: str, archetype: str, motion: str
         shape=_draw(_ranked(chosen.shape), seed, "shape"), cursor=cursor,
         invert="calm" if calm else _draw(_ranked(chosen.invert), seed, "invert"),
         concept=chosen.key, space=chosen.space, photo=chosen.photo, budget=budget,
+        signature=signature, flourish=flourish,
     )

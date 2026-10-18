@@ -8,8 +8,9 @@ import { LanguageSwitch } from './LanguageSwitch'
 import { SiteWordsProvider } from './SiteWords'
 import type { PublicWebsitePayload, PhotoCredit } from '@/lib/public-website'
 import { LANG_LOCALE, offered, siteWords, type SiteLang } from '@/lib/site-words'
-import { MOTION_BOOT, SiteMotion } from './experience/SiteMotion'
-import { siteDna, siteExperience } from './experience/experience'
+import { MOTION_BOOT, OpenNow, SiteMotion } from './experience/SiteMotion'
+import { hasMoment, siteDna, siteExperience } from './experience/experience'
+import { readHours, type OpenWords } from './experience/open-now'
 import type { Pic } from './experience/HeroScenes'
 
 /**
@@ -67,6 +68,18 @@ function finite(value: unknown, allowed: readonly string[], fallback: string) {
   const candidate = String(value || '')
   return allowed.includes(candidate) ? candidate : fallback
 }
+
+/** The word a contextual cursor shows over an action (motion.ts translates the key). */
+function cursorKey(href: string): string | undefined {
+  if (href.startsWith('tel:')) return 'call'
+  if (/wa\.me|^whatsapp:/.test(href)) return 'chat'
+  if (/\/book(?:[/?#]|$)/.test(href)) return 'book'
+  return undefined
+}
+
+/** Cross-document view transitions for the site's own pages, opted into only
+ *  by a tenant page (the stylesheets are global; LOCAH's own pages stay out). */
+const VIEW_TRANSITIONS = '@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}'
 
 type StrategyDecision = { section_type_id: string; emphasis: string; include?: boolean }
 
@@ -357,6 +370,35 @@ export function WebsitePageView({
     profile === 'bold_food_commerce' || profile === 'editorial_home_food' ? t('Call to order') : t('Call')
   const barPrimary = (stickyPrimary || toolLeads) && Boolean(ctaLabel && ctaTarget) && !/wa\.me|^tel:/.test(ctaTarget)
 
+  // Open now / Opens at, from the location's own saved hours (the browser
+  // works it out on the business's clock). No hours, no chip — never invented.
+  const hours = readHours((place as Record<string, unknown>).hours)
+  const openWords: OpenWords = {
+    open: t('Open now'),
+    until: t('until {time}'),
+    opens: t('Opens {time}'),
+    tomorrow: t('Opens tomorrow {time}'),
+    onDay: t('Opens {day} {time}'),
+    always: t('Open 24 hours'),
+  }
+  const openChip = (className: string) =>
+    hours ? <OpenNow hours={hours} words={openWords} locale={LANG_LOCALE[lang]} className={className} /> : null
+  // The desktop action dock: the header's live action and one channel beside
+  // it — WhatsApp, or Call when the action already is the chat.
+  const ctaIsChannel = /wa\.me|^whatsapp:|^tel:/.test(ctaTarget)
+  const dockChannel =
+    waHref && !/wa\.me|^whatsapp:/.test(ctaTarget)
+      ? { href: waHref, label: journey ? t(journey.label) : 'WhatsApp', key: 'chat', external: true }
+      : contact.phone && !ctaTarget.startsWith('tel:')
+        ? { href: `tel:${contact.phone}`, label: callLabel, key: 'call', external: false }
+        : null
+  const dock = ctaLabel && ctaTarget && !ctaIsChannel ? { label: ctaLabel, href: ctaTarget } : null
+  // The pointer's ring and the words it may say (motion.ts reads them).
+  const cursorLive = dna.cursor === 'dot' || hasMoment(dna, 'cursor_label')
+  const cursorWords = cursorLive
+    ? JSON.stringify({ view: t('View'), add: t('Add'), book: t('Book'), call: t('Call'), chat: 'WhatsApp' })
+    : undefined
+
   return (
     <div
       className={siteFontVariables}
@@ -399,6 +441,9 @@ export function WebsitePageView({
       data-space={dna.space}
       data-photo={dna.photo}
       data-budget={dna.budget}
+      data-signature={dna.signature}
+      data-flourish={dna.flourish}
+      data-cursor-words={cursorWords}
       data-scroll={experience.scroll}
       data-grain={experience.grain ? '' : undefined}
       style={styleVars}
@@ -407,6 +452,7 @@ export function WebsitePageView({
       suppressHydrationWarning
     >
       <script dangerouslySetInnerHTML={{ __html: MOTION_BOOT }} />
+      {motion !== 'none' ? <style dangerouslySetInnerHTML={{ __html: VIEW_TRANSITIONS }} /> : null}
       <SiteMotion />
       {experience.progress ? <div className="fx-progress" aria-hidden="true" /> : null}
       {experience.intro && !data.is_preview ? (
@@ -446,7 +492,7 @@ export function WebsitePageView({
       <LanguageSwitch languages={languages} current={lang} place="nav" />
       <header className={`ls-nav ls-nav--${navStyle}`}>
         <div className="ls-nav__inner">
-          <Link className="ls-nav__brand" href={withPreviewToken(`/${slug}`, previewToken)}>
+          <Link className="ls-nav__brand" data-vt="" href={withPreviewToken(`/${slug}`, previewToken)}>
             {logo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img className="ls-nav__logo" src={logo} alt="" />
@@ -464,6 +510,7 @@ export function WebsitePageView({
                 <Link
                   key={`${item.label}-${path}`}
                   className="ls-nav__link"
+                  data-vt=""
                   href={withPreviewToken(navHref(path), previewToken)}
                   aria-current={
                     (path === '/' && data.page.slug === 'home') ||
@@ -482,9 +529,11 @@ export function WebsitePageView({
               <a className="ls-nav__link ls-nav__account" href={`/${slug}/account`}>{t('My account')}</a>
             ) : null}
             {canOrder ? <CommerceCart slug={slug} /> : null}
+            {openChip('fx-open--nav')}
             {ctaLabel && ctaTarget ? (
               <a
                 className="ls-btn ls-btn--sm ls-nav__cta"
+                data-cursor-label={cursorKey(ctaTarget)}
                 href={ctaTarget}
                 target={ctaTarget.startsWith('http') ? '_blank' : undefined}
                 rel={ctaTarget.startsWith('http') ? 'noopener noreferrer' : undefined}
@@ -508,6 +557,7 @@ export function WebsitePageView({
                       return (
                         <Link
                           key={`sheet-${item.label}-${path}`}
+                          data-vt=""
                           href={withPreviewToken(navHref(path), previewToken)}
                           style={{ '--i': i } as React.CSSProperties}
                         >
@@ -551,10 +601,33 @@ export function WebsitePageView({
               previewToken={previewToken}
               pictures={pictures}
               cover={coverFacts}
+              dissolve={hasMoment(dna, 'dissolve')}
             />
           </div>
         ))}
       </main>
+
+      {dock ? (
+        // The live action within a glance once the cover has gone (SiteMotion
+        // shows it; hidden at the closing band and the footer, and on phones,
+        // whose bar carries the same).
+        <aside className="fx-dock" aria-label={name}>
+          {openChip('fx-open--dock')}
+          <a className="ls-btn fx-dock__primary" href={dock.href} data-cursor-label={cursorKey(dock.href)}>
+            {dock.label}
+          </a>
+          {dockChannel ? (
+            <a
+              className="fx-dock__channel"
+              href={dockChannel.href}
+              data-cursor-label={dockChannel.key}
+              {...(dockChannel.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            >
+              {dockChannel.label}
+            </a>
+          ) : null}
+        </aside>
+      ) : null}
 
       {waHref ? (
         <a

@@ -33,7 +33,7 @@ from platform_core.interview import motion_director, site_critic, site_pages
 from platform_core.interview.creative_director import CreativeDirection
 from platform_core.interview.catalogue_capture import item_traits
 from platform_core.interview.design_dna import DesignDna, choose_dna
-from platform_core.interview.experience import Experience, choose_experience, cover_for, marquee_words
+from platform_core.interview.experience import COVERS, Experience, choose_experience, cover_for, marquee_words
 from platform_core.interview.media_director import picture_for, slug
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, TargetState
 from platform_core.interview.taxonomy import normalise_name
@@ -842,6 +842,14 @@ def compose_site(
         "composer_version": COMPOSER_VERSION,
         "generation": meta or {},
     }
+    # A signature moment needs something to happen on. One these pages have
+    # nothing for (a living photograph without a cover photograph, a ribbon
+    # of three pictures) is drawn again without it — the rest of the DNA,
+    # seeded the same, does not change.
+    unable = unshowable_moments(site.pages)
+    if unable & {dna.signature, dna.flourish}:
+        dna = choose_dna(dims, family=direction.family, archetype=arche, motion=experience.motion, seed=seed,
+                         concept=dna.concept, unable=unable)
     theme["dna"] = dna.theme()
     theme["motion_direction"] = {"budget": dna.budget, "notes": motion_notes}
     if arche in _COMMERCE and wa_link and primary[1] == "#shop":
@@ -1133,6 +1141,55 @@ def _unshown_picture(bp: BusinessBlueprint, shown: set[str | None]) -> str | Non
         if picture and picture not in shown:
             return str(picture)
     return None
+
+# The first screens a cover photograph can come alive in (experience/gl/living).
+_LIVING_HEROES = frozenset({*COVERS, "cinematic_zoom", "depth"})
+
+
+def unshowable_moments(pages: list[dict[str, Any]]) -> frozenset[str]:
+    """The signature moments (design_dna.SIGNATURES) these pages have nothing to show on.
+
+    living        a cover photograph on a hero that can carry it
+    ribbon        a rail or bento of six or more pictured things
+    dissolve      a story's picture and another on its page to become
+    zoom_through  a statement set over a photograph
+    velocity_skew pictures that can lean: three in a rail, bento or menu, or a gallery
+
+    The rest move type, grounds or the cursor and need nothing but the page.
+    """
+    able: set[str] = set()
+    for page in pages:
+        sections = [s for s in page.get("sections") or [] if s.get("is_visible", True)]
+        shown: set[str] = set()
+        for section in sections:
+            content = section.get("content") or {}
+            if content.get("image_asset_id"):
+                shown.add(str(content["image_asset_id"]))
+            for item in content.get("items") or []:
+                if isinstance(item, dict) and item.get("image_asset_id"):
+                    shown.add(str(item["image_asset_id"]))
+        for section in sections:
+            kind, variant = section.get("section_type_id"), str(section.get("layout_variant") or "")
+            content = section.get("content") or {}
+            picture = content.get("image_asset_id")
+            pictured = sum(1 for i in content.get("items") or [] if isinstance(i, dict) and i.get("image_asset_id"))
+            if kind == "hero" and picture and variant in _LIVING_HEROES:
+                able.add("living")
+                if variant == "gallery":
+                    able.add("velocity_skew")
+            elif kind == "product_showcase":
+                if variant in {"rail", "bento"} and pictured >= 6:
+                    able.add("ribbon")
+                if variant in {"rail", "bento", "menu_book"} and pictured >= 3:
+                    able.add("velocity_skew")
+            elif kind == "about" and picture and variant != "text_only" and len(shown - {str(picture)}) >= 1:
+                able.add("dissolve")
+            elif kind == "statement" and variant == "image" and picture:
+                able.add("zoom_through")
+            elif kind == "gallery":
+                able.add("velocity_skew")
+    return frozenset({"living", "ribbon", "dissolve", "zoom_through", "velocity_skew"} - able)
+
 
 WHATSAPP = "whatsapp:"
 _CHANNEL = re.compile(r"\b(whats\s?app|call|phone|ring|message|dm)\b", re.I)

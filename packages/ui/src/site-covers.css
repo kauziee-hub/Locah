@@ -612,3 +612,111 @@
     aspect-ratio: 4 / 3;
   }
 }
+
+/* ---------------------------------------------------------- the GL layer */
+/* WebGL is progressive enhancement over a real <img> (experience/gl/): the
+   canvases below exist only once a renderer has started — motion on, a
+   capable device, a design whose DNA chose living, ribbon or dissolve as its
+   signature or flourish. They never take space (absolutely placed), never
+   take a click, and show only once a frame has really been drawn; the <img>
+   underneath steps back in that same frame and returns when GL stops. */
+.fx-gl {
+  position: absolute;
+  display: block;
+  margin: 0;
+  max-width: none;
+  pointer-events: none;
+  opacity: 0;
+}
+.fx-gl[data-live] {
+  opacity: 1;
+}
+.fx-gl--fill {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ribbon — the curved gallery under a rail's cards or a bento's cells. The
+   host (the rail's stage, the bento's section) is made its own stacking
+   context by the renderer; the canvas sits at -1 inside it, beneath every
+   word and button. A card whose photograph the GPU now draws lets it show
+   through: no ground, no frame, no glass over it. */
+.fx-gl--ribbon {
+  left: 0;
+  top: 0;
+  z-index: -1;
+  opacity: 1;
+}
+[data-locah-site] [data-ribbon-live] :is(.fx-rail__card, .fx-bento__cell)[data-gl-drawn] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+[data-locah-site] [data-ribbon-live] .fx-rail__card[data-gl-drawn] .fx-rail__media {
+  background: transparent;
+}
+[data-locah-site] [data-ribbon-live] .fx-rail__card[data-gl-drawn] .fx-rail__media > img,
+[data-locah-site] [data-ribbon-live] .fx-bento__cell[data-gl-drawn] > img {
+  opacity: 0;
+}
+/* The bend is the movement: once the cards have arrived they stop leaning. */
+[data-locah-site] [data-ribbon-live] .is-in > [data-gl-drawn][data-tilt] {
+  transform: none;
+}
+/* Hovered (or focused), a card un-bends and comes forward on the GPU; its
+   caption rises to meet it here. */
+@media (hover: hover) and (pointer: fine) {
+  [data-fx='on'] [data-ribbon-live] [data-gl-drawn] :is(.fx-rail__body, .fx-bento__copy) {
+    translate: 0 0.4rem;
+    transition: translate 650ms var(--fx-ease);
+  }
+  [data-fx='on'] [data-ribbon-live] [data-gl-drawn]:is(:hover, :focus-within) :is(.fx-rail__body, .fx-bento__copy) {
+    translate: 0 0;
+  }
+}
+
+/* dissolve — two photographs, the first becoming the second as the section
+   scrolls (experience/gl/GlDissolve.tsx). Still: the first, complete. Motion
+   on without GL: a crossfade on the section's own --p. With GL: a noise
+   front (the canvas covers both). The frame that holds it decides its size. */
+.fx-dissolve {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.fx-dissolve > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+.fx-dissolve__b {
+  opacity: 0;
+}
+[data-fx='on'] .fx-dissolve__b {
+  opacity: clamp(0, (var(--p, 0) - var(--dis-lo, 0.3)) / (var(--dis-hi, 0.7) - var(--dis-lo, 0.3)), 1);
+}
+/* A story's held picture (Story.tsx HeldPicture): the sticky split's drift
+   moves the pair — and the canvas over them — as one. */
+.fx-sticky__media .fx-dissolve {
+  height: 115%;
+  translate: 0 calc((var(--p, 0.5) - 0.5) * -10%);
+}
+.fx-sticky__media .fx-dissolve > img {
+  height: 100%;
+  translate: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-sticky__media .fx-dissolve {
+    height: 100%;
+    translate: none;
+  }
+}

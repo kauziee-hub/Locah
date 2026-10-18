@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { Words } from '@/lib/site-words'
 import { srcSetFor } from '../picture'
+import { GlLiving } from './gl/GlLiving'
 import { splitHeadline, type HeroParts, type Pic } from './HeroScenes'
 
 /**
@@ -59,8 +60,22 @@ export function coverFor(variant: string, pictures: Pic[], image: Pic | undefine
   return variant
 }
 
-function Photo({ pic, eager = false, sizes, decorative = false }: { pic: Pic; eager?: boolean; sizes?: string; decorative?: boolean }) {
-  return (
+/** A cover's photograph. `living`: the one picture the living photograph
+ *  (design DNA signature, ./gl/living) may take over — the <img> stays. */
+function Photo({
+  pic,
+  eager = false,
+  sizes,
+  decorative = false,
+  living = false,
+}: {
+  pic: Pic
+  eager?: boolean
+  sizes?: string
+  decorative?: boolean
+  living?: boolean
+}) {
+  const img = (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={pic.url}
@@ -69,6 +84,13 @@ function Photo({ pic, eager = false, sizes, decorative = false }: { pic: Pic; ea
       alt={decorative ? '' : pic.alt_text || ''}
       {...(eager ? { fetchPriority: 'high' as const } : { loading: 'lazy' as const })}
     />
+  )
+  if (!living) return img
+  return (
+    <>
+      {img}
+      <GlLiving />
+    </>
   )
 }
 
@@ -137,7 +159,7 @@ export function Cover({
                 </span>
               </span>
               <span className="fx-window__pane" aria-hidden="true">
-                <Photo pic={lead} eager decorative sizes="(min-width: 901px) 1240px, 100vw" />
+                <Photo pic={lead} eager decorative living sizes="(min-width: 901px) 1240px, 100vw" />
               </span>
               {second ? (
                 <span className="fx-window__line fx-window__line--b">
@@ -166,7 +188,7 @@ export function Cover({
             <CoverCopy parts={parts} />
           </div>
           <figure className="fx-gallery__pic fx-gallery__pic--a" data-reveal="mask">
-            <Photo pic={lead} eager sizes="(min-width: 901px) 40vw, 72vw" />
+            <Photo pic={lead} eager living sizes="(min-width: 901px) 40vw, 72vw" />
           </figure>
           {b ? (
             <figure
@@ -210,7 +232,7 @@ export function Cover({
           </div>
           <div className="fx-ledger__cell fx-ledger__pic" style={{ '--c': 1 } as Vars}>
             <figure className="fx-ledger__photo" data-reveal="mask">
-              <Photo pic={lead} eager sizes="(min-width: 901px) 42vw, 100vw" />
+              <Photo pic={lead} eager living sizes="(min-width: 901px) 42vw, 100vw" />
             </figure>
           </div>
           <div className="fx-ledger__cell fx-ledger__lede" style={{ '--c': 2 } as Vars}>
@@ -240,7 +262,7 @@ export function Cover({
     return (
       <section className="ls-hero fx-cover fx-signature" data-progress="">
         <figure className="fx-signature__pic">
-          <Photo pic={lead} eager sizes="(min-width: 901px) 58vw, 100vw" />
+          <Photo pic={lead} eager living sizes="(min-width: 901px) 58vw, 100vw" />
         </figure>
         <div className="fx-signature__panel">
           <div className="ls-hero__inner fx-cover__copy">
@@ -281,7 +303,7 @@ export function Cover({
         </div>
         <figure className="fx-stage__frame">
           <span className="fx-stage__mat">
-            <Photo pic={lead} eager sizes="(min-width: 901px) 1160px, 94vw" />
+            <Photo pic={lead} eager living sizes="(min-width: 901px) 1160px, 94vw" />
           </span>
         </figure>
       </section>
@@ -299,7 +321,7 @@ export function Cover({
         <div className="fx-arch__media">
           <span className="fx-arch__line" aria-hidden="true" />
           <figure className="fx-arch__main" data-reveal="mask">
-            <Photo pic={lead} eager sizes="(min-width: 901px) 520px, 88vw" />
+            <Photo pic={lead} eager living sizes="(min-width: 901px) 520px, 88vw" />
           </figure>
           {second ? (
             <figure
