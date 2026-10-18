@@ -680,6 +680,10 @@ async def critique_site(
         "reference_class": ref_rows, "must_improve": _must_improve(),
         "critique_for": references.CRITIQUE_FOR, "expected_standard": references.EXPECTED_STANDARD,
         "site_pages": sorted(known), "art_direction": art,
+        # Every LOCAH business is in India: a critic once called "₹230" the
+        # wrong currency (the rupee sign is small in a scaled tile).
+        "locale": {"country": "India", "currency": "Indian rupees, written ₹ (e.g. ₹230)",
+                   "note": "₹ is the correct currency sign; do not report it as wrong"},
     }
 
     for page in pages:

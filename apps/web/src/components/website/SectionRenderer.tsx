@@ -789,6 +789,10 @@ export function SectionRenderer({
       const email = str(c.email)
       const hours = str(c.hours_summary)
       const showMap = bool(c.show_map) && address
+      // The place card carries the address, the hours and the way there; the
+      // list and the button row do not say them again (certification: the
+      // same address and hours were repeated in four blocks of one page).
+      const [area, ...restOfAddress] = address.split(',').map((part) => part.trim()).filter(Boolean)
 
       return (
         <section
@@ -799,7 +803,7 @@ export function SectionRenderer({
             <Heading eyebrow={t('Get in touch')} title={str(c.title) || t('Visit us')} />
             <div className="ls-contact__actions" data-reveal="">
               <ContactActions t={t} contact={contact} businessName={businessName} />
-              {findable(address) ? (
+              {findable(address) && !showMap ? (
                 <a
                   className="ls-btn ls-btn--outline"
                   href={mapsHref(address)}
@@ -812,7 +816,7 @@ export function SectionRenderer({
             </div>
             <div className="ls-contact__grid">
               <ul className="ls-contact__list" data-reveal-group="">
-                {address ? (
+                {address && !showMap ? (
                   <li className="ls-contact__item">
                     <span className="ls-contact__label">{t('Address')}</span>
                     <span className="ls-contact__value">{address}</span>
@@ -834,7 +838,7 @@ export function SectionRenderer({
                     </span>
                   </li>
                 ) : null}
-                {hours ? (
+                {hours && !showMap ? (
                   <li className="ls-contact__item">
                     <span className="ls-contact__label">{t('Hours')}</span>
                     <span className="ls-contact__value">{hours}</span>
@@ -846,15 +850,20 @@ export function SectionRenderer({
                 // a raw map embed read as a pasted screenshot beside the site, and
                 // on a phone it stayed a blank rectangle until scrolled into view.
                 <div className="ls-place" data-reveal="">
-                  <svg className="ls-place__pin" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                    <circle cx="12" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                  </svg>
-                  <p className="ls-place__label">{t('Find us')}</p>
-                  <p className="ls-place__address">{address}</p>
+                  <p className="ls-place__label">
+                    <svg className="ls-place__pin" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                      <circle cx="12" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                    {t('Find us')}
+                  </p>
+                  <p className="ls-place__address">
+                    <span className="ls-place__area">{area}</span>
+                    {restOfAddress.length ? <span className="ls-place__city">{restOfAddress.join(', ')}</span> : null}
+                  </p>
                   {hours ? <p className="ls-place__hours">{hours}</p> : null}
                   {findable(address) ? (
-                    <a className="ls-btn ls-btn--primary" href={mapsHref(address)} target="_blank" rel="noopener noreferrer">
+                    <a className="ls-btn ls-place__go" href={mapsHref(address)} target="_blank" rel="noopener noreferrer">
                       {t('Get directions')}
                     </a>
                   ) : null}

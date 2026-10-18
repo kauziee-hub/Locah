@@ -461,60 +461,67 @@
 .ls-contact--compact .ls-contact__list {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 }
-/* Where to find the business: the address in the display face over a quiet
-   map-contour texture drawn in the site's own colours. */
-.ls-place {
+/* Where to find the business: a place poster in the brand's own colour — the
+   locality set large, the city and hours under it, one way to get there. Not
+   a drawn map: a critic read the old contour texture as a map that failed to
+   load. */
+[data-locah-site] .ls-place {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
   display: grid;
   align-content: end;
   justify-items: start;
-  gap: 0.75rem;
-  min-height: clamp(280px, 22vw + 160px, 420px);
+  gap: 0.9rem;
+  min-height: clamp(260px, 18vw + 160px, 380px);
   padding: clamp(1.5rem, 1rem + 2vw, 2.75rem);
   border-radius: var(--site-radius);
-  background: var(--site-bg-alt);
-  border: 1px solid var(--site-border);
-  color: var(--site-ink);
-}
-.ls-place::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.55;
-  background:
-    repeating-radial-gradient(circle at 72% 30%, transparent 0 22px,
-      color-mix(in srgb, var(--site-primary) 14%, transparent) 22px 23px),
-    linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--site-accent) 10%, transparent) 58% 60%, transparent 60%);
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
 }
 .ls-place__pin {
-  width: 2.25rem;
-  height: 2.25rem;
-  color: var(--site-primary);
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-right: 0.45rem;
+  vertical-align: -0.2rem;
 }
-.ls-place__label {
+[data-locah-site] .ls-place__label {
   margin: 0;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--site-muted);
+  color: inherit;
+  opacity: 0.85;
 }
-.ls-place__address {
+[data-locah-site] .ls-place__address {
   margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.ls-place__area {
   font-family: var(--site-display-font);
-  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.4rem);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-  max-width: 18ch;
-  white-space: pre-line;
+  font-size: calc(clamp(2.2rem, 1.3rem + 3vw, 4rem) * var(--site-display-scale, 1));
+  line-height: 0.98;
+  letter-spacing: var(--site-display-tracking, -0.03em);
+  max-width: 14ch;
+  text-wrap: balance;
 }
-.ls-place__hours {
+.ls-place__city {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+[data-locah-site] .ls-place__hours {
   margin: 0;
-  color: var(--site-muted);
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   white-space: pre-line;
+  color: inherit;
+  opacity: 0.92;
+}
+[data-locah-site] a.ls-btn.ls-place__go {
+  background: var(--site-primary-fg);
+  color: var(--site-primary);
+  border-color: transparent;
 }
 .ls-map {
   border-radius: var(--site-radius);
