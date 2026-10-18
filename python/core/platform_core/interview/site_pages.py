@@ -210,14 +210,16 @@ def faqs_for(bp: BusinessBlueprint, *, ordering: list[dict[str, str]], visiting:
 
     number = _phone(contact)
     whatsapp, phone = bool(contact.get("whatsapp")), bool(contact.get("phone"))
-    verb = "book" if booking else "order"
+    # Only a business that takes orders is asked how to order (a learning
+    # trust's visit page asked "How do I order?").
+    question = "How do I book?" if booking else "How do I order?" if ordering else "How do I get in touch?"
     if whatsapp and phone:
-        add(f"How do I {verb}?", f"Message us on WhatsApp or call {number}" if number
+        add(question, f"Message us on WhatsApp or call {number}" if number
             else "Message us on WhatsApp or give us a call")
     elif whatsapp:
-        add(f"How do I {verb}?", f"Message us on WhatsApp{f' at {number}' if number else ''}")
+        add(question, f"Message us on WhatsApp{f' at {number}' if number else ''}")
     elif phone:
-        add(f"How do I {verb}?", f"Give us a call{f' on {number}' if number else ''}")
+        add(question, f"Give us a call{f' on {number}' if number else ''}")
     if "delivery" in kinds:
         d = kinds["delivery"]
         if d["title"].lower().startswith("sent by courier"):

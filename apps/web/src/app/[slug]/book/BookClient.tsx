@@ -248,7 +248,8 @@ export default function BookClient({
   // The whole flow is visible from the start — what, when, who you are — and
   // what is being booked is summed up beside it (certification: a Book page
   // that showed only two chips read as "not a booking flow").
-  const timed = choice ? SLOT_MODES.includes(choice.mode) : true
+  // A retreat whose every choice is a stay asks for dates, never "a day and a time".
+  const timed = choice ? SLOT_MODES.includes(choice.mode) : choices.some((c) => SLOT_MODES.includes(c.mode))
   return (
     <main className="ls-section ls-book">
       <div className="ls-inner ls-book__layout">
@@ -268,7 +269,8 @@ export default function BookClient({
                   // Each choice says what it is, how long it takes and what it
                   // costs — not a pill of a name and a price (certification).
                   const meta = [SLOT_MODES.includes(c.mode) && c.minutes ? t('{n} min', { n: c.minutes }) : '',
-                    c.price !== null ? `₹${c.price}` : ''].filter(Boolean).join(' · ')
+                    c.price === null ? '' : c.mode === 'accommodation' ? t('₹{amount} a night', { amount: c.price })
+                      : `₹${c.price}`].filter(Boolean).join(' · ')
                   return (
                     <button key={c.key} type="button" onClick={() => setChoiceKey(c.key)} aria-pressed={c.key === choiceKey}
                       className={`ls-chip ls-book__choice${c.key === choiceKey ? ' is-on' : ''}`}>

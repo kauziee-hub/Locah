@@ -4,17 +4,7 @@ import { useState } from 'react'
 import { submitEnquiry, type EnquiryBody } from '@/lib/checkout-api'
 import type { Words } from '@/lib/site-words'
 import { useWords } from './SiteWords'
-
-const PURPOSES = ['enquiry', 'site_visit', 'test_drive', 'callback', 'quote_request', 'membership']
-
-const titles = (t: Words): Record<string, string> => ({
-  enquiry: t('Send an enquiry'),
-  site_visit: t('Book a site visit'),
-  test_drive: t('Book a test drive'),
-  callback: t('Ask for a call back'),
-  quote_request: t('Get a quote'),
-  membership: t('Ask to join'),
-})
+import { PURPOSES, purposeTitles } from './enquiry-purposes'
 
 const messageHint = (t: Words): Record<string, string> => ({
   quote_request: t('What do you need? Quantities, sizes, dates — whatever helps them price it'),
@@ -34,6 +24,7 @@ export function EnquiryForm({
   planId,
   planTitle,
   purpose = 'enquiry',
+  titled = true,
 }: {
   slug: string
   businessName: string
@@ -42,6 +33,8 @@ export function EnquiryForm({
   planId?: string
   planTitle?: string
   purpose?: string
+  /** False where the page already names the enquiry in its own heading. */
+  titled?: boolean
 }) {
   const t = useWords()
   const p = (PURPOSES.includes(purpose) ? purpose : 'enquiry') as NonNullable<EnquiryBody['purpose']>
@@ -92,9 +85,9 @@ export function EnquiryForm({
         }
       }}
     >
-      <h2 className="ls-title">{titles(t)[p]}</h2>
-      {offeringTitle ? <p className="ls-sub">{t('About: {item}', { item: offeringTitle })}</p> : null}
-      {planTitle ? <p className="ls-sub">{t('Plan: {plan}', { plan: planTitle })}</p> : null}
+      {titled ? <h2 className="ls-title">{purposeTitles(t)[p]}</h2> : null}
+      {titled && offeringTitle ? <p className="ls-sub">{t('About: {item}', { item: offeringTitle })}</p> : null}
+      {titled && planTitle ? <p className="ls-sub">{t('Plan: {plan}', { plan: planTitle })}</p> : null}
       <label>
         <span>{t('Your name')}</span>
         <input name="name" required maxLength={80} autoComplete="name" />

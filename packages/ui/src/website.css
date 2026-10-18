@@ -2149,14 +2149,53 @@
   background: transparent; color: var(--site-ink); font: inherit; cursor: pointer;
 }
 [data-locah-site] .ls-tab.is-on { background: var(--site-ink); color: var(--site-bg); border-color: var(--site-ink); }
-[data-locah-site] .ls-enquire { max-width: 720px; display: grid; gap: 1.4rem; }
+[data-locah-site] .ls-enquire { max-width: 1180px; display: grid; gap: clamp(1.75rem, 1rem + 2.5vw, 3.25rem); }
+/* The enquire page: one heading, the form, and beside it what happens next
+   and every other way in (app/[slug]/enquire). */
+[data-locah-site] .ls-enquire__head {
+  display: grid; gap: 0.6rem; padding-bottom: clamp(1.25rem, 1rem + 1.5vw, 2.25rem);
+  border-bottom: 1px solid var(--site-border);
+}
+[data-locah-site] .ls-enquire__head .ls-title { font-size: clamp(2.4rem, 1.3rem + 4.2vw, 4.8rem); line-height: 1; max-width: 18ch; }
+[data-locah-site] .ls-enquire__grid { display: grid; gap: clamp(2rem, 1rem + 3vw, 4rem); }
+@media (min-width: 900px) {
+  [data-locah-site] .ls-enquire__grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; }
+  [data-locah-site] .ls-enquire__aside { position: sticky; top: calc(var(--fx-nav-h, 68px) + 1.5rem); }
+}
+[data-locah-site] .ls-enquire__main { display: grid; gap: 1.25rem; }
+[data-locah-site] .ls-enquire__main .ls-enquiry { max-width: none; }
+[data-locah-site] .ls-enquire__main .ls-enquiry .ls-btn { min-width: 12rem; }
+[data-locah-site] .ls-enquire__aside {
+  display: grid; gap: 1.5rem; padding: clamp(1.25rem, 0.9rem + 1.5vw, 2rem);
+  border-radius: calc(var(--site-radius) + 6px); background: var(--site-bg-alt); border: 1px solid var(--site-border);
+}
+[data-locah-site] .ls-enquire__picture { margin: 0; }
+[data-locah-site] .ls-enquire__picture img {
+  display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--site-radius);
+}
+[data-locah-site] .ls-enquire__h { font-family: var(--site-display-font); font-size: 1.4rem; margin: 0 0 0.85rem; }
+[data-locah-site] .ls-enquire__next ol { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 0.7rem; }
+[data-locah-site] .ls-enquire__next li {
+  counter-increment: step; display: grid; grid-template-columns: 2rem 1fr; gap: 0.5rem; align-items: baseline;
+}
+[data-locah-site] .ls-enquire__next li::before {
+  content: counter(step, decimal-leading-zero); font-size: 0.78rem; color: var(--site-muted); font-variant-numeric: tabular-nums;
+}
+[data-locah-site] .ls-enquire__routes { margin: 0; display: grid; gap: 0.9rem; border-top: 1px solid var(--site-border); padding-top: 1.25rem; }
+[data-locah-site] .ls-enquire__routes > div { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.75rem; align-items: baseline; }
+[data-locah-site] .ls-enquire__routes dt {
+  font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--site-muted); font-weight: 600;
+}
+[data-locah-site] .ls-enquire__routes dd { margin: 0; overflow-wrap: anywhere; }
+[data-locah-site] .ls-enquire__routes a { color: var(--site-ink); text-decoration: underline; text-underline-offset: 3px; }
 [data-locah-site] .ls-enquire__item { display: grid; gap: 1rem; }
 [data-locah-site] .ls-enquire__item img { width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--site-radius); }
 [data-locah-site] .ls-enquiry { display: grid; gap: 0.8rem; max-width: 560px; }
-[data-locah-site] .ls-enquiry label { display: grid; gap: 0.3rem; font-size: 0.88rem; color: var(--site-muted); }
+[data-locah-site] .ls-enquiry label { display: grid; gap: 0.35rem; font-size: 0.92rem; color: color-mix(in srgb, var(--site-ink) 80%, transparent); }
 [data-locah-site] .ls-enquiry input, [data-locah-site] .ls-enquiry textarea {
-  font: inherit; color: var(--site-ink); background: var(--site-bg); min-height: 44px; padding: 0.55rem 0.75rem;
-  border: 1px solid var(--site-border); border-radius: var(--site-radius);
+  font: inherit; color: var(--site-ink); background: color-mix(in srgb, var(--site-bg-alt) 55%, var(--site-bg));
+  min-height: 48px; padding: 0.6rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--site-ink) 18%, transparent); border-radius: var(--site-radius);
 }
 [data-locah-site] .ls-enquiry .ls-btn { justify-self: start; }
 [data-locah-site] .ls-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
@@ -2567,9 +2606,15 @@
   gap: 0.75rem;
   justify-items: start;
 }
-[data-locah-site] .ls-book__last .ls-btn[disabled] {
-  opacity: 0.55;
+/* Not yet: an outline, never a faded fill a visitor reads as live (on a dark
+   site a half-strength olive still looked pressable). */
+[data-locah-site] :is(.ls-book__last, .ls-book__pending) .ls-btn[disabled] {
+  opacity: 1;
   cursor: not-allowed;
+  background: transparent;
+  color: var(--site-muted);
+  border: 1px dashed color-mix(in srgb, var(--site-ink) 30%, transparent);
+  box-shadow: none;
 }
 [data-locah-site] .ls-book__facts dd {
   margin: 0;

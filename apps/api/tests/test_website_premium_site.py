@@ -357,6 +357,13 @@ def test_each_question_is_asked_once_and_answered_from_the_owners_facts() -> Non
 def test_no_question_without_a_fact_behind_it() -> None:
     bp = BusinessBlueprint(business_id=uuid4())
     assert faqs_for(bp, ordering=[], visiting=[], contact={}, address="", booking=False) == []
+    # A business that takes no orders (a learning trust) is never asked how to order.
+    asked = [q["q"] for q in faqs_for(bp, ordering=[], visiting=[], contact={"phone": "+91 98410 57322"},
+                                      address="", booking=False)]
+    assert asked == ["How do I get in touch?"]
+    shop = [q["q"] for q in faqs_for(bp, ordering=[{"kind": "payment", "title": "Pay", "body": "UPI or cash on delivery."}],
+                                     visiting=[], contact={"phone": "+91 98410 57322"}, address="", booking=False)]
+    assert shop[0] == "How do I order?"
 
 
 def test_pillars_are_the_owners_to_say() -> None:

@@ -366,6 +366,7 @@ export function SectionRenderer({
   pictures = [],
   cover,
   dissolve = false,
+  channelsShown = false,
 }: {
   section: Section
   lang?: SiteLang
@@ -379,6 +380,9 @@ export function SectionRenderer({
   /** The site's design DNA drew `dissolve`: a story's held picture turns
    *  into another of the business's own as it is read. */
   dissolve?: boolean
+  /** A section above already offered Call and WhatsApp as buttons: here they
+   *  are quiet links (certification: three "Call now" buttons on one page). */
+  channelsShown?: boolean
   /** Position on the page — used only to alternate section grounds. */
   index?: number
   /** The business's live capabilities, so a section never offers an action the
@@ -813,7 +817,7 @@ export function SectionRenderer({
           <div className="ls-inner">
             <Heading eyebrow={t('Get in touch')} title={str(c.title) || t('Visit us')} />
             <div className="ls-contact__actions" data-reveal="">
-              <ContactActions t={t} contact={contact} businessName={businessName} />
+              <ContactActions t={t} contact={contact} businessName={businessName} quiet={channelsShown} />
               {findable(address) && !showMap ? (
                 <a
                   className="ls-btn ls-btn--outline"
@@ -1242,7 +1246,7 @@ export function SectionRenderer({
           aside={
             v === 'split' ? (
               <div className="ls-hero__cta">
-                <ContactActions t={t} contact={contact} businessName={businessName} />
+                <ContactActions t={t} contact={contact} businessName={businessName} quiet={channelsShown} />
               </div>
             ) : undefined
           }

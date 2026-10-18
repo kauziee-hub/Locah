@@ -602,6 +602,7 @@ export function WebsitePageView({
               pictures={pictures}
               cover={coverFacts}
               dissolve={hasMoment(dna, 'dissolve')}
+              channelsShown={sections.slice(0, i).some((s) => s.section_type_id === 'hero' || s.section_type_id === 'contact')}
             />
           </div>
         ))}

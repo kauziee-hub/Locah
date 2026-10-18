@@ -430,6 +430,12 @@ export function coverImage(data: PublicWebsitePayload | null): string {
   return data ? absolute(heroOf(data)?.assets?.image_asset_id?.url) : ''
 }
 
+/** The cover's own photograph and its words, for a page that borrows it. */
+export function coverPicture(data: PublicWebsitePayload | null): { url: string; alt: string } | null {
+  const asset = data ? heroOf(data)?.assets?.image_asset_id : undefined
+  return asset?.url ? { url: asset.url, alt: asset.alt_text || '' } : null
+}
+
 /** Cuisines a page can name. Only an adjective the owner's words use is
  *  stated; state names that are also places ("Kerala", "Tamil") are left out. */
 const CUISINES = [
