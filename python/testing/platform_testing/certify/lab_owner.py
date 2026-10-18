@@ -22,13 +22,15 @@ import uuid
 from platform_testing.certify.journey import DB
 
 
-async def register(label: str) -> dict[str, str]:
+async def register(label: str, email: str = "") -> dict[str, str]:
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from platform_testing.db_helpers import ensure_auth_user
 
     user_id = uuid.uuid4()
-    email = f"lab-{label}-{user_id.hex[:6]}@locah.test"
+    email = email or f"lab-{label}-{user_id.hex[:6]}@locah.test"
+    if not email.endswith("@locah.test"):
+        raise SystemExit("lab identities use @locah.test addresses only")
     engine = create_async_engine(f"postgresql+asyncpg://postgres@localhost:54329/{DB}")
     async with AsyncSession(engine) as session:
         await ensure_auth_user(session, user_id, email)
@@ -52,4 +54,5 @@ if __name__ == "__main__":  # pragma: no cover — a tool
     if len(sys.argv) > 1 and sys.argv[1] == "script":
         print(json.dumps(script(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "normal"), ensure_ascii=False))
     else:
-        print(json.dumps(asyncio.run(register(sys.argv[1] if len(sys.argv) > 1 else "owner"))))
+        print(json.dumps(asyncio.run(register(sys.argv[1] if len(sys.argv) > 1 else "owner",
+                                              sys.argv[2] if len(sys.argv) > 2 else ""))))

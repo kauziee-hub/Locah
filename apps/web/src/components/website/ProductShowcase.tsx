@@ -254,6 +254,19 @@ export function ProductShowcase({
     })
   }, [canBrowse, live, items, t])
   const liveMode = canBrowse && live.length > 0
+  // A category's "From ₹…" line: the live catalogue's lowest price once there
+  // is one — never the price said at build time beside items that now cost
+  // something else (owner lab: "From ₹240 per kg" over chicken now ₹260).
+  const categoryMeta = (name: string, built?: string): string | undefined => {
+    if (!liveMode) return built
+    const priced = live.filter((row) => (row.category || '') === name && typeof row.price_amount === 'number')
+    if (!priced.length) return undefined
+    const low = Math.min(...priced.map((row) => Number(row.price_amount)))
+    const perKg = priced.every((row) => (row.attributes as Record<string, unknown> | undefined)?.price_per === 'kg')
+    const amount = formatMoney(low, priced[0].currency)
+    if (!amount) return undefined
+    return `${t('From {price}', { price: amount })}${perKg ? ` ${t('per kg')}` : ''}`
+  }
   const liveFilters = useMemo(
     () => (liveMode ? chapters(shownItems, categories, []).filter(Boolean) : filters),
     [liveMode, shownItems, categories, filters]
@@ -572,7 +585,7 @@ export function ProductShowcase({
                     {name || t('More')}
                   </h3>
                   {category?.description ? <p className="fx-chapter__lede">{category.description}</p> : null}
-                  {category?.meta ? <p className="fx-chapter__meta">{category.meta}</p> : null}
+                  {category && categoryMeta(category.name, category.meta) ? <p className="fx-chapter__meta">{categoryMeta(category.name, category.meta)}</p> : null}
                   <ul className="fx-chapter__items" data-reveal-group="">
                     {rows.map((item) => (
                       <li key={item.name} className="fx-chapter__item">
@@ -765,7 +778,7 @@ export function ProductShowcase({
                   <div className="ls-board__body">
                     <div className="ls-board__head">
                       <h3 className="ls-board__title">{category.name}</h3>
-                      {category.meta ? <span className="ls-board__meta">{category.meta}</span> : null}
+                      {categoryMeta(category.name, category.meta) ? <span className="ls-board__meta">{categoryMeta(category.name, category.meta)}</span> : null}
                     </div>
                     {category.description ? <p className="ls-board__text">{category.description}</p> : null}
                     {rows.length > 0 ? (

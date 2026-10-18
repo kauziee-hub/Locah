@@ -32,12 +32,12 @@ export function mintToken({ id, email, hours = 8 }) {
 /** A fresh synthetic owner, signed up the way the stack allows (the auth user
  *  row a real sign-up creates — platform_testing.certify.lab_owner), with its
  *  token. */
-export function newOwner(label) {
-  const out = execFileSync('uv', ['run', '--no-env-file', 'python', '-m', 'platform_testing.certify.lab_owner', label], {
+export function newOwner(label, email = '') {
+  const out = execFileSync('uv', ['run', '--no-env-file', 'python', '-m', 'platform_testing.certify.lab_owner', label, ...(email ? [email] : [])], {
     cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
   })
-  const { id, email } = JSON.parse(out.trim().split(/\r?\n/).pop())
-  return { id, email, token: mintToken({ id, email }) }
+  const made = JSON.parse(out.trim().split(/\r?\n/).pop())
+  return { id: made.id, email: made.email, token: mintToken(made) }
 }
 
 /** The session cookie(s) for a browser context on localhost. */

@@ -125,7 +125,7 @@ const pageErrors = []
 page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 300)))
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 300)) })
 const from = opt('from', 'start')
-const ORDER = ['start', 'interview', 'build', 'tools', 'workspace', 'catalogue', 'stock', 'publish', 'customer', 'fulfil']
+const ORDER = ['start', 'interview', 'build', 'tools', 'workspace', 'catalogue', 'stock', 'publish', 'customer', 'fulfil', 'team', 'lifecycle', 'return']
 const runs = (name) => ORDER.indexOf(name) >= ORDER.indexOf(from)
 
 try {
@@ -474,8 +474,18 @@ try {
     s.check('the basket holds the items', lines > 0, `${lines} lines`)
     // Failure first: no name, no phone — the order must not go through.
     const placeBtn = g.locator('.ls-checkout__place')
-    const emptyReady = await placeBtn.isEnabled()
-    s.note(`with no details, Place order is ${emptyReady ? 'enabled' : 'disabled'}`)
+    const ordersBefore = ((await api('GET', `/v1/platform/businesses/${B}/orders`)).data || []).length
+    if (await placeBtn.isEnabled()) {
+      await placeBtn.click()
+      await sleep(2500)
+      const said = (await g.locator('[role=alert]:visible, .ls-offer__error:visible').first().innerText().catch(() => '')) || (await g.locator('input:invalid').first().evaluate((e) => (e.labels?.[0]?.innerText || e.name) + ': ' + e.validationMessage).catch(() => '')) || ''
+      const ordersAfter = ((await api('GET', `/v1/platform/businesses/${B}/orders`)).data || []).length
+      s.check('with no name or phone, Place order does not place an order', ordersAfter === ordersBefore, `${ordersBefore} → ${ordersAfter}`)
+      s.check('and says what is missing', Boolean(said.trim()), said.slice(0, 160))
+      await s.shot(g, 'checkout-empty-refused', true)
+    } else {
+      s.note('with no details, Place order is disabled')
+    }
     const modes = g.locator('[role=radiogroup]').first().locator('[role=radio]')
     const modeTexts = await modes.allInnerTexts().catch(() => [])
     const pickup = modeTexts.findIndex((m) => /pick|collect/i.test(m))
@@ -519,10 +529,11 @@ try {
     const noteText = (await page.innerText('main')).replace(/\s+/g, ' ')
     s.check('a notification tells the owner about the new order', /new order/i.test(noteText), noteText.slice(0, 300))
     s.check('the notification names which order (number, customer or amount)', new RegExp(`${journal.order_number}|Priya|₹\s?320`, 'i').test(noteText), noteText.slice(0, 200))
-    const item = page.locator('li, article, .bos-card').filter({ hasText: /new order placed/i }).first()
+    const item = page.locator('article').filter({ hasText: /new order placed/i }).filter({ hasText: new RegExp(journal.order_number || '.', 'i') }).first()
     const open = item.getByRole('link', { name: /^open$/i })
     if (await open.count()) {
       await open.first().click()
+      await page.waitForURL(/\/orders\//, { timeout: 20000 }).catch(() => {})
       await page.waitForLoadState('networkidle').catch(() => {})
     }
     s.check('the notification’s Open goes to the order', page.url().includes(journal.order_id), page.url())
@@ -584,6 +595,161 @@ try {
       s.check('the customer sees the order as done', /collected|completed|picked up|handed|delivered|done/i.test(shown), shown.slice(0, 240))
       await track.context().close()
     }
+    s.done()
+  }
+  // ------------------------------------------------------------- 11. team
+  if (runs('team')) {
+    const s = step('team: add a manager and a store keeper; each sees their work, and nothing they may not touch')
+    const PEOPLE = [
+      { role: 'manager', name: 'Murugan (lab manager)' },
+      { role: 'store_keeper', name: 'Selvi (lab store keeper)' },
+    ]
+    journal.team = journal.team || {}
+    for (const person of PEOPLE) {
+      const who = newOwner(person.role.replace('_', ''), `lab-${person.role.replace('_', '')}-${Date.now().toString(36)}@locah.test`)
+      journal.team[person.role] = { id: who.id, email: who.email }
+      await page.goto(`${WS}/b/${B}/team/add`, { waitUntil: 'networkidle', timeout: 120000 })
+      await page.locator('label', { hasText: /^\s*Name/ }).locator('input').first().fill(person.name)
+      await page.locator('input[type=email]').first().fill(who.email)
+      await page.locator(`input[name=role-new][value=${person.role}]`).check()
+      const loc = page.locator('label', { hasText: /Primary Location/ }).locator('input[type=checkbox]')
+      if ((await loc.count()) && !(await loc.isChecked())) await page.locator('label', { hasText: /Primary Location/ }).click()
+      await page.getByRole('button', { name: 'Add and make a join link' }).click()
+      const link = page.getByLabel('Join link')
+      await link.waitFor({ timeout: 30000 })
+      const url = await link.inputValue()
+      s.note(`${person.role}: join link made (${url.replace(/token\/.*$|\/join\/.*/, '/join/…')})`)
+      await s.shot(page, `team-${person.role}-link`)
+      // Their own browser, signed in as them.
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+      await ctx.addCookies(sessionCookies(who))
+      const p2 = await ctx.newPage()
+      await p2.goto(url, { waitUntil: 'networkidle', timeout: 120000 })
+      await s.shot(p2, `team-${person.role}-join`)
+      const join = p2.getByRole('button', { name: /^join /i })
+      s.check(`${person.role}: the join page offers to join this business`, (await join.count()) > 0, (await p2.innerText('body')).replace(/\s+/g, ' ').slice(0, 200))
+      if (await join.count()) {
+        await join.first().click()
+        await p2.waitForURL(new RegExp(`/b/${B}`), { timeout: 60000 }).catch(() => {})
+      }
+      s.check(`${person.role}: joined and landed in the Workspace`, p2.url().includes(`/b/${B}`), p2.url())
+      await p2.waitForLoadState('networkidle').catch(() => {})
+      await s.shot(p2, `team-${person.role}-home`, true)
+      journal.team[person.role].home = (await p2.innerText('main').catch(() => '')).replace(/\s+/g, ' ').slice(0, 600)
+      const as = (m, pth, body) => api(m, pth, body, who.token)
+      if (person.role === 'manager') {
+        await p2.goto(`${WS}/b/${B}/orders`, { waitUntil: 'networkidle' })
+        const ordersText = (await p2.innerText('main')).replace(/\s+/g, ' ')
+        s.check('manager: sees the orders', new RegExp(journal.order_number || 'ORD-', 'i').test(ordersText), ordersText.slice(0, 160))
+        await s.shot(p2, 'team-manager-orders', true)
+        await p2.goto(`${WS}/b/${B}/modules/payments`, { waitUntil: 'networkidle' })
+        s.check('manager: no "Turn on" for a tool (owner-only)', (await p2.getByRole('button', { name: /^turn on/i }).count()) === 0)
+        const en = await as('POST', `/v1/b/${B}/modules/payments/enable`)
+        s.check('manager: turning on a tool through the API is refused', en.status === 403, `status ${en.status}`)
+        const pub = await as('POST', `/v1/b/${B}/website/publish`)
+        s.check('manager: publishing the website through the API is refused', pub.status === 403, `status ${pub.status}`)
+        const inv = await as('POST', `/v1/platform/businesses/${B}/team/people`, { name: 'X', email: 'x-lab@locah.test', role: 'manager', location_ids: [] })
+        s.check('manager: adding people through the API is refused', inv.status === 403, `status ${inv.status}`)
+      } else {
+        await p2.goto(`${WS}/b/${B}/inventory`, { waitUntil: 'networkidle' })
+        const stockText = (await p2.innerText('main')).replace(/\s+/g, ' ')
+        s.check('store keeper: sees the stock', /kg/i.test(stockText), stockText.slice(0, 160))
+        await p2.goto(`${WS}/b/${B}/orders`, { waitUntil: 'networkidle' })
+        const ordersText = (await p2.innerText('main').catch(() => '')).replace(/\s+/g, ' ')
+        await s.shot(p2, 'team-storekeeper-orders', true)
+        s.check('store keeper: the orders page shows no orders', !new RegExp(journal.order_number || 'ORD-', 'i').test(ordersText), ordersText.slice(0, 200))
+        const list = await as('GET', `/v1/platform/businesses/${B}/orders`)
+        s.check('store keeper: reading orders through the API is refused', list.status === 403, `status ${list.status}`)
+        const one = await as('GET', `/v1/platform/businesses/${B}/orders/${journal.order_id}`)
+        s.check('store keeper: one order by its id is refused too', one.status === 403 || one.status === 404, `status ${one.status}`)
+      }
+      await ctx.close()
+    }
+    // Another business's owner cannot reach this one at all.
+    const stranger = newOwner('stranger')
+    const theirs = await api('GET', `/v1/platform/businesses/${B}/orders`, null, stranger.token)
+    s.check('another owner cannot read this business (tenant isolation, API)', theirs.status === 403 || theirs.status === 404, `status ${theirs.status}`)
+    s.done()
+  }
+  // -------------------------------------------------------- 12. lifecycle
+  if (runs('lifecycle')) {
+    const s = step('lifecycle: turn Orders off and on again — the website stops selling, the records stay')
+    const capabilities = async () => (await (await fetch(`${API}/v1/public/websites/${journal.slug}`)).json())?.data?.capabilities || {}
+    // From a known state: Orders on (an interrupted earlier run may have left it off).
+    if (!((await api('GET', `/v1/b/${B}/modules`)).data || []).some((m) => m.module_id === 'orders' && m.activation_state === 'active')) {
+      await page.goto(`${WS}/b/${B}/modules/orders`, { waitUntil: 'networkidle', timeout: 120000 })
+      await page.getByRole('button', { name: /^turn on/i }).first().click()
+      await page.waitForLoadState('networkidle').catch(() => {})
+      await sleep(2500)
+      s.note('Orders was off at the start; turned it on first')
+    }
+    const ordersBefore = ((await api('GET', `/v1/platform/businesses/${B}/orders`)).data || []).length
+    await page.goto(`${WS}/b/${B}/modules/orders`, { waitUntil: 'networkidle', timeout: 120000 })
+    const off = page.getByRole('button', { name: /^turn off/i })
+    s.check('the Orders page offers Turn off', (await off.count()) > 0)
+    await off.first().click()
+    const confirm = page.getByRole('dialog').getByRole('button', { name: /^(yes|turn off|confirm)/i })
+    if (await confirm.count()) await confirm.last().click()
+    await page.waitForLoadState('networkidle').catch(() => {})
+    await sleep(2500)
+    await page.reload({ waitUntil: 'networkidle' })
+    await s.shot(page, 'orders-turned-off', true)
+    let mods = (await api('GET', `/v1/b/${B}/modules`)).data || []
+    s.check('Orders is off (API)', !mods.some((m) => m.module_id === 'orders' && m.activation_state === 'active'))
+    let caps = await capabilities()
+    s.check('the live website no longer takes orders', caps.order === false, JSON.stringify(caps).slice(0, 120))
+    const guest = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
+    await guest.goto(`${journal.public_url}/shop`, { waitUntil: 'networkidle' })
+    const buyButtons = await guest.getByRole('button', { name: /^(\+\s*)?(add|choose)\b/i }).count()
+    s.check('no cart button is left on the shop page (no stale CTA)', buyButtons === 0, `${buyButtons} buttons`)
+    await guest.screenshot({ path: path.join(OUT, `shots/${String(++shotNo).padStart(2, '0')}-shop-with-orders-off.png`), fullPage: false })
+    s.note(`with Orders off the shop page says: ${(await guest.innerText('main')).replace(/\s+/g, ' ').slice(0, 220)}`)
+    await page.goto(`${WS}/b/${B}/orders`, { waitUntil: 'networkidle' })
+    s.note(`owner's Orders page while off: ${(await page.innerText('main')).replace(/\s+/g, ' ').slice(0, 220)}`)
+    await s.shot(page, 'orders-page-while-off', true)
+    // And on again.
+    await page.goto(`${WS}/b/${B}/modules/orders`, { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: /^turn on/i }).first().click()
+    await page.waitForLoadState('networkidle').catch(() => {})
+    await sleep(2500)
+    mods = (await api('GET', `/v1/b/${B}/modules`)).data || []
+    s.check('Orders is on again (API)', mods.some((m) => m.module_id === 'orders' && m.activation_state === 'active'))
+    const ordersAfter = ((await api('GET', `/v1/platform/businesses/${B}/orders`)).data || []).length
+    s.check('every past order is still there', ordersAfter === ordersBefore, `${ordersBefore} → ${ordersAfter}`)
+    caps = await capabilities()
+    s.check('the website takes orders again', caps.order === true, JSON.stringify(caps).slice(0, 120))
+    await guest.context().close()
+    s.done()
+  }
+
+  // ----------------------------------------------------------- 13. return
+  if (runs('return')) {
+    const s = step('return: a new session another day — find the orders, the customer and what changed')
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    await ctx.addCookies(sessionCookies({ ...owner, token: mintToken(owner) }))
+    const p3 = await ctx.newPage()
+    await p3.goto(`${WS}/b/${B}`, { waitUntil: 'networkidle', timeout: 120000 })
+    await s.shot(p3, 'return-home', true)
+    const home = (await p3.innerText('main')).replace(/\s+/g, ' ')
+    journal.return_home = home.slice(0, 800)
+    s.check('the home now shows real activity, not zeros', /₹\s?[1-9]/.test(home), home.slice(0, 200))
+    await p3.goto(`${WS}/b/${B}/orders`, { waitUntil: 'networkidle' })
+    const tabs = p3.getByRole('link', { name: /^completed/i }).or(p3.getByRole('tab', { name: /^completed/i }))
+    if (await tabs.count()) { await tabs.first().click(); await p3.waitForLoadState('networkidle').catch(() => {}) }
+    const done = (await p3.innerText('main')).replace(/\s+/g, ' ')
+    s.check('the completed orders are found under Completed', new RegExp(journal.order_number, 'i').test(done), done.slice(0, 200))
+    await s.shot(p3, 'return-orders-completed', true)
+    const customers = await api('GET', `/v1/platform/businesses/${B}/customers`)
+    const priya = (customers.data || []).find?.((c) => /priya/i.test(c.display_name || c.name || ''))
+    if (priya) {
+      await p3.goto(`${WS}/b/${B}/customers/${priya.id}`, { waitUntil: 'networkidle' })
+      const hist = (await p3.innerText('main')).replace(/\s+/g, ' ')
+      s.check('the customer’s page shows her orders', /ORD-/i.test(hist), hist.slice(0, 200))
+      await s.shot(p3, 'return-customer', true)
+    } else {
+      s.check('the customer who ordered is in Customers (API)', false, JSON.stringify(customers.data).slice(0, 200))
+    }
+    await ctx.close()
     s.done()
   }
 } catch (err) {
