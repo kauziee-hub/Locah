@@ -200,9 +200,13 @@ def faqs_for(bp: BusinessBlueprint, *, ordering: list[dict[str, str]], visiting:
     out: list[dict[str, str]] = []
 
     def add(q: str, a: str) -> None:
-        a = " ".join(a.split())
-        if q and a and len(out) < 10:
-            out.append({"q": q[:140], "a": (a if re.search(r"[.!?]$", a) else a + ".")[:500]})
+        a = " ".join(a.split()).strip(" ,;")
+        # An answer is a sentence a visitor can use: never a fragment of the
+        # owner's reply ("choose the doctor.").
+        if not q or len(a.split()) < 3 or len(out) >= 10:
+            return
+        a = a[0].upper() + a[1:]
+        out.append({"q": q[:140], "a": (a if re.search(r"[.!?]$", a) else a + ".")[:500]})
 
     number = _phone(contact)
     whatsapp, phone = bool(contact.get("whatsapp")), bool(contact.get("phone"))
@@ -234,12 +238,24 @@ def faqs_for(bp: BusinessBlueprint, *, ordering: list[dict[str, str]], visiting:
         else:
             add("Do you have vegetarian dishes?",
                 "Yes — every dish on the menu is marked vegetarian or non-vegetarian")
+    from platform_core.interview.discovery import characteristics
+
     custom = bp.discovery.get("offerings.customisation")
-    if custom and custom.status == "answered" and (custom.quote or custom.summary):
+    # Only a business that makes things to order is asked about custom work
+    # (a clinic's FAQ asked "Can I ask for something custom?").
+    if custom and custom.status == "answered" and (custom.quote or custom.summary) and \
+            characteristics(bp).get("made_to_order") == "observed":
         add("Can I ask for something custom?", custom.quote or custom.summary)
     booked = bp.discovery.get("bookings.format")
-    if booking and booked and booked.status == "answered" and (booked.quote or booked.summary):
-        add("What can I book?", booked.quote or booked.summary)
+    if booking:
+        # What can be booked, by name, then how it works in the owner's words.
+        names = [i.name for i in items if i.name][:4]
+        how = " ".join(((booked.quote or booked.summary) if booked and booked.status == "answered" else "").split())
+        listed = (", ".join(names[:-1]) + " or " + names[-1]) if len(names) > 1 else (names[0] if names else "")
+        if listed:
+            add("What can I book?", f"{listed}." + (f" {how[0].upper()}{how[1:]}" if len(how.split()) >= 4 else ""))
+        elif how:
+            add("What can I book?", how)
     if facts.get("opening_hours"):
         add("When are you open?", facts["opening_hours"])
     if address:

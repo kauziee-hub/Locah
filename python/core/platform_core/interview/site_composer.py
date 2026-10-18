@@ -604,6 +604,14 @@ def compose_site(
         parts["steps"] = [{"section_type_id": "feature_grid", "layout_variant": "steps", "content": {
             "title": (copy.steps_title or "How it works")[:120],
             "items": [{"title": st.title[:80], "body": st.body[:240]} for st in copy.steps[:4]]}}]
+    if "how" in parts and "steps" in parts:
+        # One "How a visit works" per page: the owner's steps carry the
+        # written title; the strip of facts beside them (hours, place,
+        # delivery) keeps a plain one (certification: a clinic's home page
+        # showed two sections both titled "How a visit works").
+        how = parts["how"][0]["content"]
+        if how["title"].casefold() == parts["steps"][0]["content"]["title"].casefold():
+            how["title"] = "How ordering works" if arche in _COMMERCE else "Good to know"
     plans = plans_from_answer(bp) if arche == "membership_fitness" else []
     if plans:
         parts["plans"] = [{"section_type_id": "product_showcase", "layout_variant": "plan_cards", "content": {

@@ -272,3 +272,17 @@ def test_build_gives_the_location_the_hours_said_but_never_overwrites_saved_ones
     # Hours the owner set themselves stay as they are.
     _run(_hand_off(bid, "Every day 7 am–8 pm", me))
     assert saved()["mon"] == [["09:00", "22:00"]]
+
+
+def test_a_split_day_reads_back_as_written() -> None:
+    # Certification: LOCAH writes a split day as "Mon–Sat 8 am–1 pm, 5 pm–9 pm";
+    # reading that back to save the location kept only the evening, so the
+    # clinic's footer, contact block and booking slots said 5–9 pm only.
+    from platform_core.interview.hours import describe, for_location, parse
+
+    for said in ("Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm",
+                 "Mon–Fri 9 am–1 pm, 4 pm–8 pm; Sat 9 am–1 pm; Sun closed"):
+        week = parse(said, asked=True)
+        assert week is not None and describe(week) == said
+    saved = for_location(parse("Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm", asked=True) or {})
+    assert saved["mon"] == [["08:00", "13:00"], ["17:00", "21:00"]] and saved["sun"] == [["08:00", "13:00"]]

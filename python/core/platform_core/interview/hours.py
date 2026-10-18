@@ -166,15 +166,28 @@ def parse(text: str, current: Week | None = None, *, asked: bool = False) -> Wee
     for pattern, said in _NAMED_TIMES:
         flat = pattern.sub(said, flat)
     changed = undated = False
+    dated: list[str] = []  # the days the last clause gave times to
     for clause in _CLAUSE.split(flat):
         if clause and (asked or _CUE.search(clause)):
+            named = days_named(clause)
+            if not named and dated and _SPAN.search(clause) and not _CLOSED.search(clause) \
+                    and not _ALL_DAY.search(clause):
+                # "Mon–Sat 8 am–1 pm, 5 pm–9 pm" (how LOCAH itself writes a
+                # split day): the second span belongs to the days just named.
+                # It replaced the whole week before, and a clinic's location
+                # was saved with its evenings only.
+                found = _clause(clause, week, add=True, days=dated)
+                if found is not None:
+                    week, changed = found, True
+                continue
             # "12 to 3 for lunch, dinner 7 to 11": a second set of times for
             # the same (unnamed) days adds to the first instead of replacing it.
-            again = undated and not days_named(clause)
+            again = undated and not named
             found = _clause(clause, week, add=again)
             if found is not None:
                 week, changed = found, True
-                undated = undated or not days_named(clause)
+                undated = undated or not named
+                dated = named if _SPAN.search(clause) else []
     # "Closed on Mondays" alone says nothing about when it IS open.
     return week if changed and any(week[d] for d in DAYS) else None
 
@@ -183,8 +196,8 @@ _EVENING = re.compile(r"\b(dinner|evenings?|nights?)\b", re.I)
 _MORNING = re.compile(r"\b(breakfast|mornings?)\b", re.I)
 
 
-def _clause(flat: str, current: Week, *, add: bool = False) -> Week | None:
-    days = days_named(flat)
+def _clause(flat: str, current: Week, *, add: bool = False, days: list[str] | None = None) -> Week | None:
+    days = days if days is not None else days_named(flat)
     week: Week = {d: [list(s) for s in current.get(d, [])] for d in DAYS}
     targets = days or list(DAYS)
     if _ALL_DAY.search(flat):
