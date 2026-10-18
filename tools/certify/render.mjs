@@ -623,6 +623,26 @@ async function settle() {
   await sleep(300)
 }
 
+/** Images that failed, fetched once more (the same src, a fresh request);
+ *  resolves to how many loaded the second time. */
+const RETRY_BROKEN = `(async () => {
+  const failed = [...document.images].filter((img) =>
+    (img.getAttribute('src') || img.getAttribute('srcset')) && img.complete && img.naturalWidth === 0)
+  const again = await Promise.all(failed.map((img) => new Promise((resolve) => {
+    const done = (ok) => { img.removeEventListener('load', onLoad); img.removeEventListener('error', onError); resolve(ok) }
+    const onLoad = () => done(true)
+    const onError = () => done(false)
+    img.addEventListener('load', onLoad)
+    img.addEventListener('error', onError)
+    setTimeout(() => done(img.naturalWidth > 0), 8000)
+    const srcset = img.getAttribute('srcset')
+    if (srcset) { img.removeAttribute('srcset'); img.setAttribute('srcset', srcset) }
+    const src = img.getAttribute('src')
+    if (src) { img.removeAttribute('src'); img.setAttribute('src', src) }
+  })))
+  return again.filter(Boolean).length
+})()`
+
 /** The site rendered something a visitor can read: its root and some words. */
 async function hasContent() {
   return evaluate(
@@ -933,6 +953,9 @@ for (let qi = 0; qi < queue.length; qi++) {
       if (entry.status == null) entry.status = nav0.status
       if (!nav0.status) throw new Error(nav0.error || 'navigation failed')
       await settle()
+      // A photo CDN that drops one request is not a broken page: each image
+      // that failed is asked for once more before anything is measured.
+      v.images_retried = await evaluate(RETRY_BROKEN, 20000).catch(() => 0)
       const m = await evaluate(metricsJs(vp.width), 60000)
       if (entry.title == null) {
         entry.title = m.title
