@@ -204,3 +204,18 @@ def test_five_businesses_of_one_trade_open_on_different_covers() -> None:
     assert len(bakeries) >= 4, bakeries
     # A poster concept never opens on a bakery's arch.
     assert all(cover_for(options, "kinetic_sport", f"gym-{i}")[0] != "arch" for i in range(40))
+
+
+def test_a_bento_needs_photographs_to_fill_it() -> None:
+    # Certification: a clinic's two doctors were laid out as a bento with no
+    # photographs — tall empty boxes a critic read as broken images.
+    from platform_core.interview.experience import Content, catalogue_options
+
+    bare = Content(pictures=0, hero_picture=False, items=2, pictured_items=0, categories=1,
+                   story_chars=0, story_picture=False)
+    assert "bento" not in catalogue_options("service_appointment", "service", bare)
+    assert catalogue_options("service_appointment", "service", bare) == ["stack"]
+    pictured = Content(pictures=4, hero_picture=True, items=4, pictured_items=3, categories=1,
+                       story_chars=0, story_picture=False)
+    assert "bento" in catalogue_options("product_commerce", "product", pictured)
+    assert "bento" not in catalogue_options("menu_commerce", "menu", bare)

@@ -2396,6 +2396,113 @@
   font-size: 0.88rem;
   color: var(--site-muted);
 }
+/* The flow beside what is being booked: steps on the left, a summary card on
+   the right (sticky) — a page with the weight of a real appointment desk. */
+[data-locah-site] .ls-book__layout {
+  display: grid;
+  gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+  align-items: start;
+}
+@media (min-width: 980px) {
+  [data-locah-site] .ls-book__layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.75fr);
+    max-width: 1080px;
+    margin-inline: auto;
+  }
+  [data-locah-site] .ls-book__summary {
+    position: sticky;
+    top: 6rem;
+    margin-top: clamp(4.5rem, 3rem + 3vw, 6.5rem);
+  }
+}
+[data-locah-site] .ls-book__flow {
+  max-width: none;
+  margin-inline: 0;
+}
+[data-locah-site] .ls-book__n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.7em;
+  height: 1.7em;
+  margin-right: 0.6em;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  background: var(--site-primary);
+  color: var(--site-primary-fg);
+  vertical-align: 0.1em;
+}
+[data-locah-site] .ls-book__next {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+[data-locah-site] .ls-book__next li {
+  display: flex;
+  align-items: center;
+  color: var(--site-muted);
+  font-weight: 600;
+}
+[data-locah-site] .ls-book__next .ls-book__n {
+  background: transparent;
+  color: var(--site-muted);
+  box-shadow: inset 0 0 0 1.5px var(--site-border);
+}
+[data-locah-site] .ls-book__days {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+[data-locah-site] .ls-book__days .ls-day {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0.1rem;
+  min-width: 4.6rem;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius);
+  background: var(--site-bg);
+  color: var(--site-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+[data-locah-site] .ls-book__days .ls-day small {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--site-muted);
+}
+[data-locah-site] .ls-book__days .ls-day.is-on {
+  border-color: var(--site-primary);
+  background: color-mix(in srgb, var(--site-primary) 10%, var(--site-bg));
+}
+[data-locah-site] .ls-book__days .ls-day:focus-visible {
+  outline: 2px solid var(--site-primary);
+  outline-offset: 2px;
+}
+[data-locah-site] .ls-book__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.45rem 1rem;
+  margin: 0.5rem 0 0;
+}
+[data-locah-site] .ls-book__facts dt {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--site-muted);
+  padding-top: 0.15rem;
+}
+[data-locah-site] .ls-book__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
 [data-locah-site] .ls-book__form textarea {
   font: inherit;
   color: var(--site-ink);

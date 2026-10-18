@@ -1778,6 +1778,27 @@ html.lenis.lenis-smooth {
   flex-direction: column;
   justify-content: flex-end;
 }
+/* No photograph anywhere in the bento (a design chosen before the photo
+   search came back empty): compact text cells, never tall empty boxes. */
+.fx-bento:not(:has(.fx-bento__cell--pic)) .fx-bento__cell {
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  border-top: 2px solid var(--site-ink);
+  border-radius: 0;
+}
+.fx-bento:not(:has(.fx-bento__cell--pic)) {
+  grid-auto-rows: auto;
+}
+@media (min-width: 900px) {
+  .fx-bento:not(:has(.fx-bento__cell--pic)) {
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+  .fx-bento:not(:has(.fx-bento__cell--pic)) > * {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
 .fx-bento__cell img {
   position: absolute;
   inset: 0;

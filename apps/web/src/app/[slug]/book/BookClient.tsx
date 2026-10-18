@@ -37,6 +37,24 @@ function today(): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
+/** The next week as a visitor picks from it: weekday and date, today first. */
+function nextDays(count: number): { iso: string; weekday: string; date: string }[] {
+  const start = new Date(`${today()}T12:00:00`)
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(start.getTime() + i * 86_400_000)
+    return {
+      iso: new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
+      weekday: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+      date: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+    }
+  })
+}
+
+function sayDay(iso: string): string {
+  if (!iso) return ''
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 export default function BookClient({
   slug,
   options,
@@ -223,16 +241,21 @@ export default function BookClient({
   const showProvider = (mode === 'appointment' || mode === 'site_visit') && providers.length > 0
   const readyForContact = Boolean(picked)
 
+  // The whole flow is visible from the start — what, when, who you are — and
+  // what is being booked is summed up beside it (certification: a Book page
+  // that showed only two chips read as "not a booking flow").
+  const timed = choice ? SLOT_MODES.includes(choice.mode) : true
   return (
     <main className="ls-section ls-book">
-      <div className="ls-inner ls-checkout">
+      <div className="ls-inner ls-book__layout">
+      <div className="ls-checkout ls-book__flow">
       <h1 className="ls-confirm__title">{t('Book')}</h1>
 
       {choices.length === 0 ? <p>{t('Nothing can be booked online yet.')}</p> : null}
 
       {choices.length > 1 ? (
         <section aria-labelledby="what-h" className="ls-bill__card">
-          <h2 id="what-h" className="ls-checkout__h">{t('What would you like to book?')}</h2>
+          <h2 id="what-h" className="ls-checkout__h"><span className="ls-book__n" aria-hidden="true">1</span>{t('What would you like to book?')}</h2>
           {grouped.map(([m, cs]) => (
             <div key={m} className="ls-book__group">
               <p className="ls-meta">{t(GROUP[m])}</p>
@@ -277,6 +300,15 @@ export default function BookClient({
 
           {SLOT_MODES.includes(mode) ? (
             <>
+              <div className="ls-book__days" role="group" aria-label={t('Pick a day')}>
+                {nextDays(7).map((d) => (
+                  <button key={d.iso} type="button" className={`ls-day${day === d.iso ? ' is-on' : ''}`}
+                    onClick={() => setDay(d.iso)} data-day={d.iso}>
+                    <small>{d.weekday}</small>
+                    <strong>{d.date}</strong>
+                  </button>
+                ))}
+              </div>
               <label>{t('Date')}
                 <input type="date" min={today()} value={day} onChange={(e) => setDay(e.target.value)} required style={field} />
               </label>
@@ -373,6 +405,39 @@ export default function BookClient({
             </>
           ) : null}
         </form>
+      ) : null}
+
+      {!choice && choices.length > 1 ? (
+        <ol className="ls-book__next">
+          <li className="ls-bill__card">
+            <span className="ls-book__n" aria-hidden="true">2</span>
+            {timed ? t('Pick a day and a time') : t('Pick your dates')}
+          </li>
+          <li className="ls-bill__card">
+            <span className="ls-book__n" aria-hidden="true">3</span>
+            {t('Your name and number, and it is booked')}
+          </li>
+        </ol>
+      ) : null}
+      </div>
+
+      {choices.length ? (
+        <aside className="ls-bill__card ls-book__summary" aria-label={t('Your booking')}>
+          <p className="ls-meta">{options.business.display_name}</p>
+          <h2 className="ls-checkout__h">{choice ? choice.title : t('Your booking')}</h2>
+          <dl className="ls-book__facts">
+            {choice && choice.price !== null ? (<><dt>{t('Price')}</dt><dd>₹{choice.price}</dd></>) : null}
+            {choice && timed && choice.minutes ? (<><dt>{t('Takes')}</dt><dd>{t('{n} min', { n: choice.minutes })}</dd></>) : null}
+            {picked ? (<><dt>{t('When')}</dt><dd>{day ? `${sayDay(day)} · ` : ''}{picked.label}</dd></>) : null}
+            {options.policy.cancel_window_hours > 0 ? (
+              <><dt>{t('Changes')}</dt><dd>{t('Free to cancel up to {h} hours before.', { h: options.policy.cancel_window_hours })}</dd></>
+            ) : null}
+            {options.policy.require_deposit ? (
+              <><dt>{t('Deposit')}</dt><dd>₹{options.policy.deposit_amount ?? ''}</dd></>
+            ) : (<><dt>{t('Payment')}</dt><dd>{t('Pay at your visit')}</dd></>)}
+          </dl>
+          {!choice ? <p className="ls-meta">{t('Choose what you would like to book to see the times.')}</p> : null}
+        </aside>
       ) : null}
       </div>
     </main>

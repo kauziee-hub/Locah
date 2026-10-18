@@ -232,7 +232,20 @@ def hero_options(arche: str, motion: str, c: Content, dims: dict[str, Any]) -> l
 
 
 def catalogue_options(arche: str, offering: str, c: Content) -> list[str]:
-    """How the range is presented: what a visitor of this trade expects."""
+    """How the range is presented: what a visitor of this trade expects.
+
+    A bento is a grid of photographs, the best one largest: without at least
+    two pictured things its cells are tall empty boxes (certification: a
+    clinic's two doctors read as "blank image containers"). Then the range is
+    a stack — or a menu, where that was the other choice."""
+    options = _catalogue_choices(arche, offering, c)
+    pictured = c.pictured_items if c.items else c.pictured_categories
+    if "bento" in options and pictured < 2:
+        options = [o for o in options if o != "bento"] or ["stack"]
+    return options
+
+
+def _catalogue_choices(arche: str, offering: str, c: Content) -> list[str]:
     if c.items == 0:
         # Known only as categories: a rail of them when they are pictured,
         # else an asymmetric grid.
