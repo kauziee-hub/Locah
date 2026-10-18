@@ -144,6 +144,14 @@
         "tools/certify/stack/web.sh"
       ],
       "port": 3200
+    },
+    {
+      "name": "certify-workspace",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "tools/certify/stack/workspace.sh"
+      ],
+      "port": 3201
     }
   ]
 }
