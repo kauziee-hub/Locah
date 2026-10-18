@@ -142,13 +142,12 @@ export function Cover({
 
   if (variant === 'window') {
     const headline = parts.headline.trim()
-    let [first, second] = splitHeadline(headline, parts.accent)
+    const split = splitHeadline(headline, parts.accent)
     // One word over the picture and the rest below it reads as a broken page
     // ("Kansa," | photo | "brass, copper and clay for your kitchen"): the
     // window's two lines are balanced by words, the accent marked where it falls.
-    if (second && Math.min(first.length, second.length) < Math.max(first.length, second.length) * 0.45) {
-      ;[first, second] = balanceWords(headline)
-    }
+    const lopsided = Boolean(split[1]) && Math.min(split[0].length, split[1].length) < Math.max(split[0].length, split[1].length) * 0.45
+    const [first, second] = lopsided ? balanceWords(headline) : split
     const secondAt = second ? headline.indexOf(second, Math.max(0, first.length - 1)) : -1
     const accentAt = parts.accent ? headline.indexOf(parts.accent.trim()) : -1
     const accentEnd = accentAt >= 0 ? accentAt + parts.accent.trim().length : -1
