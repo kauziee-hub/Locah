@@ -135,6 +135,7 @@ async def interview(owner: Owner, journey: Journey, business_id: str, script: An
     status, body = await owner.call("GET", f"/v1/b/{business_id}/interview")
     data = body.get("data") or {}
     said: set[str] = set()
+    answered: dict[str, int] = {}
     text = script.opening
     for turn in range(MAX_TURNS):
         revision = int((data.get("blueprint") or {}).get("revision") or 0)
@@ -149,16 +150,17 @@ async def interview(owner: Owner, journey: Journey, business_id: str, script: An
         ask = _ask_of(data)
         ready = _ready(data)
         journey.turns.append({"said": text, "reply": _last_reply(data), "next_ask": ask, "ready": ready})
-        answer = _answer(script, ask, business_name)
-        # A question this owner has no words for still gets an answer once ("not
-        # sure, keep it simple") — a real owner replies rather than leaving —
-        # so the interview can move on to what it has not asked yet.
-        if ready and (not ask or ask == "free" or answer in said or (answer is None and script.fallback in said)):
+        # A real owner answers what they are asked until the interview has
+        # nothing left to ask: a question they have no new words for gets
+        # their fallback ("not sure, keep it simple") and the interview moves
+        # on. Only the review summary, or the same question coming back after
+        # it was answered, ends the conversation.
+        if ready and (not ask or ask == "free" or answered.get(ask, 0) >= 1):
             break
+        answer = _answer(script, ask, business_name)
         if answer is None or answer in said:
-            if script.fallback in said and ready:
-                break
             answer = script.fallback
+        answered[ask] = answered.get(ask, 0) + 1
         said.add(answer)
         text = answer
     return data
@@ -244,7 +246,7 @@ async def choose_tools(owner: Owner, journey: Journey, business_id: str, wanted:
 
 JOB_DONE = frozenset({"completed", "fallback_used", "failed", "cancelled", "superseded"})
 USAGE_KEPT = ("composer", "archetype", "reference_profile", "model", "strategy_source", "media_drawn",
-              "media_failed", "image_latency_ms", "creative_latency_ms", "owner_edits_kept")
+              "media_failed", "image_latency_ms", "creative_latency_ms", "owner_edits_kept", "photo_audit")
 
 
 async def build_and_wait(owner: Owner, journey: Journey, business_id: str) -> dict[str, Any]:

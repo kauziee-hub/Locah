@@ -142,6 +142,12 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
     offering = offerings[0] if offerings else {}
     mode = "table" if table and not offerings else str(
         offering.get("mode") or offering.get("reservation_mode") or (modes[0] if modes else "appointment"))
+    # Like the Book page: a customer may pick one of the people who give this
+    # service at this place, and then sees only that person's free times.
+    provider_id = next((str(p.get("id")) for p in providers
+                        if (not location_id or location_id in (p.get("location_ids") or [location_id]))
+                        and (not offering.get("id") or offering["id"] in (p.get("offering_ids") or [offering["id"]]))),
+                       "")
     if not flow.step("something bookable", bool(location_id) and (bool(offerings) or bool(modes) or bool(table)),
                      f"{len(offerings)} offerings, modes {modes}, tables {(table or {}).get('tables')}"):
         return flow
@@ -158,6 +164,8 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
                 "party_size": 2 if mode in {"table", "reservation"} else 1}
         if offering.get("id"):
             body["offering_id"] = offering["id"]
+        if provider_id:
+            body["provider_id"] = provider_id
         # A customer looks at the next days until one is open (a salon is shut
         # on Mondays; a restaurant serves dinner only some nights).
         open_slots: list[dict[str, Any]] = []
@@ -178,7 +186,8 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
         # A business that never gave its hours shows no slots: the customer
         # asks for a time instead (the Book page's "Pick a time"). It books,
         # but a booking business without hours is a defect of its own.
-        flow.step("hours known (slots, not a time to ask for)", hours_known, "the business gave no opening hours")
+        flow.step("hours known (slots, not a time to ask for)", hours_known,
+                  "opening hours given" if hours_known else "the business gave no opening hours")
         if not hours_known:
             starts, ends = f"{tried[-1]}T11:00:00+05:30", f"{tried[-1]}T11:30:00+05:30"
         else:
@@ -192,8 +201,10 @@ async def book_flow(web: httpx.AsyncClient, owner: httpx.AsyncClient, slug: str,
                "party_size": 2 if mode in {"table", "reservation"} else 1, "guest": GUEST}
     if offering.get("id"):
         booking["offering_id"] = offering["id"]
-    if providers:
-        booking["provider_id"] = providers[0].get("id")
+    else:
+        booking["title"] = "Reserve a table" if mode == "table" else mode.replace("_", " ").capitalize()
+    if provider_id:
+        booking["provider_id"] = provider_id
     res = await web.post(f"/v1/public/websites/{slug}/bookings", json=booking)
     made = _data(res.json()) if res.headers.get("content-type", "").startswith("application/json") else res.text
     if not flow.step(f"booking made ({mode})", res.status_code < 400, made):
