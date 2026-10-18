@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import type { PublicPlace } from '@/lib/public-website'
 import { useEffect, useMemo, useState } from 'react'
 import {
   CartItem,
@@ -103,9 +104,13 @@ export default function CheckoutClient({
   reorder,
   unavailable,
   rangePath = '',
+  place,
 }: {
   slug: string
   options: Options
+  /** Where and when a pickup is collected: the business's main location as the
+   *  owner keeps it (address, opening hours, phone). */
+  place?: PublicPlace
   /** The site's range page ("/menu"): where an empty basket sends the visitor. */
   rangePath?: string
   /** The signed-in LOCAH customer, if any: the order joins their own record. */
@@ -262,6 +267,29 @@ export default function CheckoutClient({
     }
   }
 
+  // Where and when to collect a pickup, said on the checkout and on the
+  // confirmation (owner lab B14: neither page said where to go or when).
+  const collectFrom = (pickupName?: string) => {
+    const named = pickupName && !/^(primary|main|default) location$/i.test(pickupName.trim()) ? pickupName : ''
+    // The street address when the owner saved one, else the locality they named.
+    const where = [named, place?.address || place?.locality].filter(Boolean).join(', ')
+    if (!where && !place?.hours_summary) return null
+    return (
+      <div className="ls-collect">
+        <p className="ls-collect__where">
+          <span className="ls-meta">{t('Collect from')}</span>
+          {where ? <strong>{where}</strong> : <strong>{options.business.display_name}</strong>}
+        </p>
+        {place?.hours_summary ? <p className="ls-meta">{t('Open {hours}', { hours: place.hours_summary })}</p> : null}
+        {place?.phone ? (
+          <p className="ls-meta">
+            <a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{t('Call {phone}', { phone: place.phone })}</a>
+          </p>
+        ) : null}
+      </div>
+    )
+  }
+
   if (confirmation) {
     const pickupAt = options.locations.find((l) => l.is_primary) || options.locations[0]
     const howToPay = confirmation.checkout && !['succeeded', 'paid'].includes(confirmation.state)
@@ -310,9 +338,7 @@ export default function CheckoutClient({
                   <dd className="is-total">{rupees(priced.total)}</dd>
                 </dl>
               ) : null}
-              {mode !== 'delivery' && pickupAt?.name && !/^(primary|main|default) location$/i.test(pickupAt.name.trim()) ? (
-                <p className="ls-meta">{pickupAt.name}</p>
-              ) : null}
+              {mode !== 'delivery' ? collectFrom(pickupAt?.name) : null}
             </section>
           ) : null}
           {confirmation.checkout ? (
@@ -389,6 +415,7 @@ export default function CheckoutClient({
                   ))}
                 </div>
               )}
+              {mode === 'pickup' ? collectFrom((options.locations.find((l) => l.is_primary) || options.locations[0])?.name) : null}
               {mode === 'delivery' ? (
                 <div className="ls-checkout__fields">
                   <label><span>{t('Address')}</span><input name="line1" value={line1} onChange={(e) => setLine1(e.target.value)} required autoComplete="street-address" /></label>

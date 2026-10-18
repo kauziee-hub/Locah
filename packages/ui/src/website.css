@@ -2419,6 +2419,23 @@
 [data-locah-site] .ls-checkout {
   margin-inline: auto;
 }
+/* Where and when a pickup is collected — on the checkout and the confirmation. */
+[data-locah-site] .ls-collect {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--site-primary);
+  background: color-mix(in srgb, var(--site-primary) 6%, var(--site-bg));
+  border-radius: 0 var(--site-radius) var(--site-radius) 0;
+}
+[data-locah-site] .ls-collect p {
+  margin: 0;
+}
+[data-locah-site] .ls-collect__where {
+  display: grid;
+  gap: 0.1rem;
+}
 [data-locah-site] .ls-checkout__empty {
   display: grid;
   justify-items: center;

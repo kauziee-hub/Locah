@@ -72,7 +72,7 @@ export default async function CheckoutPage({ params, searchParams }: { params: {
   return (
     <SiteFrame site={site} lang={lang}>
       <CheckoutClient slug={params.slug} options={options} customer={customer} authToken={customer ? token : null} reorder={reorder} unavailable={unavailable}
-        rangePath={rangePath(site)} />
+        rangePath={rangePath(site)} place={site?.business?.place} />
     </SiteFrame>
   )
 }
