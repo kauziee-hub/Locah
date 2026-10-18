@@ -332,6 +332,31 @@ class WebsiteSection(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class WebsiteCertification(Base):
+    """A quality verdict on one exact draft (services.website_certification)."""
+
+    __tablename__ = "website_certifications"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    business_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("businesses.id"))
+    website_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("websites.id"))
+    version_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("website_versions.id"))
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    blocked_on: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner_requests: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class WebsiteGenerationJob(Base):
     __tablename__ = "website_generation_jobs"
 

@@ -134,6 +134,8 @@ class WebsiteService:
             pub = result.scalars().first()
             if pub:
                 published = WebsiteResolver.serialize_version(pub)
+        from platform_core.services.website_certification import WebsiteCertificationService, mode
+
         return {
             "website": WebsiteResolver.serialize_website(website),
             "draft": {
@@ -141,6 +143,12 @@ class WebsiteService:
                 "pages": page_payloads,
             },
             "published": published,
+            # The latest quality verdict on this draft and what it asks of the
+            # owner; `required` says whether publish waits for it.
+            "certification": {
+                "required": mode() == "enforce",
+                "current": await WebsiteCertificationService.current(session, business_id=business_id),
+            },
         }
 
     @staticmethod

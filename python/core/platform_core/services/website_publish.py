@@ -142,6 +142,12 @@ class WebsitePublishService:
         await WebsitePublishService.assert_publish_ready(
             session, business_id=business_id, draft_id=draft.id
         )
+        # Quality certification (WEBSITE_CERTIFICATION): with enforce, a draft
+        # without a current passing verdict is not published — the owner is
+        # told what is needed instead of a weak site going live.
+        from platform_core.services.website_certification import WebsiteCertificationService
+
+        await WebsiteCertificationService.assert_publishable(session, business_id=business_id)
 
         published = WebsiteVersion(
             website_id=website.id,

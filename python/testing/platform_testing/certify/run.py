@@ -35,6 +35,32 @@ def _node(*args: str, timeout: int = 900) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr)[-4000:]
 
 
+async def record_verdict(business_id: str, verdict: dict[str, Any]) -> bool:
+    """Write the gate's verdict to the certification database (local only)."""
+    import os
+    import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from platform_core.services.website_certification import WebsiteCertificationService
+
+    url = os.getenv("DATABASE_URL", "")
+    if "@localhost:" not in url and "@127.0.0.1:" not in url:
+        return False  # never a hosted database
+    engine = create_async_engine(url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)() as session:
+            await WebsiteCertificationService.record(
+                session, business_id=uuid.UUID(business_id), verdict=verdict, source="certify-harness")
+            await session.commit()
+        return True
+    except Exception:  # noqa: BLE001 - the run's own gate.json still holds the verdict
+        return False
+    finally:
+        await engine.dispose()
+
+
 async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False, critic: bool = True,
               render: bool = True) -> dict[str, Any]:
     from platform_testing.certify import customer as customer_step
@@ -115,6 +141,10 @@ async def run(run_dir: Path, scenario: str, variant: str, *, reuse: bool = False
         verdict = decide(crit, rounds_used=1, max_rounds=3)
         (folder / "gate.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False), encoding="utf-8")
         summary["steps"]["gate"] = {k: verdict.get(k) for k in ("status", "score", "reasons", "owner_requests")}
+        # The verdict is recorded on the business's draft, as the product reads
+        # it at publish (services.website_certification).
+        summary["steps"]["gate"]["recorded"] = await record_verdict(journey["business_id"], verdict)
+        summary["steps"]["gate"]["would_publish_under_enforce"] = verdict.get("status") == "pass"
 
     summary["seconds"] = round(time.monotonic() - started, 1)
     summary["ok"] = all(v.get("ok", True) for v in summary["steps"].values() if isinstance(v, dict))

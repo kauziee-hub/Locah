@@ -23,6 +23,10 @@ export REVALIDATE_SECRET=local-revalidate-secret-for-certify
 export WEB_REVALIDATE_URL=http://localhost:$WEB_PORT/api/revalidate
 export WEB_REVALIDATE_SECRET=$REVALIDATE_SECRET
 export WORKER_POLL_INTERVAL_SECONDS=1
+# Quality certification is recorded, not enforced, here: a run still drives
+# every customer flow on the published site, and the report says which sites
+# enforce would have held back (tests prove enforce itself).
+export WEBSITE_CERTIFICATION=${WEBSITE_CERTIFICATION:-record}
 # Real photographs, judged; the images are the Unsplash/Pixabay pipeline's.
 export IMAGE_PROVIDER=stock
 unset LOCAH_TEST_NO_EXTERNAL_AI LOCAH_JOBS_INERT VOICE_PROVIDER LOCAH_AI_REPLAY_FILE || true
