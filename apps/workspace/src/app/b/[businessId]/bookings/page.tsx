@@ -20,6 +20,7 @@ type Booking = {
   deposit_required: boolean; deposit_amount: number
   customer: { id: string; name: string; phone: string | null } | null
   location_name: string | null; provider_name: string | null
+  resource_names?: string[]
 }
 type Waiting = {
   id: string; starts_at: string; party_size: number; status: string
@@ -118,7 +119,10 @@ export default async function BookingsPage({
             key: 'when',
             header: t('When'),
             render: (x) => (
-              <span style={{ whiteSpace: 'nowrap' }}>{dayTimeLabel(x.starts_at, locale)}<span className="bos-hint"> – {timeLabel(x.ends_at, locale)}</span></span>
+              <span style={{ whiteSpace: 'nowrap' }}>{dayTimeLabel(x.starts_at, locale)}<span className="bos-hint"> – {
+                // A stay or a hire runs to another day: say which.
+                new Date(x.ends_at).toDateString() === new Date(x.starts_at).toDateString()
+                  ? timeLabel(x.ends_at, locale) : dayTimeLabel(x.ends_at, locale)}</span></span>
             ),
           },
           {
@@ -126,7 +130,8 @@ export default async function BookingsPage({
             header: t('With'),
             render: (x) => (
               <span>
-                {x.provider_name ?? (x.reservation_mode === 'appointment' ? t('Anyone free') : MODE_WORDS[x.reservation_mode] ? t(MODE_WORDS[x.reservation_mode]) : '—')}
+                {x.provider_name ?? (x.resource_names?.length ? x.resource_names.join(', ')
+                  : x.reservation_mode === 'appointment' ? t('Anyone free') : MODE_WORDS[x.reservation_mode] ? t(MODE_WORDS[x.reservation_mode]) : '—')}
                 {places.size > 1 && x.location_name ? <span className="bos-hint"> · {x.location_name}</span> : null}
               </span>
             ),

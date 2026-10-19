@@ -362,6 +362,66 @@ async def _hours_to_location(
         return  # never hold the website back over hours; the owner can set them in Locations
 
 
+def place_address(said: str) -> dict[str, str]:
+    """Where the owner said they are ("RS Puram, Coimbatore", "near Madikeri,
+    Coorg") as a location address: the known town and the part before it,
+    else the owner's own words split at the comma. Empty when nothing is said."""
+    from platform_core.geo.india_places import place_from_address
+
+    said = re.sub(r"\s+", " ", said or "").strip(" .,")
+    if not said:
+        return {}
+    named = place_from_address(said)
+    if named is not None:
+        out = {"city": named.city, "state": named.state, "country": "IN"}
+        if named.locality:
+            out["locality"] = named.locality
+        return out
+    parts = [p.strip() for p in said.split(",") if p.strip()]
+    first = parts[0][:1].upper() + parts[0][1:]
+    if len(parts) == 1:
+        return {"city": first, "country": "IN"}
+    # "Kaggodlu Road, near Madikeri": the town is Madikeri.
+    town = re.sub(r"^(?:near|nr\.?|off|opp\.?)\s+", "", parts[-1], flags=re.I)
+    return {"locality": first, "city": town[:1].upper() + town[1:], "country": "IN"}
+
+
+async def _place_to_location(
+    session: AsyncSession, business_id: UUID, bp: BusinessBlueprint, *, actor_id: UUID, correlation_id: str,
+) -> None:
+    """Where the business is and its number, as the owner said them, on the
+    primary location — the place its website, a guest's booking page and the
+    checkout tell customers to come to (owner lab: a salon "in RS Puram,
+    Coimbatore" and a hotel "near Madikeri, Coorg" told their guests neither,
+    and the number "noted for bookings" was on no location). Only what is
+    missing: an address or number set in the Workspace is never overwritten."""
+    from platform_core.services.location import LocationService
+
+    said = bp.locations.value if bp.locations is not None else ""
+    locations = await LocationService.list_for_business(session, business_id, status="active")
+    primary = locations[0] if locations else None
+    if primary is None:
+        return
+    address = dict(primary.address) if isinstance(primary.address, dict) else {}
+    payload: dict[str, Any] = {}
+    if not any(address.get(k) for k in ("line1", "locality", "city")):
+        found = place_address(str(said))
+        if found:
+            payload["address"] = {**address, **found}
+    phone = public_contact(bp).get("phone")
+    if phone and not primary.phone:
+        payload["phone"] = phone
+    if not payload:
+        return
+    try:
+        await LocationService.update_location(
+            session, business_id=business_id, location_id=primary.id, actor_id=actor_id,
+            correlation_id=correlation_id, payload=payload,
+        )
+    except ValidationError:
+        return  # never hold the website back over an address; the owner can set it in Locations
+
+
 def _carry_media(fresh: BusinessBlueprint, proposed: BusinessBlueprint) -> None:
     """Keep media the worker finished while a turn was being understood."""
     known = {m.asset_id for m in proposed.media_assets}
@@ -1335,6 +1395,7 @@ class BusinessInterviewService:
                 correlation_id=correlation_id,
             )
         await _hours_to_location(session, business.id, bp, actor_id=actor_id, correlation_id=correlation_id)
+        await _place_to_location(session, business.id, bp, actor_id=actor_id, correlation_id=correlation_id)
         seed = classification_seed(bp)
         if seed != business.business_type:
             await BusinessConfigurationService.patch_business_type(

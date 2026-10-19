@@ -148,7 +148,11 @@ class PublicBookingService:
                 {"id": str(o.id), "title": o.title, "description": o.description, "offering_type": o.offering_type,
                  "mode": mode_for(o), "minutes": minutes_for(o, mode_for(o)),
                  "price_amount": float(o.price_amount) if o.price_amount is not None else None,
-                 "currency": o.currency, "capacity": attr(o, "capacity"), "max_guests": attr(o, "max_guests")}
+                 "currency": o.currency, "capacity": attr(o, "capacity"), "max_guests": attr(o, "max_guests"),
+                 # A stay's own rules, for the Book page to say before the guest picks dates.
+                 "stay": {"check_in": attr(o, "check_in") or "14:00", "check_out": attr(o, "check_out") or "11:00",
+                          "min_nights": attr(o, "min_nights"), "weekend_min_nights": attr(o, "weekend_min_nights")}
+                 if mode_for(o) == "accommodation" else None}
                 for o in offerings
             ],
             "business": {

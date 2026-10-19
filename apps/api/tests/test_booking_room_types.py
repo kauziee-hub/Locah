@@ -55,6 +55,9 @@ def test_a_stay_gets_a_room_of_the_type_booked_and_never_another(owner: dict[str
     assert first.status_code == 200, first.text
     assert _sql("select resource_id::text from bookings_booking_allocations where booking_id = :b "
                 "and released_at is null", b=first.json()["data"]["id"]) == [(villa_1,)]
+    # The owner sees which room the guest is in, and what the stay comes to.
+    seen = client.get(f"/v1/platform/businesses/{bid}/bookings/{first.json()['data']['id']}", headers=owner).json()["data"]
+    assert seen["resource_names"] == ["Villa 1"] and seen["total_amount"] == 600.0, "two nights at 300"
 
     # The only villa is taken: a second villa stay is refused, though a cottage is free.
     again = _range(slug, location_id=loc, offering_id=villa, **nights)

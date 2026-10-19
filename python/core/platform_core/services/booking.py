@@ -55,10 +55,28 @@ class BookingService:
             BusinessLocation.id.in_({b.location_id for b in bookings})))).scalars().all()} if bookings else {}
         staff = await WorkforceService.names(
             session, business_id=business_id, member_ids={b.provider_id for b in bookings if b.provider_id})
+        # The room, table or chair each one holds ("Cottage 2"), so the owner
+        # knows where to put the guest; a finished booking keeps the one it held.
+        held: dict[uuid.UUID, list[str]] = {}
+        if bookings:
+            from platform_core.models import BookingAllocation, BookingResource
+
+            rows = (await session.execute(
+                select(BookingAllocation.booking_id, BookingResource.name, BookingAllocation.released_at)
+                .join(BookingResource, BookingResource.id == BookingAllocation.resource_id)
+                .where(BookingAllocation.business_id == business_id,
+                       BookingAllocation.booking_id.in_([b.id for b in bookings]))
+                .order_by(BookingAllocation.released_at.is_not(None), BookingResource.name)
+            )).all()
+            for booking_id, name, released in rows:
+                names = held.setdefault(booking_id, [])
+                if name not in names and (released is None or not names):
+                    names.append(name)
         return [BookingService.serialize(b) | {
             "customer": people.get(b.customer_contact_id) if b.customer_contact_id else None,
             "location_name": places.get(b.location_id),
             "provider_name": staff.get(b.provider_id) if b.provider_id else None,
+            "resource_names": held.get(b.id, []),
         } for b in bookings]
 
     @staticmethod

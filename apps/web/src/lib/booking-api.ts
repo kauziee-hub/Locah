@@ -7,6 +7,8 @@ export type BookingOptions = {
   offerings: Array<{
     id: string; title: string; description: string | null; offering_type: string; mode: string; minutes: number
     price_amount: number | null; currency: string; capacity: number | null; max_guests: number | null
+    /** A stay's check-in from / check-out by ("13:00") and its shortest stays. */
+    stay?: { check_in: string; check_out: string; min_nights: number | null; weekend_min_nights: number | null } | null
   }>
   table: { tables: number; max_party: number } | null
   providers: Array<{ id: string; display_name: string; location_ids: string[]; offering_ids: string[] }>

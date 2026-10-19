@@ -286,3 +286,64 @@ def test_a_split_day_reads_back_as_written() -> None:
         assert week is not None and describe(week) == said
     saved = for_location(parse("Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm", asked=True) or {})
     assert saved["mon"] == [["08:00", "13:00"], ["17:00", "21:00"]] and saved["sun"] == [["08:00", "13:00"]]
+
+
+async def _place_hand_off(business_id: str, place: str, phone: str, actor: Any) -> None:
+    from platform_core.db import get_database_url
+    from platform_core.interview.models import Fact
+    from platform_core.services.business_interview import _place_to_location
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+    from uuid import UUID
+
+    url = get_database_url()
+    assert url
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://", 1), poolclass=NullPool)
+    bp = BusinessBlueprint(business_id=UUID(business_id))
+    bp.locations = Fact(value=place, source="USER_STATEMENT")
+    bp.unconfirmed_facts["phone"] = Fact(value=phone, source="USER_STATEMENT")
+    async with async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)() as session:
+        await _place_to_location(session, UUID(business_id), bp, actor_id=actor, correlation_id=str(uuid4()))
+        await session.commit()
+    await engine.dispose()
+
+
+@pytest.mark.parametrize(("said", "address"), [
+    ("RS Puram, Coimbatore", {"locality": "RS Puram", "city": "Coimbatore", "state": "Tamil Nadu", "country": "IN"}),
+    ("near Madikeri, Coorg", {"locality": "Near Madikeri", "city": "Coorg", "country": "IN"}),
+    ("Kaggodlu Road, near Madikeri", {"locality": "Kaggodlu Road", "city": "Madikeri", "country": "IN"}),
+    ("Chromepet", {"city": "Chromepet", "country": "IN"}),
+    ("", {}),
+])
+def test_where_the_owner_said_they_are_is_an_address(said: str, address: dict[str, str]) -> None:
+    from platform_core.services.business_interview import place_address
+
+    assert place_address(said) == address
+
+
+@pytest.mark.skipif(not __import__("os").getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_build_gives_the_location_the_place_and_number_said_but_never_overwrites_saved_ones(monkeypatch: Any) -> None:
+    # Owner lab: a salon "in RS Puram, Coimbatore" and a hotel "near Madikeri,
+    # Coorg" told their guests neither where to come nor a number to call.
+    from fastapi.testclient import TestClient
+    from platform_api.main import app
+    from platform_testing.phase_b import create_business, new_identity, primary_location
+
+    client = TestClient(app)
+    me, owner = new_identity(monkeypatch)
+    bid = create_business(client, owner, modules=("offerings-catalog",))
+    loc = primary_location(client, owner, bid)
+
+    def saved() -> dict[str, Any]:
+        r = client.get(f"/v1/platform/businesses/{bid}/locations/{loc}", headers=owner)
+        assert r.status_code == 200, r.text
+        return dict(r.json()["data"])
+
+    _run(_place_hand_off(bid, "RS Puram, Coimbatore", "98940 73562", me))
+    first = saved()
+    assert first["address"]["locality"] == "RS Puram" and first["address"]["city"] == "Coimbatore"
+    assert first["phone"] == "+919894073562"
+    # An address and number the owner set themselves stay as they are.
+    _run(_place_hand_off(bid, "HSR Layout, Bengaluru", "90000 11111", me))
+    again = saved()
+    assert again["address"]["city"] == "Coimbatore" and again["phone"] == "+919894073562"

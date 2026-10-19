@@ -24,7 +24,7 @@ export default async function ManageBookingPage({
   return (
     <SiteFrame site={site} lang={siteLang(site?.website.languages, searchParams?.lang, true)}>
       <ManageBookingClient slug={params.slug} name={site?.business.display_name ?? null} bookingId={params.bookingId} token={token}
-        place={site?.business?.place ?? null} />
+        place={site ? { ...site.business.place, phone: site.business.place?.phone || site.business.contact?.phone } : null} />
     </SiteFrame>
   )
 }

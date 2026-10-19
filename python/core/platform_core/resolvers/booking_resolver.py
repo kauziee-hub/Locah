@@ -95,6 +95,9 @@ class BookingResolver:
             "payment_status": booking.payment_status,
             "deposit_required": booking.deposit_required,
             "deposit_amount": float(booking.deposit_amount or 0),
+            # What the booking comes to (two nights at 9500: 19000); None when
+            # the offering has no fixed price.
+            "total_amount": float(booking.total_amount) if booking.total_amount is not None else None,
             "internal_reference": booking.internal_reference,
             "cancellation_reason": booking.cancellation_reason,
             "hold_expires_at": booking.hold_expires_at.isoformat() if booking.hold_expires_at else None,

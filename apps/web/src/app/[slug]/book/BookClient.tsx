@@ -22,9 +22,12 @@ import { useWords } from '@/components/website/SiteWords'
  */
 
 type Mode = 'appointment' | 'table' | 'class_session' | 'accommodation' | 'rental' | 'site_visit' | 'event_date'
+type Stay = NonNullable<BookingOptions['offerings'][number]['stay']>
 type Choice = {
   key: string; mode: Mode; title: string; offeringId: string | null; minutes: number; price: number | null
   description?: string | null
+  /** A stay's check-in/out and shortest stays; how many a room sleeps. */
+  stay?: Stay | null; maxGuests?: number | null
 }
 type Picked = { starts_at: string; ends_at: string; label: string; full?: boolean; resourceId?: string | null }
 
@@ -58,6 +61,21 @@ function sayDay(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
+/** "13:00" as a guest reads it: "1:00 pm". */
+function sayClock(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  if (Number.isNaN(h)) return hhmm
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`
+}
+
+/** Nights between two YYYY-MM-DD days. */
+function nightsBetween(a: string, b: string): number {
+  if (!a || !b) return 0
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000)
+}
+
+const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`
+
 export default function BookClient({
   slug,
   options,
@@ -77,7 +95,7 @@ export default function BookClient({
   const choices = useMemo<Choice[]>(() => {
     const list: Choice[] = options.offerings.map((o) => ({
       key: o.id, mode: o.mode as Mode, title: o.title, offeringId: o.id, minutes: o.minutes, price: o.price_amount,
-      description: o.description,
+      description: o.description, stay: o.stay ?? null, maxGuests: o.max_guests,
     }))
     if (options.table) list.unshift({ key: 'table', mode: 'table', title: t('Reserve a table'), offeringId: null, minutes: 90, price: null })
     return list
@@ -198,14 +216,14 @@ export default function BookClient({
         reservation_mode: mode, title: choice.offeringId ? null : choice.title,
         starts_at: picked.starts_at, ends_at: picked.ends_at, party_size: partySize,
         resource_ids: picked.resourceId ? [picked.resourceId] : [],
-        payment_method: options.payment_methods[0] || 'cod', notes: notes || null, guest,
+        payment_method: options.payment_methods.includes('pay_at_business') ? 'pay_at_business' : options.payment_methods[0] || 'pay_at_business', notes: notes || null, guest,
       }, authToken)
       setDone({
         kind: 'booked', id: String(data.id), number: String(data.booking_number), token: String(data.management_token),
         deposit: data.deposit_required ? Number(data.deposit_amount || 0) : null, payment: String(data.payment_status),
         status: String(data.status),
         when: SLOT_MODES.includes(mode) ? `${day ? `${sayDay(day)} · ` : ''}${picked.label}`
-          : mode === 'accommodation' ? `${sayDay(checkIn)} → ${sayDay(checkOut)}`
+          : mode === 'accommodation' ? `${sayDay(checkIn)}${choice.stay ? `, ${t('from {time}', { time: sayClock(choice.stay.check_in) })}` : ''} → ${sayDay(checkOut)}${choice.stay ? `, ${t('by {time}', { time: sayClock(choice.stay.check_out) })}` : ''}`
             : mode === 'event_date' ? sayDay(day) : '',
       })
     } catch (err) {
@@ -299,8 +317,8 @@ export default function BookClient({
                   // Each choice says what it is, how long it takes and what it
                   // costs — not a pill of a name and a price (certification).
                   const meta = [SLOT_MODES.includes(c.mode) && c.minutes ? t('{n} min', { n: c.minutes }) : '',
-                    c.price === null ? '' : c.mode === 'accommodation' ? t('₹{amount} a night', { amount: c.price })
-                      : `₹${c.price}`].filter(Boolean).join(' · ')
+                    c.price === null ? '' : c.mode === 'accommodation' ? t('₹{amount} a night', { amount: c.price.toLocaleString('en-IN') })
+                      : `₹${c.price.toLocaleString('en-IN')}`].filter(Boolean).join(' · ')
                   return (
                     <button key={c.key} type="button" onClick={() => setChoiceKey(c.key)} aria-pressed={c.key === choiceKey}
                       className={`ls-chip ls-book__choice${c.key === choiceKey ? ' is-on' : ''}`}>
@@ -394,8 +412,16 @@ export default function BookClient({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(9rem, 1fr))', gap: '0.75rem' }}>
                 <label>{t('Check-in')}<input type="date" min={today()} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} required style={field} /></label>
                 <label>{t('Check-out')}<input type="date" min={checkIn || today()} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} required style={field} /></label>
-                <label>{t('Guests')}<input type="number" min={1} max={20} value={partySize} onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))} style={field} /></label>
+                <label>{t('Guests')}<input type="number" min={1} max={choice.maxGuests || 20} value={partySize} onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))} style={field} /></label>
               </div>
+              {choice.stay ? (
+                <p className="ls-meta">
+                  {t('Check-in from {in} · check-out by {out}', { in: sayClock(choice.stay.check_in), out: sayClock(choice.stay.check_out) })}
+                  {choice.maxGuests ? ` · ${t('sleeps {n}', { n: choice.maxGuests })}` : ''}
+                  {choice.stay.weekend_min_nights ? ` · ${t('at least {n} nights over a weekend', { n: choice.stay.weekend_min_nights })}` : ''}
+                  {choice.stay.min_nights && choice.stay.min_nights > 1 ? ` · ${t('at least {n} nights', { n: choice.stay.min_nights })}` : ''}
+                </p>
+              ) : null}
               {!picked ? <button type="button" className="ls-btn ls-btn--outline" disabled={busy || !checkIn || !checkOut} onClick={checkRange}>{t('Check availability')}</button> : null}
               {picked && rooms.length > 1 ? (
                 <label>{t('Room')}
@@ -492,9 +518,14 @@ export default function BookClient({
           <p className="ls-meta">{options.business.display_name}</p>
           <h2 className="ls-checkout__h">{choice ? choice.title : t('Your booking')}</h2>
           <dl className="ls-book__facts">
-            {choice && choice.price !== null ? (<><dt>{t('Price')}</dt><dd>₹{choice.price}</dd></>) : null}
+            {choice && choice.price !== null ? (<><dt>{t('Price')}</dt><dd>{choice.mode === 'accommodation' ? t('₹{amount} a night', { amount: choice.price.toLocaleString('en-IN') }) : `₹${choice.price.toLocaleString('en-IN')}`}</dd></>) : null}
             {choice && timed && choice.minutes ? (<><dt>{t('Takes')}</dt><dd>{t('{n} min', { n: choice.minutes })}</dd></>) : null}
-            {picked ? (<><dt>{t('When')}</dt><dd>{day ? `${sayDay(day)} · ` : ''}{picked.label}</dd></>) : null}
+            {picked && mode === 'accommodation' ? (
+              <><dt>{t('When')}</dt><dd>{sayDay(checkIn)} → {sayDay(checkOut)}</dd></>
+            ) : picked ? (<><dt>{t('When')}</dt><dd>{day ? `${sayDay(day)} · ` : ''}{picked.label}</dd></>) : null}
+            {picked && mode === 'accommodation' && choice?.price !== null && choice?.price !== undefined && nightsBetween(checkIn, checkOut) > 0 ? (
+              <><dt>{t('Total')}</dt><dd>{t('{n} nights · {amount}', { n: nightsBetween(checkIn, checkOut), amount: rupees(choice.price * nightsBetween(checkIn, checkOut)) })}</dd></>
+            ) : null}
             {options.policy.cancel_window_hours > 0 ? (
               <><dt>{t('Changes')}</dt><dd>{t('Free to cancel up to {h} hours before.', { h: options.policy.cancel_window_hours })}</dd></>
             ) : null}

@@ -22,6 +22,14 @@ type Booking = {
   channel: string | null; version: number
   customer: { id: string; name: string; phone: string | null } | null
   location_name: string | null; provider_name: string | null
+  /** What it comes to (two nights at ₹9,500: ₹19,000), and the room or table it holds. */
+  total_amount?: number | null; resource_names?: string[]
+}
+
+/** What a held thing is called, by the kind of booking. */
+const HELD_WORDS: Record<string, string> = {
+  accommodation: 'Room', table: 'Table', event_date: 'Venue', rental: 'Item', class_session: 'Studio',
+  appointment: 'Chair or room',
 }
 
 /** A moment as the day and clock an Indian business reads it, for date and time inputs. */
@@ -92,7 +100,10 @@ export default async function BookingDetailPage({ params }: { params: { business
         // The default "Primary Location" says nothing; a named place does.
         ...(bk.location_name && !/^(primary location|main( location)?)$/i.test(bk.location_name.trim())
           ? [[t('Where'), bk.location_name] as [string, string]] : []),
+        ...(bk.resource_names?.length
+          ? [[t(HELD_WORDS[bk.reservation_mode] ?? 'Given'), bk.resource_names.join(', ')] as [string, string]] : []),
         ...(bk.party_size && bk.party_size > 1 ? [[t('People'), String(bk.party_size)] as [string, string]] : []),
+        ...(bk.total_amount ? [[t('Total'), rupees(bk.total_amount)] as [string, string]] : []),
         [t('Payment'), `${PAYMENT_WORDS[bk.payment_status] ? t(PAYMENT_WORDS[bk.payment_status]) : '—'}${
           bk.deposit_required && bk.deposit_amount ? ` · ${t('deposit {amount}', { amount: rupees(bk.deposit_amount) })}` : ''}`],
         ...(bk.channel ? [[t('Booked through'), CHANNEL_WORDS[bk.channel] ? t(CHANNEL_WORDS[bk.channel]) : bk.channel] as [string, string]] : []),

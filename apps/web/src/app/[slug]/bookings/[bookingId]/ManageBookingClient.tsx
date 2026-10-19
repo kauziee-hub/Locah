@@ -45,7 +45,7 @@ function span(starts: unknown, ends: unknown, locale?: string): string {
   if (Number.isNaN(b.getTime())) return `${day} · ${clock(a)}`
   const sameDay = a.toDateString() === b.toDateString()
   return sameDay ? `${day} · ${clock(a)} – ${clock(b)}`
-    : `${day} · ${clock(a)} → ${b.toLocaleDateString(locale ?? 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`
+    : `${day} · ${clock(a)} → ${b.toLocaleDateString(locale ?? 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${clock(b)}`
 }
 
 function isoDay(d: Date): string {
@@ -195,7 +195,7 @@ export default function ManageBookingClient({
           <h1 className="ls-confirm__title">{title}</h1>
           <p className="ls-confirm__lede">{body}</p>
         </header>
-        {place?.phone ? <a className="ls-btn ls-btn--outline" href={`tel:${place.phone}`}>{t('Call {phone}', { phone: place.phone })}</a> : null}
+        {place?.phone ? <a className="ls-btn ls-btn--outline" href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{t('Call {phone}', { phone: place.phone })}</a> : null}
       </div>
     </main>
   )
@@ -318,6 +318,9 @@ export default function ManageBookingClient({
             <dt>{t('When')}</dt><dd>{when}</dd>
             {provider ? (<><dt>{t('With')}</dt><dd>{provider}</dd></>) : null}
             {where ? (<><dt>{t('Where')}</dt><dd>{where}</dd></>) : null}
+            {typeof b.total_amount === 'number' && b.total_amount > 0 ? (
+              <><dt>{t('Total')}</dt><dd>₹{b.total_amount.toLocaleString('en-IN')}</dd></>
+            ) : null}
             {payAtVisit ? (<><dt>{t('Payment')}</dt><dd>{t('Pay at your visit')}</dd></>) : null}
             {!over && windowHours > 0 ? (
               <><dt>{t('Changes')}</dt><dd>{t('Free to cancel up to {h} hours before.', { h: windowHours })}</dd></>
@@ -325,7 +328,7 @@ export default function ManageBookingClient({
           </dl>
           {place?.hours_summary ? <p className="ls-meta">{t('Opening hours: {hours}', { hours: place.hours_summary })}</p> : null}
           {place?.phone ? (
-            <p><a href={`tel:${place.phone}`}>{t('Call {phone}', { phone: place.phone })}</a></p>
+            <p><a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{t('Call {phone}', { phone: place.phone })}</a></p>
           ) : (
             <p className="ls-meta">{t('Need help? Contact the business directly with your booking number.')}</p>
           )}
