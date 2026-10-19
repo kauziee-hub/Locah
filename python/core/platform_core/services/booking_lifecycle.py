@@ -41,6 +41,14 @@ class BookingLifecycleService:
             )
 
     @staticmethod
+    def _context(by_customer: bool, customer_identity_id: uuid.UUID | None) -> str:
+        """Who the audit row says acted: the business, a signed-in customer, or
+        a guest from their booking link."""
+        if not by_customer:
+            return "business"
+        return "customer" if customer_identity_id else "website_guest"
+
+    @staticmethod
     async def _record_history(
         session: AsyncSession,
         *,
@@ -48,7 +56,7 @@ class BookingLifecycleService:
         booking_id: uuid.UUID,
         from_status: str | None,
         to_status: str,
-        actor_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
         reason: str | None,
     ) -> BookingStatusHistory:
         entry = BookingStatusHistory(
@@ -77,6 +85,7 @@ class BookingLifecycleService:
         audit_action: str,
         reason: str | None = None,
         extra: dict[str, Any] | None = None,
+        actor_context: str = "business",
     ) -> None:
         payload: dict[str, Any] = {
             "business_id": str(business_id),
@@ -113,7 +122,7 @@ class BookingLifecycleService:
             session,
             event_type=event_type,
             actor_identity_id=actor_id,
-            actor_context="business",
+            actor_context=actor_context,
             business_id=business_id,
             resource_type="booking",
             resource_id=booking.id,
@@ -166,9 +175,17 @@ class BookingLifecycleService:
         correlation_id: str,
         payload: dict[str, Any],
         expected_version: int | None = None,
+        by_customer: bool = False,
+        customer_identity_id: uuid.UUID | None = None,
     ) -> Booking:
+        """``by_customer``: the guest did it from their booking link. The
+        history and ``cancelled_by`` then name the customer's own identity (or
+        nobody, for a guest without an account) - never the owner, whose
+        identity ``actor_id`` only lends the audit row (owner lab, salon: a
+        guest's cancellation read as the owner's own action)."""
         business = await BusinessService.get_by_id(session, business_id)
         assert_business_mutable(business.state, action="update booking status")
+        who = customer_identity_id if by_customer else actor_id
         booking = await BookingResolver.resolve(
             session, business_id=business_id, booking_id=booking_id
         )
@@ -181,7 +198,7 @@ class BookingLifecycleService:
 
         if target in {"cancelled", "rejected", "no_show"}:
             booking.cancellation_reason = reason
-            booking.cancelled_by = actor_id
+            booking.cancelled_by = who
 
         if target == "confirmed" and booking.payment_method in {
             "cod",
@@ -210,7 +227,7 @@ class BookingLifecycleService:
             booking_id=booking.id,
             from_status=from_status,
             to_status=target,
-            actor_id=actor_id,
+            actor_id=who,
             reason=reason,
         )
         after = BookingResolver.serialize_booking(booking)
@@ -226,6 +243,7 @@ class BookingLifecycleService:
             event_type=event_type,
             audit_action=target,
             reason=reason,
+            actor_context=BookingLifecycleService._context(by_customer, customer_identity_id),
         )
         return booking
 
@@ -240,9 +258,13 @@ class BookingLifecycleService:
         payload: dict[str, Any],
         expected_version: int | None = None,
         enforce_opening_hours: bool = False,
+        by_customer: bool = False,
+        customer_identity_id: uuid.UUID | None = None,
     ) -> Booking:
+        """``by_customer``: as in ``transition_status``."""
         business = await BusinessService.get_by_id(session, business_id)
         assert_business_mutable(business.state, action="reschedule booking")
+        who = customer_identity_id if by_customer else actor_id
         booking = await BookingResolver.resolve(
             session, business_id=business_id, booking_id=booking_id
         )
@@ -310,7 +332,7 @@ class BookingLifecycleService:
             booking_id=booking.id,
             from_status=booking.status,
             to_status=booking.status,
-            actor_id=actor_id,
+            actor_id=who,
             reason=validated["reason"] or "Rescheduled",
         )
         after = BookingResolver.serialize_booking(booking)
@@ -326,5 +348,6 @@ class BookingLifecycleService:
             audit_action="rescheduled",
             reason=validated["reason"],
             extra={"old_starts_at": old_starts, "old_ends_at": old_ends},
+            actor_context=BookingLifecycleService._context(by_customer, customer_identity_id),
         )
         return booking

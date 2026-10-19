@@ -445,3 +445,15 @@ def test_an_order_notification_says_which_order() -> None:
                                                       {"title": "Chicken curry cut — 500 g"}]}}
     assert _body(NOTIFICATION_RULES["order.created"], payload) == "ORD-754794E1 · ₹320 · 2 items"
     assert _body(NOTIFICATION_RULES["order.created"], {"after": {}}) is None
+
+
+def test_a_booking_notification_says_which_booking_and_when() -> None:
+    # Owner lab (salon): "New booking received" / "A booking was cancelled"
+    # said nothing else, so the owner could not tell which of several it was.
+    from platform_core.services.notification_dispatch import NOTIFICATION_RULES, _body
+
+    payload = {"booking_number": "BKG-21715ABE", "starts_at": "2026-10-21T10:30:00+00:00",
+               "after": {"title": "Women's haircut"}}
+    for event in ("booking.created", "booking.cancelled"):
+        assert _body(NOTIFICATION_RULES[event], payload) == "BKG-21715ABE · Women's haircut · Wed 21 Oct, 4:00 pm"
+    assert _body(NOTIFICATION_RULES["booking.created"], {"starts_at": "not a time"}) is None

@@ -575,33 +575,31 @@ class PublicBookingService:
                 details={"code": "cancellation_window_closed"},
             )
         business = await BusinessService.get_by_id(session, booking.business_id)
-        guest_actor = booking.cancelled_by or business.primary_owner_identity_id
-        # Prefer linked customer identity for audit when present
-        if booking.customer_contact_id:
-            from platform_core.models import CustomerContact
-
-            contact = (
-                (
-                    await session.execute(
-                        select(CustomerContact).where(
-                            CustomerContact.id == booking.customer_contact_id
-                        )
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if contact and contact.identity_id:
-                guest_actor = contact.identity_id
+        customer = await PublicBookingService._customer_identity(session, booking)
         updated = await BookingLifecycleService.transition_status(
             session,
             business_id=booking.business_id,
             booking_id=booking.id,
-            actor_id=guest_actor,
+            actor_id=customer or business.primary_owner_identity_id,
             correlation_id=correlation_id,
             payload={"status": "cancelled", "reason": reason or "Customer cancelled"},
+            by_customer=True,
+            customer_identity_id=customer,
         )
         return dict(BookingResolver.serialize_booking(updated))
+
+    @staticmethod
+    async def _customer_identity(session: AsyncSession, booking: Booking) -> uuid.UUID | None:
+        """The customer's own platform identity, when their contact has one (a
+        guest checkout has none)."""
+        if not booking.customer_contact_id:
+            return None
+        from platform_core.models import CustomerContact
+
+        found: uuid.UUID | None = (await session.execute(
+            select(CustomerContact.identity_id).where(CustomerContact.id == booking.customer_contact_id)
+        )).scalars().first()
+        return found
 
     @staticmethod
     async def reschedule_by_token(
@@ -625,30 +623,16 @@ class PublicBookingService:
                 details={"code": "cancellation_window_closed"},
             )
         business = await BusinessService.get_by_id(session, booking.business_id)
-        actor_id = business.primary_owner_identity_id
-        if booking.customer_contact_id:
-            from platform_core.models import CustomerContact
-
-            contact = (
-                (
-                    await session.execute(
-                        select(CustomerContact).where(
-                            CustomerContact.id == booking.customer_contact_id
-                        )
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if contact and contact.identity_id:
-                actor_id = contact.identity_id
+        customer = await PublicBookingService._customer_identity(session, booking)
         updated = await BookingLifecycleService.reschedule(
             session,
             business_id=booking.business_id,
             booking_id=booking.id,
-            actor_id=actor_id,
+            actor_id=customer or business.primary_owner_identity_id,
             correlation_id=correlation_id,
             payload={"starts_at": starts_at, "ends_at": ends_at, "reason": reason},
             enforce_opening_hours=True,
+            by_customer=True,
+            customer_identity_id=customer,
         )
         return dict(BookingResolver.serialize_booking(updated))

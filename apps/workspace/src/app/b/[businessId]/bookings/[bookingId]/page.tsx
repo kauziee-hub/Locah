@@ -33,7 +33,11 @@ function inIndia(value: string): { day: string; time: string } {
   }
 }
 type Series = { id: string; status: string; occurrences: { id: string; occurrence_index: number; starts_at: string; status: string }[] }
-type Step = { id: string; from_status: string | null; to_status: string; reason: string | null; created_at: string }
+type Step = {
+  id: string; from_status: string | null; to_status: string; reason: string | null; created_at: string
+  /** Who did it: the business's own people, or the customer from their booking link. */
+  by?: 'team' | 'customer'
+}
 
 /** One booking: who, when, with whom, the next step, repeats, money and what happened. */
 export default async function BookingDetailPage({ params }: { params: { businessId: string; bookingId: string } }) {
@@ -195,7 +199,7 @@ export default async function BookingDetailPage({ params }: { params: { business
             {history.map((h) => (
               <li key={h.id}>
                 <span>{h.from_status ? `${status(h.from_status)} → ` : `${t('Booked')} · `}{status(h.to_status)}</span>
-                <span className="bos-hint"> · {when(h.created_at)}{h.reason && h.reason !== 'Booking created' ? ` · ${h.reason}` : ''}</span>
+                <span className="bos-hint"> · {when(h.created_at)}{h.reason && h.reason !== 'Booking created' ? ` · ${h.reason}` : ''}{h.from_status && h.by === 'customer' ? ` · ${t('by the customer')}` : ''}</span>
               </li>
             ))}
           </ul>

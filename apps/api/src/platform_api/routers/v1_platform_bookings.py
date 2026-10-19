@@ -154,6 +154,18 @@ def _patch_payload(body: BaseModel) -> dict[str, Any]:
     return {"payload": data, "version": version}
 
 
+async def _team_identities(session: AsyncSession, business_id: UUID) -> set[UUID]:
+    """Everyone who has worked for this business (past members too: a booking
+    a former stylist confirmed was still done by the team)."""
+    from sqlalchemy import select
+
+    from platform_core.models import BusinessMembership
+
+    rows = (await session.execute(select(BusinessMembership.identity_id).where(
+        BusinessMembership.business_id == business_id))).scalars().all()
+    return set(rows)
+
+
 @router.get("/{business_id}/bookings")
 async def list_bookings(
     business_id: UUID,
@@ -322,8 +334,15 @@ async def get_booking_history(
     history = await BookingService.get_status_history(
         session, business_id=business_id, booking_id=booking_id
     )
+    team = await _team_identities(session, business_id)
     return {
-        "data": [BookingResolver.serialize_status_history(h) for h in history],
+        # "by": the business's own people, or the customer (a guest from their
+        # booking link has no identity at all).
+        "data": [
+            {**BookingResolver.serialize_status_history(h),
+             "by": "team" if h.actor_identity_id in team else "customer"}
+            for h in history
+        ],
         "meta": {"correlation_id": actor.request.correlation_id, "count": len(history)},
     }
 

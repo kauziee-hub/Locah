@@ -101,6 +101,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         resource_type="booking",
         resource_id_key="booking_id",
         location_id_key="location_id",
+        body_keys=("booking_number", "after.title", "starts_at"),
     ),
     "booking.cancelled": NotificationRule(
         notification_type="booking.cancelled",
@@ -110,6 +111,7 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         resource_type="booking",
         resource_id_key="booking_id",
         location_id_key="location_id",
+        body_keys=("booking_number", "after.title", "starts_at"),
     ),
     # --- Leads ----------------------------------------------------------
     "lead.assigned": NotificationRule(
@@ -200,6 +202,21 @@ def _dig(payload: dict[str, Any], path: str) -> Any:
     return current
 
 
+def _when(value: Any) -> str:
+    """An ISO moment as an Indian business reads it: "Wed 21 Oct, 4:00 pm"."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from platform_core.business_types import DEFAULT_TIMEZONE
+
+    try:
+        at = datetime.fromisoformat(str(value)).astimezone(ZoneInfo(DEFAULT_TIMEZONE))
+    except (TypeError, ValueError):
+        return ""
+    clock = at.strftime("%I:%M %p").lstrip("0").lower()
+    return f"{at.strftime('%a')} {at.day} {at.strftime('%b')}, {clock}"
+
+
 def _body(rule: NotificationRule, payload: dict[str, Any]) -> str | None:
     """The line under the title that says which one: "ORD-754794E1 · ₹320 ·
     2 items" — read from the event (a "New order placed" with nothing else
@@ -208,6 +225,12 @@ def _body(rule: NotificationRule, payload: dict[str, Any]) -> str | None:
     for key in rule.body_keys:
         value = _dig(payload, key)
         if value in (None, "", []):
+            continue
+        if key.endswith("starts_at"):
+            # "Wed 21 Oct, 4:00 pm" in the business's time, not the wire format.
+            when = _when(value)
+            if when:
+                parts.append(when)
             continue
         if key.endswith("_amount"):
             try:
