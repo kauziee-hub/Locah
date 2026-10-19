@@ -70,6 +70,18 @@ def test_state_follows_what_happened_not_a_stored_flag() -> None:
                       ends_at=None).status == "cancelled"
 
 
+def test_the_last_day_covered_is_the_day_before_the_period_ends() -> None:
+    # Owner lab (gym): a 30-day plan from 19 Oct ends at midnight of 18 Nov; the
+    # desk said "valid until 18 Nov" and would have refused him that morning.
+    start = datetime(2026, 10, 19, tzinfo=IST)
+    st = lc.compute("access", now=start + timedelta(hours=10), periods=[_p("a", 1, start, 30)],
+                    stored_status="active", starts_at=start, ends_at=None)
+    assert st.last_day == date(2026, 11, 17) and st.days_remaining == 30
+    morning_after = lc.compute("access", now=datetime(2026, 11, 18, 6, tzinfo=IST), periods=[_p("a", 1, start, 30)],
+                               stored_status="active", starts_at=start, ends_at=None)
+    assert morning_after.status != "active", "the day after the last day is not covered"
+
+
 def test_session_packs_count_both_validity_and_sessions() -> None:
     t0 = datetime(2026, 10, 1, 4, 30, tzinfo=UTC)
     pack = [_p("a", 1, t0, 60, sessions=10)]

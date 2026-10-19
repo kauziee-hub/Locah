@@ -62,7 +62,7 @@ export default async function MemberPage({ params }: { params: { businessId: str
         {kind !== 'fee_plan' ? (
           <div>
             <dt>{w.valid}</dt>
-            <dd className="is-balance">{day(d.valid_until)}</dd>
+            <dd className="is-balance">{d.last_day ? day(`${d.last_day}T12:00:00`) : day(d.valid_until)}</dd>
           </div>
         ) : null}
         {d.days_remaining !== null && d.status !== 'expired' ? (

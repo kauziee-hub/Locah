@@ -85,6 +85,8 @@ export type CheckinResult = {
   reason: string
   status: string
   valid_until: string | null
+  /** The last day covered (YYYY-MM-DD). */
+  last_day?: string | null
   days_remaining: number | null
   sessions_remaining: number | null
   renew: string | null

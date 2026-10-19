@@ -22,7 +22,7 @@ type Account = {
   quotes: { id: string; number: string; title: string | null; status: string; total: number; valid_until: string | null; url: string | null }[]
   memberships: {
     id: string; plan: string; kind: string; title: string; valid_label: string; status: string; starts_at: string
-    ends_at: string | null; days_left: number | null; sessions_left: number | null; outstanding: number; paid: number
+    ends_at: string | null; last_day?: string | null; days_left: number | null; sessions_left: number | null; outstanding: number; paid: number
     next_due_on: string | null; overdue: boolean; good_standing: boolean | null; checkin_code: string | null
     can_renew: boolean; can_pay: boolean
     next_instalment?: { label: string; amount: number; due_on: string } | null
@@ -104,7 +104,7 @@ export default async function AccountPage({ params, searchParams }: { params: { 
         {searchParams?.membership === 'late' ? <p className="ls-meta" role="status">{t('Tomorrow is already decided — call or message the business to change it.')}</p> : null}
         {searchParams?.membership === 'failed' ? <p className="ls-meta" role="status">{t('That could not be done right now.')}</p> : null}
         {a.memberships.map((m) => <div key={m.id} className="ls-account__card"><p><strong>{m.plan}</strong> · {state(m.status)}</p>
-          <p className="ls-meta">{m.ends_at ? `${t(m.valid_label)} ${when(m.ends_at)}` : t('From {start}', { start: when(m.starts_at) })}{m.days_left !== null ? ` · ${m.days_left === 1 ? t('1 day left') : t('{n} days left', { n: m.days_left })}` : ''}{m.sessions_left !== null ? ` · ${t('{n} sessions left', { n: m.sessions_left })}` : ''}</p>
+          <p className="ls-meta">{m.ends_at ? `${t(m.valid_label)} ${when(m.last_day ? `${m.last_day}T12:00:00` : m.ends_at)}` : t('From {start}', { start: when(m.starts_at) })}{m.days_left !== null ? ` · ${m.days_left === 1 ? t('1 day left') : t('{n} days left', { n: m.days_left })}` : ''}{m.sessions_left !== null ? ` · ${t('{n} sessions left', { n: m.sessions_left })}` : ''}</p>
           {m.good_standing !== null ? <p className="ls-meta">{m.good_standing ? t('In good standing') : t('Dues not paid')}</p> : null}
           {m.next_instalment ? <p className="ls-meta">{t('Next instalment: {label} · {amount} due {date}', { label: m.next_instalment.label, amount: rupees(m.next_instalment.amount), date: when(m.next_instalment.due_on) })}</p> : null}
           {m.kind === 'fee_plan' ? <p className="ls-meta">{t('Paid {paid} · outstanding {amount}', { paid: rupees(m.paid), amount: rupees(m.outstanding) })}</p> : null}

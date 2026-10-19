@@ -306,11 +306,14 @@ CATEGORIES: tuple[Category, ...] = (
         _s("piercing_studio", "Piercing studio", "salon", SALON, "piercing"),
     )),
     Category("fitness", "Fitness & wellness", "gym", True, (
-        _s("gym", "Gym", "gym", GYM, "fitness centre", "fitness center", "health club", "workout"),
+        # "A strength gym" is a gym; powerlifting is a sport it may coach (owner
+        # lab: Forge Strength Club was greeted as "a powerlifting gym").
+        _s("gym", "Gym", "gym", GYM, "fitness centre", "fitness center", "health club", "workout", "strength gym",
+           "strength training"),
         _s("yoga", "Yoga", "studio", STUDIO, "yoga studio", "yoga classes", "yoga centre"),
         _s("pilates", "Pilates", "studio", STUDIO, "pilates studio"),
         _s("crossfit", "CrossFit", "gym", GYM, "cross fit", "functional training"),
-        _s("powerlifting", "Powerlifting", "gym", GYM, "strength gym", "weightlifting", "barbell club"),
+        _s("powerlifting", "Powerlifting", "gym", GYM, "powerlifting gym", "weightlifting", "barbell club"),
         _s("martial_arts", "Martial arts", "studio", STUDIO, "karate", "silambam", "taekwondo",
            "kickboxing", "mma", "kalari"),
         _s("dance_fitness", "Dance fitness", "studio", STUDIO, "zumba", "dance workout"),

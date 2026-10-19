@@ -177,6 +177,9 @@ async def test_acknowledgements_vary_and_a_summary_comes_mid_way() -> None:
     ("open 8-1 and 5-9, Sunday morning.", "Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm"),
     ("timing morn 8-1 eve 5-9 sunday morning only","Mon–Sat 8 am–1 pm, 5 pm–9 pm; Sun 8 am–1 pm"),
     ("Open 9 to 6 Monday to Saturday", "Mon–Sat 9 am–6 pm; Sun closed"),
+    # Owner lab (gym): "Sunday half day" was dropped and the site said Sunday 6 am–10 pm.
+    ("6 am to 10 pm, Sunday half day", "Mon–Sat 6 am–10 pm; Sun 6 am–1 pm"),
+    ("9 am to 9 pm, Saturday half day, Sunday closed", "Mon–Fri 9 am–9 pm; Sat 9 am–1 pm; Sun closed"),
 ])
 def test_hours_are_read_as_a_week(said: str, week: str) -> None:
     found = hours.parse(said)

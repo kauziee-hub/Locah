@@ -17,6 +17,7 @@ type Row = {
   status_words: string
   reason: string
   valid_until: string | null
+  last_day?: string | null
   days_remaining: number | null
   expiring_soon: boolean
   sessions_remaining: number | null
@@ -66,7 +67,7 @@ function MemberRow({ r, href }: { r: Row; href: string }) {
   // Only what is known: a member still waiting for payment has no "until".
   const facts = [
     r.plan,
-    r.valid_until ? `until ${day(r.valid_until)}` : '',
+    r.last_day ? `until ${day(`${r.last_day}T12:00:00`)}` : r.valid_until ? `until ${day(r.valid_until)}` : '',
     r.days_remaining !== null && r.status === 'active' ? `${r.days_remaining} days left` : '',
     r.sessions_remaining !== null ? `${r.sessions_remaining} sessions left` : '',
     r.outstanding > 0 ? `${rupees(r.outstanding)} due` : '',

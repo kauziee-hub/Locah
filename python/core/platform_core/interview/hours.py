@@ -127,7 +127,8 @@ _CLAUSE = re.compile(
 _CUE = re.compile(
     r"\b(open\w*|clos\w*|timings?|timing|hours?|shut|holiday|daily|every ?day|weekends?|weekdays?|breakfast|lunch|"
     r"dinner|thirappom|thirak\w*|"
-    r"(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?s?|tues|thurs|am|pm|a\.m|p\.m|morning|evening|night|midnight|"
+    r"(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?s?|tues|thurs|tuesdays?|wednesdays?|thursdays?|saturdays?|half[\s-]*day|"
+    r"am|pm|a\.m|p\.m|morning|evening|night|midnight|"
     r"round the clock)\b|\b24\s*(?:x|/|\*)\s*7\b|\d[:.]\d{2}",
     re.I)
 
@@ -192,6 +193,7 @@ def parse(text: str, current: Week | None = None, *, asked: bool = False) -> Wee
     return week if changed and any(week[d] for d in DAYS) else None
 
 
+_HALF_DAY = re.compile(r"\bhalf[\s-]*day\b", re.I)
 _EVENING = re.compile(r"\b(dinner|evenings?|nights?)\b", re.I)
 _MORNING = re.compile(r"\b(breakfast|mornings?)\b", re.I)
 
@@ -207,6 +209,18 @@ def _clause(flat: str, current: Week, *, add: bool = False, days: list[str] | No
     if days and _CLOSED.search(flat) and not _SPAN.search(flat) and not _UNTIL.search(flat):
         for d in days:
             week[d] = []
+        return week
+    if days and _HALF_DAY.search(flat) and not _SPAN.search(flat) and not _UNTIL.search(flat) \
+            and not _FROM.search(flat):
+        # "6 am to 10 pm, Sunday half day": that day opens as usual and closes
+        # at 1 pm (it was dropped, and a gym's site said Sunday 6 am–10 pm).
+        usual = next((week[d][0] for d in [*days, *DAYS] if week[d]), None)
+        if usual is None:
+            return None
+        open_at, close_at = _at(usual[0]), _at(usual[1])
+        half = 13 * 60 if open_at < 13 * 60 < close_at else open_at + (close_at - open_at) // 2
+        for d in days:
+            week[d] = [[usual[0], _clock(half)]]
         return week
     part = "evening" if _EVENING.search(flat) else "morning" if _MORNING.search(flat) else ""
     spans: list[tuple[int, int] | None] = []

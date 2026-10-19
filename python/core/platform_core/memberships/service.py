@@ -672,6 +672,7 @@ class MembershipCore:
                 "member": contact.display_name if contact else None, "plan": plan.name, "kind": plan.plan_kind,
                 "decision": decision, "colour": CHECKIN_COLOURS[decision], "reason": why, "status": st.status,
                 "valid_until": st.valid_until.isoformat() if st.valid_until else None,
+                "last_day": st.last_day.isoformat() if st.last_day else None,
                 "days_remaining": st.days_remaining, "sessions_remaining": st.sessions_remaining,
                 "renew": words(plan.plan_kind)["renew"] if decision != "allowed" else None}
 
@@ -739,6 +740,7 @@ class MembershipCore:
             "payer": {"id": str(payer.id), "name": payer.display_name} if payer else None,
             "status": st.status, "status_words": STATUS_WORDS.get(st.status, st.status), "reason": st.reason,
             "valid_until": st.valid_until.isoformat() if st.valid_until else None,
+            "last_day": st.last_day.isoformat() if st.last_day else None,
             "grace_until": st.grace_until.isoformat() if st.grace_until else None,
             "days_remaining": st.days_remaining, "expiring_soon": st.expiring_soon,
             "next_due_on": st.next_due_on.isoformat() if st.next_due_on else None,

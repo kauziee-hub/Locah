@@ -215,6 +215,8 @@ class CustomerAccountService:
             "id": str(e.id), "plan": plan.name, "kind": plan.plan_kind, "title": w["customer_title"],
             "valid_label": w["valid"], "status": st.status, "starts_at": e.starts_at.isoformat(),
             "ends_at": st.valid_until.isoformat() if st.valid_until else (e.ends_at.isoformat() if e.ends_at else None),
+            # The last day covered, in the business's days (ends_at is the instant after it).
+            "last_day": st.last_day.isoformat() if st.last_day else None,
             "days_left": st.days_remaining if st.status in ("active", "paused", "grace") else None,
             "sessions_left": st.sessions_remaining, "outstanding": _f(st.outstanding), "paid": _f(st.paid),
             "next_due_on": st.next_due_on.isoformat() if st.next_due_on else None, "overdue": st.overdue,

@@ -37,6 +37,7 @@ def _row(enrolment: MembershipEnrolment, plan: MembershipPlan, contact: Customer
             "phone": contact.phone if contact else None, "plan": plan.name, "kind": plan.plan_kind,
             "status": st.status, "status_words": STATUS_WORDS.get(st.status, st.status), "reason": st.reason,
             "valid_until": st.valid_until.isoformat() if st.valid_until else None,
+            "last_day": st.last_day.isoformat() if st.last_day else None,
             "days_remaining": st.days_remaining, "expiring_soon": st.expiring_soon,
             "sessions_remaining": st.sessions_remaining, "outstanding": float(st.outstanding),
             "next_due_on": st.next_due_on.isoformat() if st.next_due_on else None, "overdue": st.overdue,

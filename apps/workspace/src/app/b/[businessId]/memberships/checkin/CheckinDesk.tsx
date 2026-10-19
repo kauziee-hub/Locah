@@ -55,7 +55,7 @@ export function CheckinDesk({ businessId }: { businessId: string }) {
           </p>
           <p>
             {result.reason}
-            {result.valid_until ? ` · valid until ${new Date(result.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
+            {result.last_day || result.valid_until ? ` · valid until ${new Date(result.last_day ? `${result.last_day}T12:00:00` : result.valid_until ?? '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
             {result.days_remaining !== null && result.decision !== 'denied' ? ` · ${result.days_remaining} days left` : ''}
             {result.sessions_remaining !== null ? ` · ${result.sessions_remaining} sessions left` : ''}
           </p>

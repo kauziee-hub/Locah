@@ -11,7 +11,7 @@ Pure: no database, no clock. The service feeds it rows and `now`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -70,6 +70,11 @@ class State:
     starts_later: bool = False
     renewed_ahead: bool = False
     extra: dict[str, object] = field(default_factory=dict)
+    # The last day the member is covered, in the business's own days: a 30-day
+    # plan from 19 Oct runs through 17 Nov (valid_until is the instant it ends,
+    # midnight of 18 Nov — owner lab: the desk said "valid until 18 Nov" and
+    # would have turned the member away that morning).
+    last_day: date | None = None
 
 
 def _today(now: datetime, tz: str) -> date:
@@ -85,7 +90,17 @@ def _st(status: str, reason: str, **fields: Any) -> State:
     return State(status, reason, **fields)
 
 
-def compute(
+def compute(kind: str, *, now: datetime, tz: str = "Asia/Kolkata", **given: Any) -> State:
+    """What this relationship is right now, and why (owner words), with the
+    last day it covers."""
+    state = _compute(kind, now=now, tz=tz, **given)
+    if state.valid_until is None:
+        return state
+    last = (state.valid_until - timedelta(microseconds=1)).astimezone(ZoneInfo(tz)).date()
+    return replace(state, last_day=last)
+
+
+def _compute(
     kind: str,
     *,
     now: datetime,

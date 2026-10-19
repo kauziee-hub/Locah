@@ -23,6 +23,8 @@ export type Detail = {
   status_words: string
   reason: string
   valid_until: string | null
+  /** The last day covered (YYYY-MM-DD, the business's own days). */
+  last_day?: string | null
   grace_until: string | null
   days_remaining: number | null
   expiring_soon: boolean
