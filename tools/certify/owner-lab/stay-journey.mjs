@@ -81,6 +81,13 @@ export function stayJourney(ctx) {
     return journal.plan
   }
 
+  /** The guest's booking page reads the booking in the browser: wait until it has. */
+  async function settled(g) {
+    for (let i = 0; i < 40; i++) {
+      if (!/Loading…/.test(await g.innerText('main').catch(() => 'Loading…'))) return
+      await sleep(500)
+    }
+  }
   async function guestPage() {
     const c = await browser.newContext(VIEW)
     const g = await c.newPage()
@@ -299,7 +306,7 @@ export function stayJourney(ctx) {
       }
       if (done.manageUrl) {
         await g.goto(done.manageUrl, { waitUntil: 'networkidle' })
-        await sleep(1500)
+        await settled(g)
         const m = flat(await g.innerText('main'))
         await s.shot(g, 'manage-link', true)
         journal.first.manage_text = m.slice(0, 400)
@@ -396,7 +403,7 @@ export function stayJourney(ctx) {
       await s.shot(page, 'stay-confirmed', true)
       const g = await guestPage()
       await g.goto(journal.first.manage_url, { waitUntil: 'networkidle' })
-      await sleep(1500)
+      await settled(g)
       const seen = flat(await g.innerText('main'))
       await s.shot(g, 'guest-confirmed', true)
       s.check('the guest\'s link now says Confirmed', /confirmed/i.test(seen), seen.slice(0, 200))
@@ -414,7 +421,7 @@ export function stayJourney(ctx) {
       const { mon, wed } = plan()
       const g = await guestPage()
       await g.goto(sec.manage_url, { waitUntil: 'networkidle', timeout: 120000 })
-      await sleep(1500)
+      await settled(g)
       await s.shot(g, 'second-manage', true)
       const cancel = g.getByRole('button', { name: /cancel booking/i })
       s.check('the guest\'s link offers Cancel booking', (await cancel.count()) > 0)

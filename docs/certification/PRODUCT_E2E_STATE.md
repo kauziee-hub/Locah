@@ -105,6 +105,40 @@ a manager's own action in the audit trail, website premium-quality review.
 
 Bugs and fixes: `certify-out/product-e2e/BUGS.md` (B1–B16).
 
+## Phase 2 — appointment and stay businesses (2026-10-19)
+
+### Salon (Amber Room Salon) — DONE for the normal owner
+
+Run r2 from a fresh sign-up, after the fixes: **16/16 steps, 121/121 checks pass**
+(`certify-out/product-e2e/SCENARIOS/salon-normal-r2/REPORT.md`).
+
+| Step (VERIFIED-BROWSER + API check) | State |
+|---|---|
+| Services from the conversation → drafts → time given → live → one price changed; unpriced duplicate archived | PASS |
+| Hours from "10 to 8, Monday holiday"; address added on the place | PASS |
+| A stylist with his services, his week, a day off | PASS |
+| Guest books on /book with the stylist, pays at the salon; empty details refused; page states the real status | PASS after S2 |
+| Conflicts: a taken time is gone; two guests race, one wins, the other is told and the time disappears; "anyone available" never double-books the only stylist; off-hours, day off, closed day refused (UI and crafted API) | PASS after S3, S7 |
+| Owner: notification names the booking → Open → Confirm → move to another day; the guest's link follows | PASS after S4, S8 |
+| Guest cancels from her link (asked first); recorded as the customer's; the owner is told; the time frees | PASS after S5, S9 |
+| Team: manager works bookings, refused tools/publish/people; accountant refused bookings (UI + API, by id); another owner refused | PASS |
+| Lifecycle: Bookings off → no Book anywhere; on → nothing lost | PASS |
+| Return in a new session | PASS |
+
+### Hotel (Mistwood Estate Retreat, 14-room Coorg estate)
+
+New lab model `stay` (`tools/certify/owner-lab/stay-journey.mjs`): rooms → room list → publish →
+stay → overlap → arrival → guest cancel → return. Run r1 (resumed after the build): 59/60 checks,
+the one failure fixed since (H6). Full re-run r2 from sign-up: see BUGS.md (in progress at the
+time of writing). Findings H1–H8 (`BUGS.md`): rooms tied to room types (critical), check-in /
+check-out and shortest-stay rules from the chat, resort vs homestay, room and total shown to the
+owner and the guest, the place and number from the chat on the location.
+
+### Gym (Forge Strength Club)
+
+New lab model `membership` (`tools/certify/owner-lab/membership-journey.mjs`): plans → publish →
+join → enrol → check-in → freeze → return. In progress.
+
 ## Blockers needing the founder
 
 1. The premium visual-reference images (the PDF or `ref_01..15.png`).
@@ -123,8 +157,8 @@ Bugs and fixes: `certify-out/product-e2e/BUGS.md` (B1–B16).
 
 ## Next
 
-1. Fix the open Phase 1 items worth it (B5 server render, B6 go-live, B7, B8, B13, B14).
-2. Phase 2: salon (appointments, providers, cancel/reschedule), then hotel
-   (date ranges), then gym (memberships) — same lab, one at a time.
+1. Gym (memberships) to a clean run; then Phase 3: architecture, consultant, NGO (enquiry businesses).
+2. Open Phase 1 items: B5 server render, B6 go-live, B7, B10–B12, B15.
+3. Founder decision MC-03: who may change a business's plan and entitlements (today the owner can, through the API).
 
     node tools/certify/owner-lab/journey.mjs salon normal --run certify-out/product-e2e/SCENARIOS/salon-normal-r1
