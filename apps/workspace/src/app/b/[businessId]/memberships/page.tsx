@@ -4,6 +4,8 @@ import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { EnrolForm, FinaliseDay, PlanForm, type PlanLite } from './MembershipForms'
+import { ActionButton } from '@/components/ActionButton'
+import { makePlanLive } from './member-actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -297,9 +299,13 @@ export default async function MembershipsPage({
                     {p.duration_days ? ` · ${p.duration_days} days` : ' · ongoing'}
                     {p.sessions_included ? ` · ${p.sessions_included} sessions` : ''}
                     {p.grace_days ? ` · ${p.grace_days} days' grace` : ''}
-                    {p.status !== 'active' ? ` · ${p.status}` : ''}
+                    {p.status !== 'active' ? ` · ${p.status === 'draft' ? 'draft — not offered yet' : p.status}` : ''}
                   </p>
                 </div>
+                {p.status === 'draft' ? (
+                  <ActionButton className="btn-quiet" label="Make it live" busyLabel="Saving…"
+                    run={makePlanLive.bind(null, b, p.id)} />
+                ) : null}
               </li>
             ))}
           </ul>

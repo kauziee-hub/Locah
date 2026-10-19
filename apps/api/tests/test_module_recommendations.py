@@ -304,3 +304,22 @@ def test_payments_without_a_provider_says_it_works_at_the_business_only(monkeypa
     assert any(t["label"] == "Connect online payments" for t in s["tips"])
     # Other tools keep the plain words.
     assert _setup(owner, bid, "leads")["ready_note"] is None
+
+
+@needs_db
+def test_memberships_without_enquiries_says_joining_is_by_phone(monkeypatch: Any) -> None:
+    # Owner lab (gym): Memberships read "Working — customers can use it (…
+    # joining online …)" while the website refused every request to join.
+    owner, bid = _business(monkeypatch, "fitness", "gym")
+    for mid in ("payments", "memberships"):
+        client.post(f"/v1/b/{bid}/modules/{mid}/enable", headers=owner)
+    r = client.post(f"/v1/platform/businesses/{bid}/membership-plans", headers=owner,
+                    json={"name": "Monthly", "plan_kind": "access", "price_amount": 3500, "duration_days": 30,
+                          "status": "active", "visibility": "public"})
+    assert r.status_code == 200, r.text
+    s = _setup(owner, bid, "memberships")
+    assert s["status_label"] == "Working — joining by phone only"
+    assert "joining online" not in s["website"] and any(t["label"] == "Turn on Enquiries" for t in s["tips"])
+    client.post(f"/v1/b/{bid}/modules/leads/enable", headers=owner)
+    s = _setup(owner, bid, "memberships")
+    assert s["status_label"] == "Working" and "joining online" in s["website"]

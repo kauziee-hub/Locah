@@ -29,6 +29,11 @@ export async function createPlan(businessId: string, body: Record<string, unknow
   return send<{ id: string }>(businessId, '/membership-plans', 'POST', body)
 }
 
+/** A draft plan (from the conversation) goes live: customers can see it and join. */
+export async function makePlanLive(businessId: string, planId: string) {
+  return send(businessId, `/membership-plans/${planId}`, 'PATCH', { status: 'active' })
+}
+
 export async function archivePlan(businessId: string, planId: string) {
   return send(businessId, `/membership-plans/${planId}/archive`, 'POST', {})
 }

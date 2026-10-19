@@ -324,6 +324,67 @@ def _stay_rules(said: str) -> dict[str, Any]:
     return rules
 
 
+_PERIODS = (
+    (re.compile(r"\b(?:half[\s-]*year(?:ly)?|six[\s-]*months?|6[\s-]*months?)\b", re.I), 180),
+    (re.compile(r"\b(?:quarter(?:ly)?|three[\s-]*months?|3[\s-]*months?)\b", re.I), 90),
+    (re.compile(r"\b(?:annual(?:ly)?|year(?:ly)?|per\s*year|a\s*year|12[\s-]*months?)\b", re.I), 365),
+    (re.compile(r"\b(?:month(?:ly)?|per\s*month|a\s*month|1[\s-]*month)\b", re.I), 30),
+)
+_PACK = re.compile(r"\b(\d{1,3})\s*-?\s*(?:class|classes|sessions?|visits?)\b", re.I)
+_VALID_FOR = re.compile(r"\bvalid\s*(?:for\s*)?(\d{1,3}|one|two|three|four|five|six|eight|ten|twelve)\s*(days?|weeks?|months?)\b",
+                        re.I)
+_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "eight": 8, "ten": 10, "twelve": 12}
+
+
+def _membership_plan_payload(name: str, amount: str, said: str) -> dict[str, Any] | None:
+    """A Memberships plan for a plan the owner named with its price — only when
+    its length is known from their words ("Monthly 3500", "Quarterly 9500",
+    "12 classes, valid six weeks"). Nothing is guessed: a pack whose validity
+    was not said stays in the catalogue only (owner lab, gym: the plans told to
+    LOCAH reached the catalogue without their length, and the owner had to
+    make them again in Memberships)."""
+    if not amount:
+        return None
+    text = f"{name} {said}"
+    pack = _PACK.search(name)
+    valid = _VALID_FOR.search(said)
+    days = None
+    if valid:
+        word = valid.group(1).lower()
+        n = int(word) if word.isdigit() else _WORD_NUMBERS.get(word, 0)
+        days = n * {"day": 1, "week": 7, "month": 30}[valid.group(2).lower().rstrip("s")] or None
+    if pack:
+        if not days:
+            return None
+        return {"name": name[:120], "plan_kind": "session_pack", "price_amount": amount, "duration_days": days,
+                "sessions_included": int(pack.group(1)), "status": "draft", "visibility": "public"}
+    for pattern, period in _PERIODS:
+        if pattern.search(text):
+            return {"name": name[:120], "plan_kind": "access", "price_amount": amount, "duration_days": period,
+                    "status": "draft", "visibility": "public", "freeze_allowed": True}
+    return None
+
+
+async def _membership_plan_draft(
+    session: AsyncSession, business_id: UUID, payload: dict[str, Any], *, actor_id: UUID, correlation_id: str,
+) -> None:
+    """Through the Memberships module's own service, and only while it is on;
+    a plan of the same name is never made twice."""
+    from platform_core.services.membership_plan import MembershipPlanService
+    from platform_core.services.module_readiness import module_operational
+
+    if not await module_operational(session, business_id, "memberships"):
+        return
+    existing = await MembershipPlanService.list_plans(session, business_id=business_id)
+    if any(p.name.strip().casefold() == payload["name"].strip().casefold() for p in existing):
+        return
+    try:
+        await MembershipPlanService.create_plan(session, business_id=business_id, actor_id=actor_id,
+                                                correlation_id=correlation_id, payload=payload)
+    except ValidationError:
+        return  # the catalogue item stands; the owner can make the plan in Memberships
+
+
 def _row_kind(trade_kind: str, title: str, chapter: str) -> str:
     """The catalogue kind for one item of a trade whose kind is ``trade_kind``."""
     if trade_kind not in {"membership_plan", "accommodation"}:
@@ -1288,7 +1349,7 @@ class BusinessInterviewService:
                     attributes.update(stay_rules)
                 if attributes:
                     payload["attributes"] = {**payload.get("attributes", {}), **attributes}
-                await OfferingService.create_offering(
+                created = await OfferingService.create_offering(
                     session,
                     business_id=business.id,
                     actor_id=actor_id,
@@ -1296,6 +1357,15 @@ class BusinessInterviewService:
                     payload=payload,
                 )
                 known.add(name.casefold())
+                if (row_kind or kind) == "membership_plan":
+                    # Memberships keeps a plan's length and rules, and is what
+                    # the website's plans and the front desk read: the plan
+                    # goes there too (a draft until the owner makes it live).
+                    plan = _membership_plan_payload(name, amount or "", " ".join(
+                        filter(None, [row.get("unit", ""), row.get("description", "")])))
+                    if plan is not None:
+                        await _membership_plan_draft(session, business.id, {**plan, "offering_id": str(created.id)},
+                                                     actor_id=actor_id, correlation_id=correlation_id)
             if len(bp.applied_setup_offerings) < SETUP_LIMIT:
                 bp.applied_setup_offerings.append(name)
 

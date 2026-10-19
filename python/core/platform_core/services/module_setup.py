@@ -110,6 +110,20 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
         tips.append({"text": "Online payments are not connected, so nobody is asked to pay online. "
                              "Connect your Razorpay account to take payments on the website.",
                      "label": "Connect online payments", "href": "/payments"})
+    website = [SITE_WORDS[w] for w in info.site if w in SITE_WORDS]
+    if module_id == "memberships" and not await _enquiries_ready(session, business_id):
+        # Asking to join on the website is an enquiry; without Enquiries the
+        # website's "Ask to join" can only call the business (owner lab, gym:
+        # "Working — customers can use it (… joining online …)" while every
+        # request was refused).
+        customer_can = ["See your plans and call or WhatsApp you to join", "See their membership and renew"]
+        website = [w for w in website if w != SITE_WORDS.get("join")]
+        if status == "ready":
+            status_label = "Working — joining by phone only"
+            ready_note = ("Your plans are on your website; people call or WhatsApp you to join. "
+                          "Turn on Enquiries to let them ask to join on the website.")
+        tips.append({"text": "People can only call or WhatsApp you to join. Turn on Enquiries to take join "
+                             "requests on your website.", "label": "Turn on Enquiries", "href": "/modules/leads"})
     return {
         "module": module_id,
         "label": info.label,
@@ -130,10 +144,17 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
             "ready": bool(state.get("ready")), "enabled": bool(state.get("enabled")),
             "holding_back": dep in blocked, "href": f"/modules/{dep}",
         } for dep, state in deps.items()],
-        "website": [SITE_WORDS[s] for s in info.site if s in SITE_WORDS],
+        "website": website,
         "home": HOMES.get(module_id),
         "tips": tips,
     }
+
+
+async def _enquiries_ready(session: AsyncSession, business_id: uuid.UUID) -> bool:
+    """Enquiries (leads) can take a request from the website."""
+    from platform_core.services.module_readiness import module_ready
+
+    return bool(await module_ready(session, business_id, "leads"))
 
 
 async def _online_payments_active(session: AsyncSession, business_id: uuid.UUID) -> bool:
