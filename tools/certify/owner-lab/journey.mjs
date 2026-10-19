@@ -24,6 +24,7 @@ import { mintToken, newOwner, sessionCookies } from './session.mjs'
 import { bookingJourney } from './booking-journey.mjs'
 import { stayJourney } from './stay-journey.mjs'
 import { membershipJourney } from './membership-journey.mjs'
+import { enquiryJourney } from './enquiry-journey.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const API = process.env.CERTIFY_API || 'http://localhost:8020'
@@ -132,7 +133,9 @@ page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().s
 // (services, hours, the people customers book, an appointment and its changes).
 // A hotel books nights in rooms of a room type (stay-journey.mjs).
 // A gym sells plans people join and renew (membership-journey.mjs).
+// An architect, a consultant, an NGO: a visitor asks and the owner follows up (enquiry-journey.mjs).
 const MODEL = persona.kind === 'hotel' ? 'stay' : persona.kind === 'gym' ? 'membership'
+  : persona.modules.includes('leads') && !persona.modules.includes('orders') && !persona.modules.includes('bookings') ? 'enquiry'
   : persona.modules.includes('bookings') && !persona.modules.includes('orders') ? 'booking' : 'order'
 const from = opt('from', 'start')
 const ORDERS = {
@@ -143,6 +146,7 @@ const ORDERS = {
     'guest-cancel', 'return'],
   membership: ['start', 'interview', 'build', 'tools', 'workspace', 'plans', 'publish', 'join', 'enrol', 'checkin', 'changes',
     'return'],
+  enquiry: ['start', 'interview', 'build', 'tools', 'workspace', 'offer', 'publish', 'enquire', 'followup', 'return'],
 }
 const ORDER = ORDERS[MODEL]
 const to = opt('to', ORDER[ORDER.length - 1])
@@ -180,6 +184,9 @@ try {
     : null
   const MB = MODEL === 'membership'
     ? membershipJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
+    : null
+  const EQ = MODEL === 'enquiry'
+    ? enquiryJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors, persona })
     : null
 
   // --------------------------------------------------------- 2. interview
@@ -279,7 +286,7 @@ try {
     // at the door). A salon: services, bookings and payments as recommended
     // (the bridal advance online), plus Staff & rota for the stylists people
     // ask for by name.
-    const chosen = MODEL === 'stay' || MODEL === 'membership' ? [...persona.modules]
+    const chosen = MODEL === 'stay' || MODEL === 'membership' || MODEL === 'enquiry' ? [...persona.modules]
       : MODEL === 'booking'
       ? [...new Set(persona.modules.concat(['workforce']))]
       : [...new Set(persona.modules.concat(['inventory']))]
@@ -452,6 +459,7 @@ try {
   if (ST && runs('rooms')) await ST.rooms()
   if (ST && runs('roomlist')) await ST.roomlist()
   if (MB && runs('plans')) await MB.plans()
+  if (EQ && runs('offer')) await EQ.offer()
 
   // ----------------------------------------------------------- 8. publish
   if (runs('publish')) {
@@ -489,6 +497,7 @@ try {
     const after = (await (await fetch(`${API}/v1/public/websites/${biz.slug}`)).json())?.data?.capabilities || {}
     journal.capabilities_live = after
     if (MODEL === 'membership') s.check('once live, the website offers joining a plan (public capabilities)', after.join === true, JSON.stringify(after).slice(0, 200))
+    else if (MODEL === 'enquiry') s.check('once live, the website takes enquiries (public capabilities)', after.enquire === true || after.request_quote === true, JSON.stringify(after).slice(0, 200))
     else if (MODEL !== 'order') s.check('once live, the website takes bookings (public capabilities)', after.book === true, JSON.stringify(after).slice(0, 200))
     else s.check('once live, the website takes orders (public capabilities)', after.order === true, JSON.stringify(after).slice(0, 200))
     const res = await fetch(journal.public_url)
@@ -516,6 +525,9 @@ try {
   if (MB && runs('checkin')) await MB.checkin()
   if (MB && runs('changes')) await MB.changes()
   if (MB && runs('return')) await MB.ret(owner)
+  if (EQ && runs('enquire')) await EQ.enquire()
+  if (EQ && runs('followup')) await EQ.followup()
+  if (EQ && runs('return')) await EQ.ret(owner)
 
   // ---------------------------------------------------------- 9. customer
   if (MODEL === 'order' && runs('customer')) {

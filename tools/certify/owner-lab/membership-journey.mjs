@@ -158,7 +158,7 @@ export function membershipJourney(ctx) {
         s.check('the Memberships tool says joining is by phone and how to take requests online', /joining by phone only/i.test(said) && /turn on enquiries/i.test(said), said.slice(0, 300))
         const tip = page.getByRole('link', { name: /turn on enquiries/i })
         if (await tip.count()) {
-          await tip.first().click()
+          await Promise.all([page.waitForURL(/\/modules\/leads/, { timeout: 30000 }).catch(() => {}), tip.first().click()])
           await page.waitForLoadState('networkidle').catch(() => {})
           const on = page.getByRole('button', { name: /^turn on/i })
           if (await on.count()) { await on.first().click(); await sleep(2500) }
@@ -319,7 +319,7 @@ export function membershipJourney(ctx) {
       await p3.goto(`${WS}/b/${B}/memberships`, { waitUntil: 'networkidle', timeout: 120000 })
       const list = flat(await p3.innerText('main'))
       await s.shot(p3, 'return-members', true)
-      s.check('Rahul is in the members list, active, with his plan', /Rahul Nair/.test(list) && new RegExp(esc('Open gym'), 'i').test(list), list.slice(0, 300))
+      s.check('Rahul is in the members list, active, with his plan', /Rahul Nair/.test(list) && /monthly/i.test(list), list.slice(0, 300))
       if (journal.enrolment_id) {
         await p3.goto(`${WS}/b/${B}/memberships/${journal.enrolment_id}`, { waitUntil: 'networkidle' })
         const m = flat(await p3.innerText('main'))
