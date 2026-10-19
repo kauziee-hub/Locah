@@ -107,8 +107,11 @@ export default function BookClient({
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Bumped when a time turns out to be gone: the day's times are asked for again.
+  const [fresh, setFresh] = useState(0)
   const [done, setDone] = useState<
-    | { kind: 'booked'; id: string; number: string; token: string; deposit: number | null; payment: string }
+    | { kind: 'booked'; id: string; number: string; token: string; deposit: number | null; payment: string
+        status: string; when: string }
     | { kind: 'waitlist' }
     | null
   >(null)
@@ -144,7 +147,7 @@ export default function BookClient({
       setSlots(r.slots)
     }).catch(() => live && setError(t('Could not load times. Try again.')))
     return () => { live = false }
-  }, [slug, choice, mode, day, locationId, partySize, providerId, t])
+  }, [slug, choice, mode, day, locationId, partySize, providerId, t, fresh])
 
   async function checkRange() {
     if (!choice || !mode) return
@@ -200,12 +203,23 @@ export default function BookClient({
       setDone({
         kind: 'booked', id: String(data.id), number: String(data.booking_number), token: String(data.management_token),
         deposit: data.deposit_required ? Number(data.deposit_amount || 0) : null, payment: String(data.payment_status),
+        status: String(data.status),
+        when: SLOT_MODES.includes(mode) ? `${day ? `${sayDay(day)} · ` : ''}${picked.label}`
+          : mode === 'accommodation' ? `${sayDay(checkIn)} → ${sayDay(checkOut)}`
+            : mode === 'event_date' ? sayDay(day) : '',
       })
     } catch (err) {
-      const x = err as Error & { code?: string }
-      setError(x.code === 'slot_conflict' || x.code === 'no_resource_free'
-        ? t('That time was just taken. Choose another.') : x.message)
-      if (x.code === 'slot_conflict' || x.code === 'no_resource_free') setPicked(null)
+      const x = err as Error & { code?: string; status?: number }
+      // Someone else booked this time a moment ago: a conflict with no more
+      // specific reason ("Farhan is away then" keeps its own words). Either
+      // way the time is taken away and the day's times are asked for again —
+      // the page never keeps offering a time the server has refused.
+      const taken = x.code === 'slot_conflict' || x.code === 'no_resource_free' || (x.status === 409 && !x.code)
+      setError(taken ? t('That time was just taken. Choose another.') : x.message)
+      if (taken || x.status === 409) {
+        setPicked(null)
+        setFresh((n) => n + 1)
+      }
     } finally {
       setBusy(false)
     }
@@ -222,16 +236,25 @@ export default function BookClient({
     )
   }
   if (done?.kind === 'booked') {
+    // Say what is true: a booking the business still has to confirm is held
+    // for the guest, not confirmed (the manage link says "Waiting to be
+    // confirmed" — this page used to say "Confirmed" for the same booking).
+    const confirmed = done.status === 'confirmed'
     return (
       <main className="ls-section ls-book">
         <div className="ls-inner ls-checkout">
           <header className="ls-confirm__head">
-            <h1 className="ls-confirm__title">{t('Confirmed')}</h1>
+            <h1 className="ls-confirm__title">{confirmed ? t('Confirmed') : t('Waiting to be confirmed')}</h1>
             <p className="ls-confirm__lede">
               {t('Booking {number} is reserved.', { number: done.number })}
+              {confirmed ? null : ` ${t('Your request was sent to {business}.', { business: options.business.display_name })}`}
               {done.deposit !== null ? ` ${t('Deposit {amount}', { amount: done.deposit })} · ${done.payment}.` : null}
             </p>
           </header>
+          <dl className="ls-book__facts">
+            {done.when ? (<><dt>{t('When')}</dt><dd>{done.when}</dd></>) : null}
+            {done.payment === 'pending_offline' ? (<><dt>{t('Payment')}</dt><dd>{t('Pay at your visit')}</dd></>) : null}
+          </dl>
           <div className="ls-bill__actions">
             <Link className="ls-btn" href={`/${slug}/bookings/${done.id}?token=${encodeURIComponent(done.token)}`}>{t('Manage this booking')}</Link>
             <Link className="ls-btn ls-btn--outline" href={`/${slug}`}>{t('Back to {business}', { business: options.business.display_name })}</Link>

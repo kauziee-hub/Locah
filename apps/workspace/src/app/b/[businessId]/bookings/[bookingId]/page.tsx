@@ -6,10 +6,10 @@ import { Card, DetailShell, GateNotice, PageHeader, Section, StatusPill } from '
 import { ActionButton } from '@/components/ActionButton'
 import { ActionForm, SubmitButton } from '@/components/ActionForm'
 import { MoneySection } from '@/components/MoneySection'
-import { dayLabel, dayTimeLabel, rupees, timeLabel } from '@/lib/when'
+import { IST, dayLabel, dayTimeLabel, rupees, timeLabel, todayInIndia } from '@/lib/when'
 import { pageWords, wsLang } from '@/lib/ws-lang'
 import { WS_LOCALE } from '@/lib/ws-words'
-import { endSeries, repeatBooking, shiftSeries, transitionBooking } from '../actions'
+import { endSeries, repeatBooking, rescheduleBooking, shiftSeries, transitionBooking } from '../actions'
 import { CHANNEL_WORDS, MODE_WORDS, NEXT_STEPS, PAYMENT_WORDS, STATUS_TONE, STATUS_WORDS } from '../words'
 
 export const dynamic = 'force-dynamic'
@@ -19,9 +19,18 @@ type Booking = {
   starts_at: string; ends_at: string; party_size: number | null; payment_status: string
   deposit_required: boolean; deposit_amount: number; hold_expires_at: string | null
   series_id: string | null; occurrence_index: number | null; cancellation_reason: string | null
-  channel: string | null
+  channel: string | null; version: number
   customer: { id: string; name: string; phone: string | null } | null
   location_name: string | null; provider_name: string | null
+}
+
+/** A moment as the day and clock an Indian business reads it, for date and time inputs. */
+function inIndia(value: string): { day: string; time: string } {
+  const d = new Date(value)
+  return {
+    day: new Intl.DateTimeFormat('en-CA', { timeZone: IST, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d),
+    time: new Intl.DateTimeFormat('en-GB', { timeZone: IST, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d),
+  }
 }
 type Series = { id: string; status: string; occurrences: { id: string; occurrence_index: number; starts_at: string; status: string }[] }
 type Step = { id: string; from_status: string | null; to_status: string; reason: string | null; created_at: string }
@@ -103,6 +112,25 @@ export default async function BookingDetailPage({ params }: { params: { business
         </p>
       ) : null}
       {bk.cancellation_reason ? <p className="bos-hint">{t('Reason: {why}', { why: bk.cancellation_reason })}</p> : null}
+
+      {live ? (
+        // A customer rings to change the time: the owner moves it here (the
+        // API always could; the page had no way to ask it).
+        <Section title={t('Move to another time')}>
+          <Card>
+            <ActionForm action={rescheduleBooking} success={t('Moved.')} className="bos-inline-form" aria-label={t('Move to another time')}>
+              <input type="hidden" name="businessId" value={b} />
+              <input type="hidden" name="bookingId" value={bk.id} />
+              <input type="hidden" name="version" value={String(bk.version ?? '')} />
+              <input type="hidden" name="minutes" value={String(Math.max(5, Math.round((Date.parse(bk.ends_at) - Date.parse(bk.starts_at)) / 60_000)))} />
+              <label>{t('Date')} <input name="day" type="date" min={todayInIndia()} defaultValue={inIndia(bk.starts_at).day} required /></label>
+              <label>{t('Start time')} <input name="time" type="time" step={900} defaultValue={inIndia(bk.starts_at).time} required /></label>
+              <SubmitButton className="btn-ghost" busy={t('Moving…')}>{t('Move')}</SubmitButton>
+            </ActionForm>
+            <p className="bos-hint">{t('It keeps its length. The customer sees the new time on their booking link.')}</p>
+          </Card>
+        </Section>
+      ) : null}
 
       <Section title={t('Repeats')}>
         <Card>

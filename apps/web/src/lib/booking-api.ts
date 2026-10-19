@@ -82,7 +82,9 @@ export async function createPublicBooking(slug: string, body: Record<string, unk
   if (!res.ok) {
     const message = json?.detail?.message || json?.error?.message || 'Booking failed'
     const code = json?.error?.details?.code || json?.detail?.details?.code || json?.detail?.code
-    throw Object.assign(new Error(message), { code })
+    // The status too: a 409 is "someone else has this time now", which the
+    // Book page answers by taking the time away and showing what is still free.
+    throw Object.assign(new Error(message), { code, status: res.status })
   }
   return json.data
 }

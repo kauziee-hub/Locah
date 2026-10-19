@@ -46,6 +46,28 @@ export async function withdrawWaitlist(businessId: string, entryId: string): Pro
   return r
 }
 
+/** Move one booking to another day and time (India time, like every time in the
+ *  Workspace), keeping its length. The API refuses a time that is taken or that
+ *  its person does not work, and says why; the customer's own link follows. */
+export async function rescheduleBooking(_prev: FormResult, formData: FormData): Promise<FormResult> {
+  const businessId = String(formData.get('businessId'))
+  const bookingId = String(formData.get('bookingId'))
+  const day = String(formData.get('day') || '')
+  const time = String(formData.get('time') || '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(time)) return { ok: false, message: 'Choose the new day and time.' }
+  const start = new Date(`${day}T${time}:00+05:30`)
+  const minutes = num(formData.get('minutes'), 60)
+  const version = num(formData.get('version'), 0)
+  const r = await sendJson(`${api(businessId)}/bookings/${bookingId}/reschedule`, 'POST', {
+    starts_at: start.toISOString(),
+    ends_at: new Date(start.getTime() + minutes * 60_000).toISOString(),
+    reason: 'Moved by the business',
+    ...(version > 0 ? { version } : {}),
+  })
+  if (r.ok) refresh(businessId, bookingId)
+  return asForm(r)
+}
+
 /** Repeat a booking every N weeks. */
 export async function repeatBooking(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const businessId = String(formData.get('businessId'))
