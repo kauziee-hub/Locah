@@ -23,7 +23,8 @@ export default async function ManageBookingPage({
   const site = await fetchPublicWebsite(params.slug)
   return (
     <SiteFrame site={site} lang={siteLang(site?.website.languages, searchParams?.lang, true)}>
-      <ManageBookingClient slug={params.slug} name={site?.business.display_name ?? null} bookingId={params.bookingId} token={token} />
+      <ManageBookingClient slug={params.slug} name={site?.business.display_name ?? null} bookingId={params.bookingId} token={token}
+        place={site?.business?.place ?? null} />
     </SiteFrame>
   )
 }

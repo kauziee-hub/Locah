@@ -352,7 +352,7 @@ class PublicBookingService:
         business = await PublicBookingService._resolve_business(session, slug)
         booking = await BookingWaitlistService.claim(
             session, business=business, entry_id=entry_id, token=token, correlation_id=correlation_id)
-        data = BookingResolver.serialize_booking(booking)
+        data = PublicBookingService._for_guest(booking)
         data["management_token"] = booking.management_token
         return dict(data)
 
@@ -494,7 +494,7 @@ class PublicBookingService:
             await BookingNoteService.create_note(
                 session, business_id=business.id, booking_id=booking.id, actor_id=actor_id,
                 correlation_id=correlation_id, body=f"From the customer: {note[:1000]}")
-        data = BookingResolver.serialize_booking(booking)
+        data = PublicBookingService._for_guest(booking)
         data["management_token"] = booking.management_token
         data["management_token_expires_at"] = (
             booking.management_token_expires_at.isoformat()
@@ -548,7 +548,7 @@ class PublicBookingService:
         booking = await PublicBookingService._resolve_by_token(
             session, booking_id=booking_id, token=token
         )
-        data = BookingResolver.serialize_booking(booking)
+        data = PublicBookingService._for_guest(booking)
         data["contact"] = {
             "business_id": str(booking.business_id),
             "location_id": str(booking.location_id),
@@ -586,7 +586,17 @@ class PublicBookingService:
             by_customer=True,
             customer_identity_id=customer,
         )
-        return dict(BookingResolver.serialize_booking(updated))
+        return PublicBookingService._for_guest(updated)
+
+    @staticmethod
+    def _for_guest(booking: Booking) -> dict[str, Any]:
+        """The booking as its guest may read it: never the business's own
+        reference note or its record id for the customer (the
+        booking link returned ``internal_reference`` to the guest)."""
+        data = dict(BookingResolver.serialize_booking(booking))
+        for private in ("internal_reference", "customer_contact_id"):
+            data.pop(private, None)
+        return data
 
     @staticmethod
     async def _customer_identity(session: AsyncSession, booking: Booking) -> uuid.UUID | None:
@@ -635,4 +645,4 @@ class PublicBookingService:
             by_customer=True,
             customer_identity_id=customer,
         )
-        return dict(BookingResolver.serialize_booking(updated))
+        return PublicBookingService._for_guest(updated)

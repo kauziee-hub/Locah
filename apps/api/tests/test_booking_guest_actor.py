@@ -54,6 +54,15 @@ def test_a_guests_own_cancel_and_move_are_not_recorded_as_the_owners(owner: dict
 
     first, second, third = book(slots[0], 1), book(slots[2], 2), book(slots[4], 3)
 
+    # The guest's link never hands them the business's own reference note.
+    r = client.patch(f"/v1/platform/businesses/{bid}/bookings/{first['id']}",
+                     json={"internal_reference": "VIP - comp the wash"}, headers=owner)
+    assert r.status_code == 200, r.text
+    seen = client.get(f"/v1/public/bookings/{first['id']}", params={"token": first["management_token"]})
+    assert seen.status_code == 200, seen.text
+    assert "internal_reference" not in seen.json()["data"] and "customer_contact_id" not in seen.json()["data"]
+    assert "internal_reference" not in first
+
     cancel = client.post(f"/v1/public/bookings/{first['id']}/cancel",
                          json={"token": first["management_token"], "reason": "Plans changed"})
     assert cancel.status_code == 200, cancel.text

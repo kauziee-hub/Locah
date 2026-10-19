@@ -690,6 +690,14 @@ export function bookingJourney(ctx) {
         let asked = ''
         g.once('dialog', async (d) => { asked = d.message(); await d.accept() })
         await cancel.first().click()
+        await sleep(800)
+        // The page may ask on the page itself ("Cancel this booking?" → "Yes, cancel it").
+        const yes = g.getByRole('button', { name: /yes, cancel/i })
+        if (await yes.count()) {
+          asked = flat(await g.locator('section').filter({ has: yes }).first().innerText().catch(() => 'yes, cancel'))
+          await s.shot(g, 'second-cancel-asked', true)
+          await yes.first().click()
+        }
         await sleep(2500)
         s.note(asked ? `the page asked first: "${asked}"` : 'the page cancelled at once, without asking "are you sure?"')
         journal.second.cancel_asked = Boolean(asked)
