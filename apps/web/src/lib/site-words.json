@@ -2674,5 +2674,9 @@
   "To change the dates, call {phone}.": {
     "hi": "तारीखें बदलने के लिए {phone} पर कॉल करें।",
     "ta": "தேதிகளை மாற்ற {phone} ஐ அழைக்கவும்."
+  },
+  "Opening hours: {hours}": {
+    "hi": "खुलने का समय: {hours}",
+    "ta": "திறந்திருக்கும் நேரம்: {hours}"
   }
 }

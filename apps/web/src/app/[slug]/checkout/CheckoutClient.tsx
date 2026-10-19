@@ -280,7 +280,7 @@ export default function CheckoutClient({
           <span className="ls-meta">{t('Collect from')}</span>
           {where ? <strong>{where}</strong> : <strong>{options.business.display_name}</strong>}
         </p>
-        {place?.hours_summary ? <p className="ls-meta">{t('Open {hours}', { hours: place.hours_summary })}</p> : null}
+        {place?.hours_summary ? <p className="ls-meta">{t('Opening hours: {hours}', { hours: place.hours_summary })}</p> : null}
         {place?.phone ? (
           <p className="ls-meta">
             <a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{t('Call {phone}', { phone: place.phone })}</a>

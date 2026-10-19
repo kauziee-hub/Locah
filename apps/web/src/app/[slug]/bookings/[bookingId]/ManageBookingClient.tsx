@@ -323,7 +323,7 @@ export default function ManageBookingClient({
               <><dt>{t('Changes')}</dt><dd>{t('Free to cancel up to {h} hours before.', { h: windowHours })}</dd></>
             ) : null}
           </dl>
-          {place?.hours_summary ? <p className="ls-meta">{t('Open {hours}', { hours: place.hours_summary })}</p> : null}
+          {place?.hours_summary ? <p className="ls-meta">{t('Opening hours: {hours}', { hours: place.hours_summary })}</p> : null}
           {place?.phone ? (
             <p><a href={`tel:${place.phone}`}>{t('Call {phone}', { phone: place.phone })}</a></p>
           ) : (
