@@ -275,6 +275,16 @@ class BookingService:
                 starts_at=validated["starts_at"],
                 ends_at=validated["ends_at"],
             )
+        if not validated["provider_id"] and validated["reservation_mode"] == "appointment":
+            # "Anyone available": the booking goes to a person who is free then,
+            # so it takes their time and the next guest is told it is taken.
+            # (Checked again under the slot lock by assert_available below.)
+            _, free = await AvailabilityService.free_provider(
+                session, business_id=business_id, location_id=validated["location_id"],
+                offering_id=validated["offering_id"], starts_at=validated["starts_at"],
+                ends_at=validated["ends_at"])
+            if free is not None:
+                validated["provider_id"] = free
         if not resources:
             await AvailabilityService.assert_available(
                 session,

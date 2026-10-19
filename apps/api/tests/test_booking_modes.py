@@ -87,7 +87,11 @@ def test_slot_modes_list_only_times_the_commit_would_accept(owner: dict[str, str
                                          date=day.isoformat())["slots"]]
     assert labels == ["10:00", "10:30", "11:00", "11:30", "12:00"], "only Priya's hours, whole service inside"
     anyone = [s["label"] for s in _slots(slug, location_id=loc, offering_id=cut, date=day.isoformat())["slots"]]
-    assert anyone[0] == "09:00" and anyone[-1] == "17:00", "any provider: the opening hours"
+    # "Anyone available" offers only times someone who gives this service works
+    # and is free — here only Priya does. (It used to offer the whole opening
+    # day, 09:00-17:00, and a 09:00 booking with nobody there was accepted:
+    # owner lab, salon.)
+    assert anyone == labels, "any provider: the times someone who gives it is free"
 
     # A class shows places left, and a full time disappears.
     spin = _offering(owner, bid, "class_session", capacity=2, duration_minutes=60)

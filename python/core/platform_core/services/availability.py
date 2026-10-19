@@ -113,6 +113,54 @@ class AvailabilityService:
         )
 
     @staticmethod
+    async def free_provider(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        location_id: uuid.UUID,
+        offering_id: uuid.UUID | None,
+        starts_at: datetime,
+        ends_at: datetime,
+        exclude_booking_id: uuid.UUID | None = None,
+    ) -> tuple[bool, uuid.UUID | None]:
+        """For a booking with no person chosen: (whether named people give this
+        service, the first of them who works here then and is free). (False,
+        None) when nobody is named for it — the business does not book it by
+        person, and nothing changes for it."""
+        from platform_core.models import WorkforceMember, WorkforceServiceAssociation
+
+        if offering_id is None:
+            return False, None
+        members = (await session.execute(
+            select(WorkforceMember.id)
+            .join(WorkforceServiceAssociation, WorkforceServiceAssociation.member_id == WorkforceMember.id)
+            .where(
+                WorkforceServiceAssociation.business_id == business_id,
+                WorkforceServiceAssociation.offering_id == offering_id,
+                WorkforceMember.business_id == business_id,
+                WorkforceMember.deleted_at.is_(None),
+                WorkforceMember.status == "active",
+            )
+            .order_by(WorkforceMember.display_name.asc(), WorkforceMember.id.asc())
+        )).scalars().all()
+        if not members:
+            return False, None
+        for member_id in dict.fromkeys(members):
+            try:
+                await AvailabilityService.assert_provider_can_take(
+                    session, business_id=business_id, provider_id=member_id, location_id=location_id,
+                    offering_id=offering_id, starts_at=starts_at, ends_at=ends_at)
+            except (ValidationError, ConflictError):
+                continue
+            if await AvailabilityService._provider_conflict(
+                session, business_id=business_id, provider_id=member_id, starts_at=starts_at,
+                ends_at=ends_at, exclude_booking_id=exclude_booking_id,
+            ):
+                continue
+            return True, member_id
+        return True, None
+
+    @staticmethod
     def closed_reason(
         location: BusinessLocation, reservation_mode: str, starts_at: datetime, ends_at: datetime
     ) -> str | None:
@@ -289,6 +337,18 @@ class AvailabilityService:
                 raise ConflictError(
                     "Provider is not available for this time slot",
                     details={"provider_id": str(provider_id)},
+                )
+        elif reservation_mode == "appointment":
+            # "Anyone available": where named people give this service, one of
+            # them must work then and be free (owner lab, salon: 16:00 was
+            # offered and taken twice with the only stylist already booked).
+            scheduled, free = await AvailabilityService.free_provider(
+                session, business_id=business_id, location_id=location_id, offering_id=offering_id,
+                starts_at=starts_at, ends_at=ends_at, exclude_booking_id=exclude_booking_id)
+            if scheduled and free is None:
+                raise ConflictError(
+                    "Nobody who gives this service is free then",
+                    details={"code": "no_provider_free"},
                 )
 
         # Capacity modes: date-range / slot capacity — NOT inventory stock decrement.

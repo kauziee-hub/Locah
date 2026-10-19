@@ -288,3 +288,51 @@ def test_the_providers_last_slot_goes_to_exactly_one_guest(owner: dict[str, str]
                       for i in range(CONTENDERS)])
     _one_winner(outcomes)
     assert len(_active(bid, provider_id=stylist)) == 1
+
+
+# ------------------------------------------------------------------ anyone available
+
+
+def test_anyone_available_takes_the_only_free_stylist_and_then_refuses(owner: dict[str, str]) -> None:
+    """Owner lab (salon): with one stylist for a haircut, "anyone available"
+    was offered and booked at a time the stylist already had, and an
+    unassigned booking never took anyone's time — two guests at one chair."""
+    bid, slug, loc = _business(owner)
+    cut = _offering(owner, bid, "service", duration_minutes=45)
+    farhan = _provider(owner, bid, loc, cut)
+    starts, ends = _slot(days=4)
+    body = {"location_id": loc, "offering_id": cut, "reservation_mode": "appointment",
+            "starts_at": starts, "ends_at": ends}
+
+    first = client.post(f"/v1/public/websites/{slug}/bookings", json={**body, "guest": _guest(1)})
+    assert first.status_code == 200, first.text
+    # "Anyone available" went to the person who gives the service: it holds their time.
+    assert _sql("select provider_id::text from bookings_bookings where id = cast(:i as uuid)",
+                i=first.json()["data"]["id"])[0][0] == farhan
+
+    avail = client.post(f"/v1/public/websites/{slug}/booking/availability", json=body)
+    assert avail.status_code == 200 and avail.json()["data"]["available"] is False, avail.text
+    second = client.post(f"/v1/public/websites/{slug}/bookings", json={**body, "guest": _guest(2)})
+    assert second.status_code == 409, second.text
+    named = client.post(f"/v1/public/websites/{slug}/bookings",
+                        json={**body, "provider_id": farhan, "guest": _guest(3)})
+    assert named.status_code == 409, named.text
+    assert len(_active(bid, offering_id=cut)) == 1
+
+    # A service nobody is named for is booked as before (no person to check).
+    other = _offering(owner, bid, "service", duration_minutes=30)
+    plain = {**body, "offering_id": other}
+    assert client.post(f"/v1/public/websites/{slug}/bookings", json={**plain, "guest": _guest(4)}).status_code == 200
+
+
+def test_anyone_available_races_for_the_last_stylist_one_wins(owner: dict[str, str]) -> None:
+    bid, slug, loc = _business(owner)
+    cut = _offering(owner, bid, "service", duration_minutes=45)
+    _provider(owner, bid, loc, cut)
+    starts, ends = _slot(days=5)
+    outcomes = _race([(f"/v1/public/websites/{slug}/bookings",
+                       {"location_id": loc, "offering_id": cut, "reservation_mode": "appointment",
+                        "starts_at": starts, "ends_at": ends, "guest": _guest(i)}, {})
+                      for i in range(CONTENDERS)])
+    _one_winner(outcomes)
+    assert len(_active(bid, offering_id=cut)) == 1
