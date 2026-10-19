@@ -59,6 +59,22 @@ MODE_TYPES: dict[str, frozenset[str]] = {
 KNOWN_TYPES = frozenset().union(*MODE_TYPES.values())
 
 
+def serves(resource: BookingResource, offering_id: uuid.UUID | str | None) -> bool:
+    """Whether this resource may be given to a booking of this offering.
+
+    A hotel's rooms are of a room type: "Cottage 2" is a Valley-view cottage
+    and must never be handed to a guest who booked the Pool villa (owner lab,
+    hotel: with no tie between rooms and room types, any free room took any
+    stay, and the villa could be sold as often as there were rooms). A resource
+    names the offerings it is (``metadata.offering_ids``); one that names none
+    serves every booking of its kind, as before.
+    """
+    named = (resource.resource_metadata or {}).get("offering_ids") or []
+    if not named or offering_id is None:
+        return True
+    return str(offering_id) in {str(x) for x in named}
+
+
 def _filter_types(query: Any, mode: str | None) -> Any:
     if mode is None:
         return query
@@ -494,6 +510,7 @@ class BookingAllocationService:
         ends_at: datetime,
         party_size: int = 1,
         mode: str | None = None,
+        offering_id: uuid.UUID | None = None,
     ) -> BookingResource | None:
         """Hold a free resource for a guest who did not choose one.
 
@@ -521,6 +538,7 @@ class BookingAllocationService:
         free = await BookingAllocationService.free_resources(
             session, business_id=business_id, location_id=location_id, resource_type=None,
             starts_at=starts_at, ends_at=ends_at, party_size=party_size, mode=mode,
+            offering_id=offering_id,
         )
         candidates = await BookingAllocationService.load_many(
             session, business_id=business_id,
@@ -583,8 +601,12 @@ class BookingAllocationService:
         party_size: int = 1,
         exclude_booking_id: uuid.UUID | None = None,
         mode: str | None = None,
+        offering_id: uuid.UUID | str | None = None,
     ) -> list[dict[str, Any]]:
         """Which resources can take this booking, answered in two queries.
+
+        ``offering_id``: only the resources that are that offering (a room of
+        that room type) or name no offering at all - see ``serves``.
 
         The obvious shape - list the resources, then ask about each one - is the
         N+1 that made Marketplace search take ten seconds. Instead: one query
@@ -612,7 +634,7 @@ class BookingAllocationService:
                 BookingResource.resource_type == resource_type.strip().lower()
             )
         candidates = _filter_types(candidates, mode)
-        resources = list((await session.execute(candidates)).scalars().all())
+        resources = [r for r in (await session.execute(candidates)).scalars().all() if serves(r, offering_id)]
         if not resources:
             return []
 

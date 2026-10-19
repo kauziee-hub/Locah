@@ -91,7 +91,17 @@ def _validate(payload: dict[str, Any], *, partial: bool = False) -> dict[str, An
     if present("metadata"):
         if not isinstance(payload["metadata"], dict):
             raise ValidationError("metadata must be an object")
-        out["resource_metadata"] = payload["metadata"]
+        meta = dict(payload["metadata"])
+        # The room types (offerings) this room is - see booking_allocation.serves.
+        if "offering_ids" in meta:
+            ids = meta["offering_ids"] or []
+            if not isinstance(ids, list):
+                raise ValidationError("offering_ids must be a list", details={"field": "offering_ids"})
+            try:
+                meta["offering_ids"] = list(dict.fromkeys(str(uuid.UUID(str(i))) for i in ids))
+            except ValueError as exc:
+                raise ValidationError("offering_ids must be offering ids", details={"field": "offering_ids"}) from exc
+        out["resource_metadata"] = meta
 
     return out
 

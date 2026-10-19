@@ -87,7 +87,7 @@ class BookingWaitlistService:
             free = await BookingAllocationService.free_resources(
                 session, business_id=business_id, location_id=params["location_id"], resource_type=None,
                 starts_at=params["starts_at"], ends_at=params["ends_at"], party_size=params["party_size"],
-                mode=params["reservation_mode"],
+                mode=params["reservation_mode"], offering_id=params.get("offering_id"),
             )
             return not free
         return False

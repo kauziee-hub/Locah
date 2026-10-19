@@ -273,6 +273,57 @@ def _weighed_payload(unit: str, said: str) -> dict[str, Any] | None:
             "attributes": {"price_per": "kg"}, "sell_units": packs}
 
 
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+_CLOCK = r"(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.|noon)?"
+_CHECK_IN = re.compile(r"check[\s-]*in\s*(?:is\s*)?(?:from|at|after|:|-)?\s*" + _CLOCK, re.I)
+_CHECK_OUT = re.compile(r"check[\s-]*out\s*(?:is\s*)?(?:by|at|before|till|until|:|-)?\s*" + _CLOCK, re.I)
+_NIGHTS = r"(\d|one|two|three|four|five|six|seven)\s*-?\s*(?:nights?|nites?)"
+_MIN_NIGHTS = re.compile(r"(?:(?:minimum|min\.?)\s*(?:stay\s*)?(?:is\s*)?(?:of\s*)?" + _NIGHTS + r"|" + _NIGHTS
+                         + r"\s*(?:minimum|min\b))([^.;]{0,30})", re.I)
+# A rule for a season or a month is one LOCAH cannot hold yet: never applied all year.
+_SEASONAL = re.compile(r"\b(?:season|peak|festive|festival|holidays?|long weekends?|jan\w*|feb\w*|march|apr\w*|"
+                       r"may|june?|july?|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|christmas|new year|diwali|pooja|onam)\b",
+                       re.I)
+_WEEKEND = re.compile(r"\bweekends?\b|\bsat(?:urday)?s?\b|\bfri(?:day)?s?\b", re.I)
+
+
+def _clock(hour: str, minute: str | None, half: str | None) -> str | None:
+    h, m = int(hour), int(minute or 0)
+    half = (half or "").lower().replace(".", "")
+    if half == "pm" and h < 12:
+        h += 12
+    elif half == "am" and h == 12:
+        h = 0
+    elif not half and 1 <= h <= 6:
+        h += 12  # "check-in 2" is 2 pm, never 2 am
+    return f"{h:02d}:{m:02d}" if 0 <= h <= 23 and 0 <= m <= 59 else None
+
+
+def _stay_rules(said: str) -> dict[str, Any]:
+    """A stay's rules from how the owner said them — "check-in 1 pm, check-out
+    11 am", "2-night minimum on weekends", "weekend min 2 nites" — as a room
+    type's fields (owner lab, hotel: both were "noted" in the chat and neither
+    reached the rooms)."""
+    rules: dict[str, Any] = {}
+    if found := _CHECK_IN.search(said):
+        if at := _clock(*found.groups()):
+            rules["check_in"] = at
+    if found := _CHECK_OUT.search(said):
+        if at := _clock(*found.groups()):
+            rules["check_out"] = at
+    for found in _MIN_NIGHTS.finditer(said):
+        word = (found.group(1) or found.group(2) or "").lower()
+        nights = _NUMBER_WORDS.get(word) or (int(word) if word.isdigit() else 0)
+        if nights < 2:
+            continue
+        # "weekend min 2 nites": the weekend may come before the number too.
+        around = said[max(0, found.start() - 20):found.end()]
+        if _SEASONAL.search(around):
+            continue
+        rules["weekend_min_nights" if _WEEKEND.search(around) else "min_nights"] = nights
+    return rules
+
+
 def _row_kind(trade_kind: str, title: str, chapter: str) -> str:
     """The catalogue kind for one item of a trade whose kind is ``trade_kind``."""
     if trade_kind not in {"membership_plan", "accommodation"}:
@@ -1114,6 +1165,12 @@ class BusinessInterviewService:
         said_units = " ".join(filter(None, [
             (bp.discovery.get("offerings.units") or TargetState()).quote,
             (bp.discovery.get("offerings.structure") or TargetState()).quote]))
+        # A stay's check-in, check-out and shortest stay, wherever they were said.
+        facts = {**bp.unconfirmed_facts, **bp.known_facts}
+        stay_rules = _stay_rules(" . ".join(filter(None, [
+            (bp.discovery.get("operations.hours") or TargetState()).quote,
+            (bp.discovery.get("bookings.format") or TargetState()).quote,
+            *(str(facts[k].value) for k in ("opening_hours", "operational_characteristics") if k in facts)])))
         for row in _setup_details(bp):
             name = row.get("title", "")
             if not name or name.casefold() in applied:
@@ -1167,6 +1224,8 @@ class BusinessInterviewService:
                 minutes = re.search(r"(\d{1,3})\s*min", row.get("unit", ""))
                 if (offer_kind in {"service", "class"} or row_kind in {"service", "class_session"}) and minutes:
                     attributes["duration_minutes"] = int(minutes.group(1))
+                if (row_kind or kind) == "accommodation":
+                    attributes.update(stay_rules)
                 if attributes:
                     payload["attributes"] = {**payload.get("attributes", {}), **attributes}
                 await OfferingService.create_offering(

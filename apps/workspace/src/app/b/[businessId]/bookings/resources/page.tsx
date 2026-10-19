@@ -6,7 +6,7 @@ import { Card, EmptyState, GateNotice, PageHeader, Section, StatusPill } from '@
 import { ActionButton } from '@/components/ActionButton'
 import { ActionForm, SubmitButton } from '@/components/ActionForm'
 import { pageWords } from '@/lib/ws-lang'
-import { addResource, setResourceActive } from '../actions'
+import { addResource, setResourceActive, setRoomType } from '../actions'
 import { RESOURCE_KINDS } from '../words'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,10 @@ type Resource = {
   id: string; location_id: string; resource_type: string; name: string; allocation_mode: 'exclusive' | 'pooled'
   capacity: number; max_party_size: number | null; buffer_after_minutes: number; granularity: string; is_active: boolean
   version: number
+  /** The room types (offerings) a room is; none — any stay. */
+  metadata?: { offering_ids?: string[] }
 }
+type Offering = { id: string; title: string; offering_type: string; status: string }
 
 /** What customers book time on. A guest who does not choose is given a free one that fits. */
 export default async function ResourcesPage({ params }: { params: { businessId: string } }) {
@@ -24,9 +27,10 @@ export default async function ResourcesPage({ params }: { params: { businessId: 
   const t = pageWords()
   const b = params.businessId
   const base = `/v1/platform/businesses/${b}`
-  const [resRes, locRes] = await Promise.all([
+  const [resRes, locRes, offRes] = await Promise.all([
     apiTry<{ data: { resources: Resource[] } }>(`${base}/bookings/resources?include_inactive=true`, token),
     apiTry<{ data: { id: string; name: string }[] }>(`${base}/locations`, token),
+    apiTry<{ data: Offering[] }>(`${base}/products?limit=200`, token),
   ])
   const header = <PageHeader title={t('Tables, rooms & equipment')} breadcrumb={<Link href={`/b/${b}/bookings`}>← {t('Bookings')}</Link>}
     subtitle={t('What customers book time on. A guest who does not choose is given a free one that fits.')} />
@@ -34,6 +38,10 @@ export default async function ResourcesPage({ params }: { params: { businessId: 
   const resources = resRes.data.data.resources ?? []
   const locations = locRes.ok ? locRes.data.data : []
   const placeName = (id: string) => locations.find((l) => l.id === id)?.name ?? ''
+  // A hotel's room types: each room is one of them, so a Pool villa stay is
+  // never given the Valley-view cottage.
+  const stays = (offRes.ok ? offRes.data.data : []).filter((o) => o.offering_type === 'accommodation' && o.status !== 'archived')
+  const roomTypeOf = (r: Resource) => stays.find((o) => r.metadata?.offering_ids?.includes(o.id))
   const groups = Object.entries(RESOURCE_KINDS).map(([key, k]) => [key, k, resources.filter((r) => r.resource_type === key)] as const)
   const other = resources.filter((r) => !(r.resource_type in RESOURCE_KINDS))
 
@@ -55,6 +63,7 @@ export default async function ResourcesPage({ params }: { params: { businessId: 
                       : r.max_party_size ? `${t(k.seats)}: ${r.max_party_size}` : ''}
                     {r.buffer_after_minutes ? ` · ${t('{n} min to reset', { n: r.buffer_after_minutes })}` : ''}
                     {locations.length > 1 ? ` · ${placeName(r.location_id)}` : ''}
+                    {key === 'room' && stays.length ? ` · ${roomTypeOf(r)?.title ?? t('Any room type')}` : ''}
                   </span>
                   <StatusPill value={r.is_active ? 'active' : 'paused'} tone={r.is_active ? 'good' : 'neutral'}
                     label={r.is_active ? t('Taking bookings') : t('Paused')} />
@@ -62,10 +71,24 @@ export default async function ResourcesPage({ params }: { params: { businessId: 
                     confirm={r.is_active ? t("Pause {name}? New bookings won't be given it; existing ones stay.", { name: r.name }) : undefined}
                     confirmLabel={t('Yes, pause')}
                     run={setResourceActive.bind(null, b, r.id, !r.is_active)} />
+                  {key === 'room' && stays.length ? (
+                    <ActionForm action={setRoomType} success={t('Saved.')} className="bos-inline-form" aria-label={t('Room type of {name}', { name: r.name })}>
+                      <input type="hidden" name="businessId" value={b} />
+                      <input type="hidden" name="resourceId" value={r.id} />
+                      <select name="offering_id" defaultValue={roomTypeOf(r)?.id ?? ''} aria-label={t('Room type')}>
+                        <option value="">{t('Any room type')}</option>
+                        {stays.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+                      </select>
+                      <SubmitButton className="btn-quiet" busy={t('Saving…')}>{t('Save')}</SubmitButton>
+                    </ActionForm>
+                  ) : null}
                 </li>
               ))}
             </ul>
             <p className="bos-hint" style={{ margin: '0.4rem 0 0' }}>{t(k.help)}</p>
+            {key === 'room' && stays.length ? (
+              <p className="bos-hint" style={{ margin: '0.2rem 0 0' }}>{t('A guest who books a room type is given a free room of that type.')}</p>
+            ) : null}
           </Card>
         </Section>
       ))}
@@ -85,6 +108,14 @@ export default async function ResourcesPage({ params }: { params: { businessId: 
               </select>
             </label>
             <label>{t('Name')}<input name="name" required placeholder={t('Table 4, Room 101…')} maxLength={80} /></label>
+            {stays.length ? (
+              <label>{t('Room type (for a room)')}
+                <select name="offering_id" defaultValue="">
+                  <option value="">{t('Any room type')}</option>
+                  {stays.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+                </select>
+              </label>
+            ) : null}
             <label>{t('Seats / guests / places')}<input name="size" type="number" min={1} max={500} defaultValue={4} required /></label>
             <label>{t('Minutes to reset after')}<input name="buffer" type="number" min={0} max={240} defaultValue={0} /></label>
             {locations.length > 1 ? (

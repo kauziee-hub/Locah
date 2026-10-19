@@ -22,7 +22,7 @@ from platform_core.exceptions import ValidationError
 class KindField:
     key: str
     label: str
-    type: str  # text | long_text | int | money | choice | list | bool | date | year
+    type: str  # text | long_text | int | money | choice | list | bool | date | year | time
     required: bool = False
     choices: tuple[str, ...] = ()
     unit: str | None = None
@@ -87,7 +87,16 @@ KINDS: dict[str, OfferingKind] = {k.key: k for k in (
                  "A kind of room guests book by date.",
                  (KindField("max_guests", "Guests per room", "int", True),
                   KindField("beds", "Beds", "text"), KindField("size_sqft", "Room size", "int", unit="sq ft"),
-                  _AMENITIES),
+                  _AMENITIES,
+                  # The stay's own rules, as the owner says them ("check-in 1 pm,
+                  # check-out 11 am", "2-night minimum on weekends"): the Book
+                  # page and the booking hold to them (booking_slots.stay_window
+                  # and stay_rule_broken).
+                  KindField("check_in", "Check-in from", "time", help="Guests arrive from this time. Usually 2 pm."),
+                  KindField("check_out", "Check-out by", "time", help="Guests leave by this time. Usually 11 am."),
+                  KindField("min_nights", "Shortest stay", "int", unit="nights"),
+                  KindField("weekend_min_nights", "Shortest stay over a Friday or Saturday night", "int",
+                            unit="nights")),
                  goods=False),
     OfferingKind("rental", "rental_resource", "Rental", "Rentals", "booking", "Check availability",
                  "Something hired by the hour or day — a hall, equipment, a vehicle.",
@@ -221,6 +230,11 @@ def clean_attributes(k: OfferingKind, raw: dict[str, Any] | None) -> dict[str, A
                 out[f.key] = bool(v)
             elif f.type == "date":
                 out[f.key] = date.fromisoformat(str(v)).isoformat()
+            elif f.type == "time":
+                # "13:00" (an <input type=time>); seconds are dropped.
+                from datetime import time as clock
+
+                out[f.key] = clock.fromisoformat(str(v).strip()).strftime("%H:%M")
         except (ValueError, InvalidOperation):
             raise _bad(f"attributes.{f.key}", f"{f.label} is not valid") from None
     if k.key == "cause" and "suggested_amounts" in out:

@@ -295,7 +295,7 @@ function FieldInput({ field: f, value, onChange }: { field: KindField; value: st
       ) : (
         <input
           id={id}
-          type={f.type === 'date' ? 'date' : 'text'}
+          type={f.type === 'date' ? 'date' : f.type === 'time' ? 'time' : 'text'}
           inputMode={f.type === 'int' || f.type === 'year' || f.type === 'money' ? 'numeric' : undefined}
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}

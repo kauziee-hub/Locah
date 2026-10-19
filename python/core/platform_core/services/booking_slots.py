@@ -75,6 +75,28 @@ def stay_window(location: BusinessLocation, offering: Offering | None, check_in:
             datetime.combine(check_out, _clock(attrs.get("check_out"), CHECK_OUT), tz))
 
 
+def stay_rule_broken(offering: Offering | None, location: BusinessLocation, starts_at: datetime,
+                     ends_at: datetime) -> str | None:
+    """The owner's shortest-stay rule this stay breaks, in the guest's words;
+    None when it keeps them. "2-night minimum on weekends" is a stay over a
+    Friday or Saturday night (owner lab, hotel: the rule was "noted" in the
+    chat and a one-night Saturday was taken anyway)."""
+    attrs = (offering.attributes or {}) if offering else {}
+    tz = zone(location)
+    first, last = starts_at.astimezone(tz).date(), ends_at.astimezone(tz).date()
+    nights = (last - first).days
+    try:
+        least, weekend = int(attrs.get("min_nights") or 0), int(attrs.get("weekend_min_nights") or 0)
+    except (TypeError, ValueError):
+        return None
+    over_weekend = any((first + timedelta(days=i)).weekday() in (4, 5) for i in range(max(nights, 0)))
+    if weekend > least and over_weekend and nights < weekend:
+        return f"A stay over a Friday or Saturday night is at least {weekend} nights"
+    if least > 1 and nights < least:
+        return f"A stay here is at least {least} nights"
+    return None
+
+
 def day_window(location: BusinessLocation, day: date) -> tuple[datetime, datetime]:
     tz = zone(location)
     start = datetime.combine(day, time(0, 0), tz)
@@ -95,7 +117,7 @@ class BookingSlotService:
             free = await BookingAllocationService.free_resources(
                 session, business_id=business_id, location_id=params["location_id"], resource_type=None,
                 starts_at=params["starts_at"], ends_at=params["ends_at"], party_size=params["party_size"],
-                mode=params["reservation_mode"])
+                mode=params["reservation_mode"], offering_id=params.get("offering_id"))
             if not free:
                 return False, "Nothing is free for this time"
         return True, None
@@ -176,6 +198,12 @@ class BookingSlotService:
             raise ValidationError("The end must be after the start", details={"field": "ends_at"})
         if starts_at <= datetime.now(timezone.utc):
             return {"available": False, "reason": "That time has passed", "resources": []}
+        if mode == "accommodation":
+            broken = stay_rule_broken(offering, location, starts_at, ends_at)
+            if broken:
+                return {"available": False, "reason": broken, "code": "minimum_stay", "resources": [],
+                        "starts_at": starts_at.astimezone(timezone.utc).isoformat(),
+                        "ends_at": ends_at.astimezone(timezone.utc).isoformat()}
         params = {"location_id": location.id, "provider_id": None,
                   "offering_id": offering.id if offering else None, "reservation_mode": mode,
                   "starts_at": starts_at, "ends_at": ends_at, "party_size": party_size, "capacity": None,
@@ -183,7 +211,8 @@ class BookingSlotService:
         open_, reason = await BookingSlotService.is_open(session, business_id, params)
         free = await BookingAllocationService.free_resources(
             session, business_id=business_id, location_id=location.id, resource_type=None, starts_at=starts_at,
-            ends_at=ends_at, party_size=party_size, mode=mode) if open_ else []
+            ends_at=ends_at, party_size=party_size, mode=mode,
+            offering_id=offering.id if offering else None) if open_ else []
         return {"available": open_, "reason": reason,
                 "starts_at": starts_at.astimezone(timezone.utc).isoformat(),
                 "ends_at": ends_at.astimezone(timezone.utc).isoformat(),

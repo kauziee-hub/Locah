@@ -242,6 +242,7 @@ class PublicBookingService:
             party_size=params["party_size"],
             exclude_booking_id=params.get("exclude_booking_id"),
             mode=params["reservation_mode"],
+            offering_id=params.get("offering_id"),
         )
         result["resources"] = [
             {
@@ -363,10 +364,17 @@ class PublicBookingService:
         """The offering decides the mode, not the request: a class booked as an
         'appointment' would otherwise skip its places limit. An event date is
         the whole local day, whatever times were sent."""
-        from platform_core.services.booking_slots import day_window, mode_for, zone
+        from platform_core.services.booking_slots import (
+            day_window,
+            mode_for,
+            stay_rule_broken,
+            stay_window,
+            zone,
+        )
         from platform_core.validation.booking import parse_datetime
 
         mode = str(payload.get("reservation_mode") or "appointment")
+        offering = None
         if payload.get("offering_id"):
             offering = await PublicBookingService._public_offering(session, business, payload["offering_id"])
             mode = mode_for(offering)
@@ -376,6 +384,18 @@ class PublicBookingService:
         if mode == "event_date":
             first = parse_datetime(starts, field="starts_at").astimezone(zone(location)).date()
             a, b = day_window(location, first)
+            starts, ends = a.isoformat(), b.isoformat()
+        elif mode == "accommodation" and offering is not None:
+            # A stay runs from the room type's check-in to its check-out on the
+            # days asked for, whatever clock times were sent, and keeps the
+            # owner's shortest-stay rules.
+            tz = zone(location)
+            a, b = stay_window(location, offering,
+                               parse_datetime(starts, field="starts_at").astimezone(tz).date(),
+                               parse_datetime(ends, field="ends_at").astimezone(tz).date())
+            broken = stay_rule_broken(offering, location, a, b)
+            if broken:
+                raise ValidationError(broken, details={"code": "minimum_stay"})
             starts, ends = a.isoformat(), b.isoformat()
         return mode, starts, ends
 

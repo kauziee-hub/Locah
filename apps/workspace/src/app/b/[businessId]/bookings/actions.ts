@@ -121,6 +121,20 @@ export async function addResource(_prev: FormResult, formData: FormData): Promis
     capacity: pooled ? size : 1,
     max_party_size: pooled ? null : size,
     buffer_after_minutes: num(formData.get('buffer'), 0),
+    // A room is of a room type: only stays of that type are given it.
+    ...(kindKey === 'room' && formData.get('offering_id')
+      ? { metadata: { offering_ids: [String(formData.get('offering_id'))] } } : {}),
+  })
+  if (r.ok) revalidatePath(`/b/${businessId}/bookings/resources`)
+  return asForm(r)
+}
+
+/** Which room type a room is ("" — any stay may be given it). */
+export async function setRoomType(_prev: FormResult, formData: FormData): Promise<FormResult> {
+  const businessId = String(formData.get('businessId'))
+  const offering = String(formData.get('offering_id') || '')
+  const r = await sendJson(`${api(businessId)}/bookings/resources/${String(formData.get('resourceId'))}`, 'PATCH', {
+    metadata: { offering_ids: offering ? [offering] : [] },
   })
   if (r.ok) revalidatePath(`/b/${businessId}/bookings/resources`)
   return asForm(r)

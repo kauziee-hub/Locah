@@ -20,7 +20,7 @@ from platform_core.resolvers.offering_resolver import OfferingResolver
 from platform_core.resolvers.booking_resolver import BookingResolver
 from platform_core.services.audit import AuditService
 from platform_core.services.availability import AvailabilityService
-from platform_core.services.booking_allocation import BookingAllocationService
+from platform_core.services.booking_allocation import BookingAllocationService, serves
 from platform_core.services.business import BusinessService
 from platform_core.services.consumer_activity import ConsumerActivityService
 from platform_core.services.customer_timeline import CustomerTimelineService
@@ -189,6 +189,13 @@ class BookingService:
                     details={"offering_type": offering.offering_type},
                 )
             title = title or offering.title
+            # A room the guest picked must be of the room type they booked.
+            for resource in resources:
+                if not serves(resource, offering.id):
+                    raise ValidationError(
+                        f"{resource.name} is not a {offering.title}",
+                        details={"code": "resource_not_this_offering", "resource_id": str(resource.id)},
+                    )
             if offering.price_amount is not None:
                 offering_price = float(offering.price_amount)
                 if getattr(offering, "price_type", "fixed") == "fixed" and offering.offering_type in {
@@ -354,6 +361,7 @@ class BookingService:
                 ends_at=validated["ends_at"],
                 party_size=validated["party_size"],
                 mode=validated["reservation_mode"],
+                offering_id=validated["offering_id"],
             )
             if held is not None:
                 booking.capacity = BookingAllocationService.effective_capacity([held])

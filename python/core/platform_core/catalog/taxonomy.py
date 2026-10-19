@@ -479,7 +479,8 @@ CATEGORIES: tuple[Category, ...] = (
     )),
     Category("travel_stay", "Travel, stays & tourism", "hotel", True, (
         _s("hotel", "Hotel", "hotel", STAY | _t("walk_in"), "lodge", "hotel rooms", "business hotel"),
-        _s("resort", "Resort", "hotel", STAY, "resorts", "farm stay resort"),
+        _s("resort", "Resort", "hotel", STAY, "resorts", "farm stay resort", "estate stay", "plantation stay",
+           "eco resort", "jungle resort", "nature resort"),
         _s("homestay", "Homestay", "homestay", STAY, "home stay", "bnb", "b&b", "cottage"),
         _s("hostel", "Hostel", "homestay", STAY, "backpackers hostel"),
         _s("villa_rental", "Villa rental", "homestay", STAY, "villa", "holiday home"),
@@ -1118,6 +1119,12 @@ _DOING: tuple[tuple[re.Pattern[str], str, float], ...] = (
     (re.compile(r"\b(?:builds?|building|construct\w*|develop\w*)\b[^.]{0,30}\b(?:villas?|apartments?|"
                 r"flats?|homes|houses|gated communit\w*)\b", re.I), "developer", 0.82),
     (re.compile(r"\b(?:sell|selling)\b[^.]{0,30}\b(?:plots?|layouts?)\b", re.I), "plots", 0.8),
+    # Ten rooms and more is a hotel, or a resort on an estate or in the hills —
+    # never a homestay because it also has cottages (owner lab: a 14-room
+    # Coorg coffee-estate retreat was filed and greeted as "a homestay").
+    (re.compile(r"\b[1-9]\d\s*-?\s*rooms?\b[^.]{0,80}\b(?:estates?|plantations?|coffee|tea|jungle|forest|valley|"
+                r"cottages?|villas?|pool)\b", re.I), "resort", 0.84),
+    (re.compile(r"\b[1-9]\d\s*-?\s*rooms?\b", re.I), "hotel", 0.8),
     (re.compile(r"\b(?:supply|supplies|supplying|manufactur\w*)\b[^.]{0,60}\b(?:factories|industr\w*|"
                 r"plants?|oems?|fasteners|valves|bearings|pipes|fittings)\b", re.I), "industrial_supplier", 0.8),
     # "Free after-school learning centres for children, scholarships for girls.

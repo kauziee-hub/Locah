@@ -1,7 +1,7 @@
 export type KindField = {
   key: string
   label: string
-  type: 'text' | 'long_text' | 'int' | 'money' | 'choice' | 'list' | 'bool' | 'date' | 'year'
+  type: 'text' | 'long_text' | 'int' | 'money' | 'choice' | 'list' | 'bool' | 'date' | 'year' | 'time'
   required: boolean
   choices: string[]
   unit: string | null
