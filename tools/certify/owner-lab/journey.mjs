@@ -21,6 +21,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { mintToken, newOwner, sessionCookies } from './session.mjs'
+import { bookingJourney } from './booking-journey.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const API = process.env.CERTIFY_API || 'http://localhost:8020'
@@ -124,9 +125,21 @@ const page = await ownerCtx.newPage()
 const pageErrors = []
 page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 300)))
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 300)) })
+// The business model decides the steps after the build: an order business
+// (catalogue, stock, a customer order, fulfilment) or a booking business
+// (services, hours, the people customers book, an appointment and its changes).
+const MODEL = persona.modules.includes('bookings') && !persona.modules.includes('orders') ? 'booking' : 'order'
 const from = opt('from', 'start')
-const ORDER = ['start', 'interview', 'build', 'tools', 'workspace', 'catalogue', 'stock', 'publish', 'customer', 'fulfil', 'team', 'lifecycle', 'return']
-const runs = (name) => ORDER.indexOf(name) >= ORDER.indexOf(from)
+const ORDERS = {
+  order: ['start', 'interview', 'build', 'tools', 'workspace', 'catalogue', 'stock', 'publish', 'customer', 'fulfil', 'team', 'lifecycle', 'return'],
+  booking: ['start', 'interview', 'build', 'tools', 'workspace', 'services', 'hours', 'providers', 'publish', 'book', 'conflicts',
+    'appointment', 'guest-cancel', 'team', 'lifecycle', 'return'],
+}
+const ORDER = ORDERS[MODEL]
+const to = opt('to', ORDER[ORDER.length - 1])
+if (!ORDER.includes(from) || !ORDER.includes(to)) throw new Error(`steps for a ${MODEL} business: ${ORDER.join(', ')}`)
+const runs = (name) => ORDER.includes(name) && ORDER.indexOf(name) >= ORDER.indexOf(from) && ORDER.indexOf(name) <= ORDER.indexOf(to)
+journal.model = MODEL
 
 try {
   // ------------------------------------------------------------- 1. start
@@ -148,6 +161,11 @@ try {
     s.done()
   }
   const B = journal.business_id
+  // A booking business's own steps (services, hours, providers, a guest's
+  // appointment and what happens to it): booking-journey.mjs.
+  const BK = MODEL === 'booking'
+    ? bookingJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
+    : null
 
   // --------------------------------------------------------- 2. interview
   if (runs('interview')) {
@@ -225,6 +243,8 @@ try {
     const s = step('tools: continue into the Workspace, then turn on my own set of tools')
     // An interview-built site skips "Your tools": the tools wait in the
     // Workspace ("Review later" in the confirm sheet). /done hands off.
+    // A resumed run starts on a blank page: the owner comes back to the website step.
+    if (page.url() === 'about:blank') await page.goto(`${WEB}/start/${B}/website`, { waitUntil: 'networkidle', timeout: 120000 })
     if (page.url().startsWith(WEB)) {
       if (!page.url().includes(`/start/${B}/website`)) await page.goto(`${WEB}/start/${B}/website`, { waitUntil: 'networkidle' })
       await page.getByRole('link', { name: /continue/i }).first().click()
@@ -239,9 +259,14 @@ try {
     await page.goto(`${WS}/b/${B}/modules`, { waitUntil: 'networkidle', timeout: 120000 })
     await s.shot(page, 'modules-overview', true)
     journal.modules_page_text = (await page.innerText('main').catch(() => '')).replace(/\s+/g, ' ').slice(0, 2500)
-    // This owner's own choice: catalogue, orders, fulfilment and stock (fish
-    // sells out) — not online payments, though recommended (UPI or cash at the door).
-    const chosen = [...new Set(persona.modules.concat(['inventory']))]
+    // This owner's own choice. A shop: catalogue, orders, fulfilment and stock
+    // (fish sells out) — not online payments, though recommended (UPI or cash
+    // at the door). A salon: services, bookings and payments as recommended
+    // (the bridal advance online), plus Staff & rota for the stylists people
+    // ask for by name.
+    const chosen = MODEL === 'booking'
+      ? [...new Set(persona.modules.concat(['workforce']))]
+      : [...new Set(persona.modules.concat(['inventory']))]
     journal.tools_chosen = chosen
     s.note(`recommended in the interview: ${(journal.recommended_tools || []).join(', ')}; chosen: ${chosen.join(', ')}`)
     for (const mid of chosen) {
@@ -262,7 +287,28 @@ try {
     journal.modules_active = active
     s.note(`active (API): ${active.join(', ')}`)
     for (const m of chosen) s.check(`chosen tool is active: ${m}`, active.includes(m))
-    s.check('the declined recommendation stays off: payments', !active.includes('payments'))
+    if (MODEL === 'order') {
+      s.check('the declined recommendation stays off: payments', !active.includes('payments'))
+    } else {
+      // No payment provider account exists on this stack (no Razorpay/Cashfree
+      // test keys): Payments may be on — cash and UPI at the salon work without
+      // one — but nothing may tell the owner that customers can pay online.
+      const pay = (await api('GET', `/v1/b/${B}/modules/payments/setup`)).data || {}
+      journal.payments_setup = { status: pay.status, status_label: pay.status_label, remaining: pay.remaining,
+        steps: (pay.steps || []).map((x) => `${x.done ? '✓' : '○'} ${x.label}`) }
+      s.note(`payments setup (API): ${JSON.stringify(journal.payments_setup).slice(0, 300)}`)
+      await page.goto(`${WS}/b/${B}/modules/payments`, { waitUntil: 'networkidle', timeout: 120000 })
+      const said = (await page.innerText('main')).replace(/\s+/g, ' ')
+      await s.shot(page, 'payments-tool-page', true)
+      await page.goto(`${WS}/b/${B}/payments`, { waitUntil: 'networkidle', timeout: 120000 })
+      const money = (await page.innerText('main')).replace(/\s+/g, ' ')
+      await s.shot(page, 'payments-money-page', true)
+      const online = money.slice(money.search(/online payments/i)).slice(0, 300)
+      journal.payments_state = { tool_page: said.slice(0, 400), online_payments: online }
+      s.check('the Payments money page says online payments are not switched on yet', /waiting for the payment provider|not (yet )?(connected|switched on)/i.test(online), online)
+      s.check('the Payments tool page does not promise online payment while no provider is connected',
+        !(/working — customers can use it/i.test(said) && /pay online/i.test(said)), said.slice(0, 260))
+    }
     s.done()
   }
 
@@ -280,7 +326,7 @@ try {
     s.done()
   }
   // ------------------------------------------------------- 6. catalogue
-  if (runs('catalogue')) {
+  if (MODEL === 'order' && runs('catalogue')) {
     const s = step('catalogue: bring in what I told LOCAH, check the prices, make it live, change one price')
     await page.goto(`${WS}/b/${B}/offerings`, { waitUntil: 'networkidle', timeout: 120000 })
     await s.shot(page, 'products-empty', true)
@@ -336,7 +382,7 @@ try {
     s.done()
   }
   // ------------------------------------------------------------- 7. stock
-  if (runs('stock')) {
+  if (MODEL === 'order' && runs('stock')) {
     const s = step('stock: keep stock of what sells out, record this morning\'s arrival')
     const KEEP = [/chicken curry cut/i, /^mutton/i, /seer fish/i]
     await page.goto(`${WS}/b/${B}/inventory?view=setup`, { waitUntil: 'networkidle', timeout: 120000 })
@@ -383,6 +429,11 @@ try {
     s.check('the arrival is on hand (API)', journal.stock_after_arrival.some((r) => /12\s*kg/.test(String(r.on_hand))), JSON.stringify(journal.stock_after_arrival).slice(0, 300))
     s.done()
   }
+  // ------------------------------- 6–7 (booking). services, hours, providers
+  if (BK && runs('services')) await BK.services()
+  if (BK && runs('hours')) await BK.hours()
+  if (BK && runs('providers')) await BK.providers()
+
   // ----------------------------------------------------------- 8. publish
   if (runs('publish')) {
     const s = step('publish: preview, then put the website online')
@@ -404,7 +455,7 @@ try {
     journal.public_url = `${WEB}/${biz.slug}`
     s.note(`page now says: ${(await page.innerText('main')).replace(/\s+/g, ' ').slice(0, 300)}`)
     const before = (await (await fetch(`${API}/v1/public/websites/${biz.slug}`)).json())?.data?.capabilities || {}
-    s.note(`after Publish alone, the live site can: order=${before.order} catalogue=${before.catalogue}`)
+    s.note(`after Publish alone, the live site can: order=${before.order} book=${before.book} catalogue=${before.catalogue}`)
     journal.capabilities_after_publish_only = before
     // "To go live for customers: 1. Website → Preview & publish 2. Marketplace →
     // Confirm & become discoverable" (the hand-off page).
@@ -418,7 +469,8 @@ try {
     s.note(`marketplace now: ${(await page.innerText('main')).replace(/\s+/g, ' ').slice(0, 400)}`)
     const after = (await (await fetch(`${API}/v1/public/websites/${biz.slug}`)).json())?.data?.capabilities || {}
     journal.capabilities_live = after
-    s.check('once live, the website takes orders (public capabilities)', after.order === true, JSON.stringify(after).slice(0, 200))
+    if (MODEL === 'booking') s.check('once live, the website takes bookings (public capabilities)', after.book === true, JSON.stringify(after).slice(0, 200))
+    else s.check('once live, the website takes orders (public capabilities)', after.order === true, JSON.stringify(after).slice(0, 200))
     const res = await fetch(journal.public_url)
     s.check('the public website answers', res.status === 200, `${journal.public_url} → ${res.status}`)
     const html = await res.text()
@@ -426,8 +478,17 @@ try {
     s.done()
   }
 
+  // --------------------- 9–13 (booking). the guest's appointment and after
+  if (BK && runs('book')) await BK.book()
+  if (BK && runs('conflicts')) await BK.conflicts()
+  if (BK && runs('appointment')) await BK.appointment()
+  if (BK && runs('guest-cancel')) await BK.guestCancel()
+  if (BK && runs('team')) await BK.team()
+  if (BK && runs('lifecycle')) await BK.lifecycle()
+  if (BK && runs('return')) await BK.ret(owner)
+
   // ---------------------------------------------------------- 9. customer
-  if (runs('customer')) {
+  if (MODEL === 'order' && runs('customer')) {
     const s = step('customer: a guest in another browser orders, pays at pickup')
     const guest = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     const g = await guest.newPage()
@@ -521,7 +582,7 @@ try {
     s.done()
   }
   // ------------------------------------------------------- 10. the order
-  if (runs('fulfil')) {
+  if (MODEL === 'order' && runs('fulfil')) {
     const s = step('owner: hear about the order, accept it, get it ready, hand it over, take the cash')
     const stockBefore = ((await api('GET', `/v1/platform/businesses/${B}/stock`)).data?.items || []).map((r) => `${r.title} ${r.on_hand_text}`)
     await page.goto(`${WS}/b/${B}/notifications`, { waitUntil: 'networkidle', timeout: 120000 })
@@ -598,7 +659,7 @@ try {
     s.done()
   }
   // ------------------------------------------------------------- 11. team
-  if (runs('team')) {
+  if (MODEL === 'order' && runs('team')) {
     const s = step('team: add a manager and a store keeper; each sees their work, and nothing they may not touch')
     const PEOPLE = [
       { role: 'manager', name: 'Murugan (lab manager)' },
@@ -672,7 +733,7 @@ try {
     s.done()
   }
   // -------------------------------------------------------- 12. lifecycle
-  if (runs('lifecycle')) {
+  if (MODEL === 'order' && runs('lifecycle')) {
     const s = step('lifecycle: turn Orders off and on again — the website stops selling, the records stay')
     const capabilities = async () => (await (await fetch(`${API}/v1/public/websites/${journal.slug}`)).json())?.data?.capabilities || {}
     // From a known state: Orders on (an interrupted earlier run may have left it off).
@@ -723,7 +784,7 @@ try {
   }
 
   // ----------------------------------------------------------- 13. return
-  if (runs('return')) {
+  if (MODEL === 'order' && runs('return')) {
     const s = step('return: a new session another day — find the orders, the customer and what changed')
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     await ctx.addCookies(sessionCookies({ ...owner, token: mintToken(owner) }))
