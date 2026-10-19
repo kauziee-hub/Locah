@@ -466,13 +466,24 @@ def fulfilment_modes(text: str) -> list[str]:
     return modes
 
 
+# The word an owner puts before the places — "delivery near Chromepet", "in and
+# around Adyar", "within 5 km". It belongs to the sentence, never to the place:
+# kept, "delivery near Chromepet" was read back as "delivery around Near
+# Chromepet". (Longest first; "nearby areas" names no place.)
+_AREA_LEAD = (r"(?:in and around|anywhere in|all over|close to|near(?!\s*by\b)|around|within|across|throughout"
+              r"|to|in)")
+# "home delivery in Velachery", "we do free delivery to Adyar" — the delivery
+# itself, before the places.
+_DELIVERY_SAID = (r"^\s*(?:yes[,.]?\s*)?(?:we\s+)?(?:(?:do|offer|provide|have)\s+)?(?:only\s+)?"
+                  r"(?:(?:free|home|door|doorstep)\s+)?(?:deliver|ship|send|courier|serve|cover)\w*\s*")
+
+
 def service_area(text: str) -> str:
     """ "We deliver around Nookampalayam and Perumbakkam" -> the places."""
     raw = " ".join((text or "").split())
     raw = re.sub(r"\b(?:by|through|via)\s+(?:courier|post|parcel)\w*", "", raw, flags=re.I)
-    raw = re.sub(r"^\s*(?:yes[,.]?\s*)?(?:we\s+)?(?:only\s+)?(?:deliver|ship|send|courier|serve|cover)\w*\s*", "",
-                 raw, flags=re.I)
-    raw = re.sub(r"^(?:to|in|around|within|across|all over|throughout|anywhere in)\s+", "", raw.strip(), flags=re.I)
+    raw = re.sub(_DELIVERY_SAID, "", raw, flags=re.I)
+    raw = re.sub(rf"^(?:only\s+)?{_AREA_LEAD}\s+", "", raw.strip(), flags=re.I)
     # "around X and Y, people can also pick up from the shop" — the places only.
     raw = re.split(r"[.;]\s|,\s*(?=(?:people|customers|we|they|but|though|also|and (?:people|we|they)|pick))",
                    raw, maxsplit=1, flags=re.I)[0]
@@ -489,8 +500,7 @@ def service_area(text: str) -> str:
 # delivery verb. Used for what the owner volunteers; an answer to "where do
 # you deliver?" is read whole by service_area.
 _AREA_SAID = re.compile(
-    r"\b(?:deliver\w*|ship\w*|courier\w*|serve|cover)\s+(?:only\s+)?(?:to|around|in|within|across|all over|"
-    r"throughout|anywhere in)\s+(?P<area>[^.;!?]+)", re.I)
+    rf"\b(?:deliver\w*|ship\w*|courier\w*|serve|cover)\s+(?:only\s+)?{_AREA_LEAD}\s+(?P<area>[^.;!?]+)", re.I)
 
 
 def service_area_said(text: str) -> str:
@@ -505,6 +515,24 @@ def service_area_said(text: str) -> str:
             and len(area.split()) > 6:
         return ""
     return area[:1].upper() + area[1:]
+
+
+_RADIUS = re.compile(
+    r"(?P<km>\d+(?:\.\d+)?(?:\s*(?:-|–|to)\s*\d+(?:\.\d+)?)?)\s*(?:km|kms|kilomet\w*)\b"
+    r"(?:\s*(?:radius|kulla|kulle|ulla|ulle))?(?:\s+(?:of|from|around)\s+(?P<place>.+))?", re.I)
+
+
+def area_phrase(area: str) -> str:
+    """Where delivery reaches, worded to follow "delivery": "around Chromepet and
+    Pallavaram", "within 5 km of Adyar". The owner's preposition is never kept
+    inside the place, so it is never said twice."""
+    place = re.sub(rf"^(?:only\s+)?{_AREA_LEAD}\s+", "", " ".join((area or "").split()).strip(" .,"), flags=re.I)
+    if not place:
+        return ""
+    radius = _RADIUS.fullmatch(place)
+    if radius:
+        return f"within {radius.group('km')} km" + (f" of {radius.group('place')}" if radius.group("place") else "")
+    return f"around {place}"
 
 
 _PAYMENT = (

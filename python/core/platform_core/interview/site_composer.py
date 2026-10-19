@@ -30,6 +30,7 @@ from dataclasses import replace
 from typing import Any
 
 from platform_core.interview import motion_director, site_critic, site_pages
+from platform_core.interview import reader as rd
 from platform_core.interview.creative_director import CreativeDirection
 from platform_core.interview.catalogue_capture import item_traits
 from platform_core.interview.design_dna import DesignDna, choose_dna
@@ -279,9 +280,14 @@ def ordering_facts(bp: BusinessBlueprint, business_type: str | None) -> list[dic
 
 def _area(text: str) -> str:
     """ "All over Tamil Nadu by courier." -> "Tamil Nadu"; "around X and Y" -> "X and Y"."""
-    raw = re.sub(r"\b(?:by|through|via)\s+(?:courier|post|parcel)\w*", "", text, flags=re.I)
-    raw = re.sub(r"^\s*(?:we\s+)?(?:deliver|ship|send|courier)\w*\s+", "", raw.strip(), flags=re.I)
-    raw = re.sub(r"^(?:all over|across|anywhere in|throughout|around|in|to|within)\s+", "", raw.strip(), flags=re.I)
+    # A whole sentence ("We sell fish, home delivery in Velachery and Guindy"):
+    # the places named after the delivery verb.
+    raw = re.sub(r"\b(?:by|through|via)\s+(?:courier|post|parcel)\w*", "", rd.service_area_said(text) or text,
+                 flags=re.I)
+    raw = re.sub(r"^\s*(?:we\s+)?(?:(?:free|home|door|doorstep)\s+)?(?:deliver|ship|send|courier)\w*\s+", "",
+                 raw.strip(), flags=re.I)
+    raw = re.sub(r"^(?:in and around|all over|across|anywhere in|throughout|close to|around|near(?!\s*by\b)|in|to"
+                 r"|within)\s+", "", raw.strip(), flags=re.I)
     raw = raw.strip(" .,")
     # "3 km kulla" (Tamil: within 3 km) / "within 5 km" — a radius, not a place.
     radius = re.search(r"(\d+(?:\.\d+)?)\s*(?:km|kms|kilomet\w*)\b(?:\s*(?:kulla|kulle|ulla|ulle|radius))?",

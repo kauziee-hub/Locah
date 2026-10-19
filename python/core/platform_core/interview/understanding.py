@@ -28,6 +28,7 @@ from typing import Any
 from platform_core.interview.models import BusinessBlueprint, TargetState
 from platform_core.interview.reader import (
     ACTION_LABELS,
+    area_phrase,
     canonical_actions,
     fulfilment_modes,
     location_text,
@@ -36,6 +37,7 @@ from platform_core.interview.reader import (
     payment_methods,
     phone_number,
     service_area,
+    service_area_said,
     units,
 )
 from platform_core.interview.taxonomy import catalogue_lines
@@ -123,7 +125,10 @@ def delivery_area(bp: BusinessBlueprint) -> str:
     s = _state(bp, "fulfilment.area")
     if s.status != "answered":
         return ""
-    return str(service_area(s.quote) or service_area(s.summary))
+    # The quote can be a whole sentence ("We sell chicken, mutton and fish, we
+    # deliver within 5 km of Adyar"): the places named after the delivery verb
+    # first, then the reply read whole as the answer.
+    return str(service_area_said(s.quote) or service_area(s.quote) or service_area(s.summary))
 
 
 def payments(bp: BusinessBlueprint) -> list[str]:
@@ -203,7 +208,7 @@ def buying(bp: BusinessBlueprint) -> list[dict[str, str]]:
     modes = fulfilment(bp)
     area = delivery_area(bp)
     if "delivery" in modes or "shipping" in modes:
-        where = f" around {area}" if area and "delivery" in modes and "shipping" not in modes else \
+        where = f" {area_phrase(area)}" if area and "delivery" in modes and "shipping" not in modes else \
             f" — {area}" if area else ""
         label = "Delivery" if "shipping" not in modes else "Delivery and shipping"
         rows.append({"kind": "delivery", "text": f"{label}{where}"})
@@ -407,9 +412,9 @@ def read_back(bp: BusinessBlueprint, stage: str = "first") -> str:
     elif does:
         tail.append(f"where people {does}")
     if "delivery" in modes and "pickup" not in modes:
-        tail.append(f"with delivery around {area}" if area else "with delivery as part of the service")
+        tail.append(f"with delivery {area_phrase(area)}" if area else "with delivery as part of the service")
     elif "delivery" in modes and "pickup" in modes:
-        tail.append(f"delivering around {area} or ready for pickup" if area else "with delivery or pickup")
+        tail.append(f"delivering {area_phrase(area)} or ready for pickup" if area else "with delivery or pickup")
     elif "pickup" in modes and "delivery" not in modes:
         tail.append("collected from you")
     elif "shipping" in modes:

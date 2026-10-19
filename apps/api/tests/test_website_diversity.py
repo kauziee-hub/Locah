@@ -10,18 +10,57 @@ asserts randomness: every expectation follows from what the owner said.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from collections import Counter
 from typing import Any
 
 import pytest
 
 from platform_core.interview.experience import COVER_AFFINITY
-from platform_testing.website_fixtures import SiteFixture, build_all, distinctness
+from platform_testing import interview_eval
+from platform_testing.website_fixtures import FIXTURE_PERSONAS, SiteFixture, build, distinctness
+
+_SEEDS = uuid.uuid5(uuid.NAMESPACE_URL, "https://locah.test/tests/website-diversity")
+
+
+def _build_all() -> list[SiteFixture]:
+    """Every fixture business, each with its own fixed business id.
+
+    Every design draw (concept, cover, palette) is seeded by the business id.
+    The eval gives each persona a fresh uuid4, so each run judged a different
+    random sample: about 1 build in 50 put 10-11 of the 23 on one cover and
+    failed the spread check below (BUGS.md B16 — "stage" x 11 in one full
+    run, passing alone and in the next). A business keeps its id for life, so
+    one fixed id per persona is the honest fixture: the same build in every
+    run, alone or after any other test.
+    """
+
+    async def run() -> list[SiteFixture]:
+        built: list[SiteFixture] = []
+        with pytest.MonkeyPatch.context() as mp:
+            for persona in FIXTURE_PERSONAS:
+                fixed = uuid.uuid5(_SEEDS, persona.key)
+                mp.setattr(interview_eval, "uuid4", lambda fixed=fixed: fixed)
+                built.append(await build(persona, images=True))
+        return built
+
+    return asyncio.run(run())
 
 
 @pytest.fixture(scope="module")
 def sites() -> dict[str, SiteFixture]:
-    return {f.key: f for f in asyncio.run(build_all(images=True))}
+    return {f.key: f for f in _build_all()}
+
+
+def test_the_fixture_build_is_the_same_every_time() -> None:
+    # B16's cause: the build changed run to run. Two builds, the same sites.
+    def heroes(fixtures: list[SiteFixture]) -> dict[str, tuple[str, str]]:
+        return {f.key: (f.payload["theme_hints"]["dna"]["concept"], _hero(f)["layout_variant"]) for f in fixtures}
+
+    first, second = _build_all(), _build_all()
+    assert heroes(first) == heroes(second)
+    assert [f.signature for f in first] == [f.signature for f in second]
+    assert len({f.bp.business_id for f in first}) == len(first)  # still one business each
 
 
 def _sections(f: SiteFixture) -> list[dict[str, Any]]:

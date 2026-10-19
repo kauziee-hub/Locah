@@ -1115,8 +1115,13 @@ def _read_for_question(
         if sentence in text:
             fact("description", sentence[:400])
         answer("business.identity", sentence[:240], evidence=sentence)
-        # "…a South Indian restaurant in Anna Nagar." — a capitalised place after "in".
-        placed = re.search(r"\b(?:in|at|near)\s+([A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3})", " ".join(sentences[:2]))
+        # "…a South Indian restaurant in Anna Nagar." — a capitalised place after
+        # "in", but not where it delivers: "home delivery in Velachery" once
+        # made a Chromepet shop "a meat shop in Velachery".
+        opening = " ".join(sentences[:2])
+        placed = next((m for m in re.finditer(r"\b(?:in|at|near)\s+([A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,3})", opening)
+                       if not re.search(r"\b(?:deliver\w*|ship\w*|courier\w*|serve|cover)\b[^.,;]{0,20}$",
+                                        opening[:m.start()], re.I)), None)
         # …or in Tanglish, "Anna Nagar la".
         place = rd.location_text(placed.group(1)) if placed else rd.place_ta(" ".join(sentences[:2]))
         if place and place in text and not _answered(ti, "contact.location"):
