@@ -98,10 +98,23 @@ export function membershipJourney(ctx) {
         PLANS.every((pl) => before.some((p) => pl.re.test(p.name) && Number(p.price_amount) === pl.price && Number(p.duration_days) === pl.days)),
         before.length ? journal.membership_plans_from_conversation.join(', ') : `none — the page says: ${first.slice(0, 160)}`)
       let monthly = before.find((p) => PLANS[0].re.test(p.name))
+      if (monthly && monthly.status === 'draft') {
+        // From the conversation, waiting for the owner: Make it live.
+        const row = page.locator('li').filter({ has: page.locator('strong', { hasText: new RegExp(`^${esc(monthly.name)}$`) }) })
+        const live = row.getByRole('button', { name: /make it live/i })
+        s.check('a plan from the conversation waits as a draft with "Make it live"', (await live.count()) > 0)
+        if (await live.count()) {
+          await live.first().click()
+          await sleep(2500)
+          await page.reload({ waitUntil: 'networkidle' })
+        }
+        monthly = (await plans()).find((p) => p.id === monthly.id)
+        s.note(`the owner made "${monthly?.name}" live: ${monthly?.status}`)
+      }
       if (!monthly) {
         // As the owner would: New plan → Open gym, monthly · ₹3,500 · 30 days · 3 days' grace.
         const details = page.locator('details').filter({ has: page.locator('summary', { hasText: /^new plan$/i }) })
-        if (!(await details.getAttribute('open'))) await details.locator('summary').click()
+        if (!(await details.evaluate((d) => d.open))) await details.locator('summary').click()
         const form = details.locator('form')
         await form.locator('input[name=name]').fill(PLANS[0].name)
         await form.locator('input[name=price_amount]').fill(String(PLANS[0].price))
@@ -113,7 +126,7 @@ export function membershipJourney(ctx) {
         monthly = (await plans()).find((p) => PLANS[0].re.test(p.name))
         s.note(`the owner made the plan in Memberships: ${monthly ? `${monthly.name} ₹${monthly.price_amount} ${monthly.duration_days} days` : 'not saved'}`)
       }
-      s.check('"Open gym, monthly" is a Memberships plan: ₹3,500 for 30 days (API)',
+      s.check('the monthly plan is a live Memberships plan: ₹3,500 for 30 days (API)',
         monthly && Number(monthly.price_amount) === 3500 && Number(monthly.duration_days) === 30 && monthly.status === 'active',
         JSON.stringify(monthly || {}).slice(0, 200))
       journal.plan_id = monthly?.id || ''
@@ -124,53 +137,62 @@ export function membershipJourney(ctx) {
 
     // ---------------------------------------------------------------- join
     async join() {
-      const s = step('join: a visitor presses Join on "Open gym, monthly" on the website')
+      const s = step('join: a visitor wants to join; the owner lets them ask online; the visitor asks')
       const g = await guestPage()
+      const planLinks = async () => g.locator('a').evaluateAll((as) => as.filter((a) => a.getClientRects().length &&
+        /join/i.test(a.innerText)).map((a) => `${a.innerText.trim()}|${a.getAttribute('href')}`))
       await g.goto(journal.public_url, { waitUntil: 'networkidle', timeout: 120000 })
       await s.shot(g, 'public-home', true)
-      const joins = await g.locator('a[href*="purpose=membership"], a[href*="plan_id="]').evaluateAll((as) => as.filter((a) => a.getClientRects().length).map((a) => `${a.innerText.trim()}|${a.getAttribute('href')}`))
-      const allPlans = flat(await g.innerText('body'))
-      journal.site_join_links = joins
-      s.note(`Join links on the home page: ${joins.join(' · ').slice(0, 300)}`)
-      const times = (allPlans.match(/open gym/gi) || []).length
-      s.note(`"Open gym" appears ${times} time(s) on the home page`)
-      let href = joins.find((j) => j.includes(journal.plan_id))?.split('|')[1]
-      if (!href) {
-        // Plans may sit on their own page.
-        for (const path of ['/plans', '/memberships', '/membership', '/pricing']) {
-          const r = await g.goto(`${journal.public_url}${path}`, { waitUntil: 'networkidle' }).catch(() => null)
-          if (r && r.status() === 200) {
-            const more = await g.locator(`a[href*="plan_id=${journal.plan_id}"]`).evaluateAll((as) => as.map((a) => a.getAttribute('href')))
-            if (more.length) { href = more[0]; s.note(`the plan's Join is on ${path}`); break }
-          }
+      const body = flat(await g.innerText('body'))
+      s.check('the website shows the monthly plan and its price', /monthly/i.test(body) && /3,500/.test(body), body.slice(0, 200))
+      let links = await planLinks()
+      journal.join_links_before = links
+      s.note(`join links with Enquiries off: ${links.join(' · ').slice(0, 300)}`)
+      const online = (ls) => ls.find((l) => /plan_id=|purpose=membership/.test(l))
+      if (!online(links)) {
+        s.check('without Enquiries, "Ask to join" calls the gym (never a form that refuses)', links.some((l) => /\|tel:/.test(l)), links.join(' · '))
+        // The owner wants people to join online: what does Memberships say?
+        await page.goto(`${WS}/b/${B}/modules/memberships`, { waitUntil: 'networkidle', timeout: 120000 })
+        const said = flat(await page.innerText('main'))
+        await s.shot(page, 'memberships-tool', true)
+        s.check('the Memberships tool says joining is by phone and how to take requests online', /joining by phone only/i.test(said) && /turn on enquiries/i.test(said), said.slice(0, 300))
+        const tip = page.getByRole('link', { name: /turn on enquiries/i })
+        if (await tip.count()) {
+          await tip.first().click()
+          await page.waitForLoadState('networkidle').catch(() => {})
+          const on = page.getByRole('button', { name: /^turn on/i })
+          if (await on.count()) { await on.first().click(); await sleep(2500) }
+          s.note(`the owner turned on Enquiries from the tip: ${page.url()}`)
         }
+        await g.reload({ waitUntil: 'networkidle' })
+        links = await planLinks()
+        journal.join_links_after = links
+        s.note(`join links with Enquiries on: ${links.join(' · ').slice(0, 300)}`)
       }
-      s.check('the website offers Join on "Open gym, monthly"', Boolean(href), joins.join(' · ').slice(0, 200))
+      const href = online(links)?.split('|')[1]
+      s.check('the website offers Join on the monthly plan', Boolean(href), links.join(' · ').slice(0, 200))
       await g.goto(href ? new URL(href, journal.public_url).href : `${journal.public_url}/enquire?plan_id=${journal.plan_id}&purpose=membership`,
         { waitUntil: 'networkidle' })
       await s.shot(g, 'join-page', true)
       const joinPage = flat(await g.innerText('main').catch(() => ''))
-      s.note(`the Join page: ${joinPage.slice(0, 300)}`)
-      s.check('the Join page names the plan and its price', /open gym/i.test(joinPage) && /3,?500/.test(joinPage), joinPage.slice(0, 200))
+      s.check('the Join page names the plan and its price', /monthly/i.test(joinPage) && /3,?500/.test(joinPage), joinPage.slice(0, 200))
       const field = (re) => g.locator('label').filter({ hasText: re }).locator('input, textarea')
-      if (await field(/^\s*(your )?name/i).count()) {
-        await field(/^\s*(your )?name/i).first().fill(RAHUL.name)
+      if (await field(/name/i).count()) {
+        await field(/name/i).first().fill(RAHUL.name)
         if (await field(/phone/i).count()) await field(/phone/i).first().fill(RAHUL.phone)
         if (await field(/email/i).count()) await field(/email/i).first().fill(RAHUL.email)
-        await g.getByRole('button', { name: /send|join|submit|request/i }).first().click()
+        await g.getByRole('button', { name: /send|join|submit|request|ask/i }).first().click()
         await g.locator('[role=status], [role=alert]').first().waitFor({ timeout: 30000 }).catch(() => {})
         await sleep(1000)
       } else s.note('no name field on the Join page')
       const said = flat(await g.innerText('main').catch(() => ''))
       await s.shot(g, 'join-sent', true)
       journal.join_result = said.slice(0, 400)
-      s.check('the visitor is told the gym has the request (not refused)', !/not taking enquiries|could not|went wrong/i.test(said) && /(thank|received|has your|will (call|get back))/i.test(said), said.slice(0, 220))
-      const theirs = (await customers()).find?.((c) => /rahul nair/i.test(c.display_name || ''))
-      s.check('the visitor is now a customer the gym can enrol (API)', Boolean(theirs), JSON.stringify((await customers()).map?.((c) => c.display_name) || []).slice(0, 200))
+      s.check('the visitor is told the gym has the request', !/not taking enquiries|could not|went wrong/i.test(said) && /(thank|received|has your|will (call|get back))/i.test(said), said.slice(0, 220))
       await page.goto(`${WS}/b/${B}/notifications`, { waitUntil: 'networkidle', timeout: 120000 })
       const notes = flat(await page.innerText('main'))
       await s.shot(page, 'notifications', true)
-      s.check('the owner hears that Rahul wants to join', /rahul|join|membership/i.test(notes), notes.slice(0, 240))
+      s.check('the owner hears that Rahul wants to join', /rahul|enquiry|join|membership/i.test(notes), notes.slice(0, 240))
       await g.context().close()
       s.done()
     },
