@@ -288,3 +288,19 @@ def test_bookings_working_without_hours_says_customers_cannot_pick_a_time(monkey
     client.patch(f"/v1/platform/businesses/{bid}/locations/{loc}", headers=owner,
                  json={"hours": {"mon": [["10:00", "19:00"]]}})
     assert _setup(owner, bid, "bookings")["tips"] == []
+
+
+@needs_db
+def test_payments_without_a_provider_says_it_works_at_the_business_only(monkeypatch: Any) -> None:
+    # Owner lab (salon): Payments read "Working — customers can use it" over
+    # "Pay online…" with no payment provider connected.
+    owner, bid = _business(monkeypatch, "beauty", "salon")
+    client.post(f"/v1/b/{bid}/modules/payments/enable", headers=owner)
+    s = _setup(owner, bid, "payments")
+    assert s["status"] == "ready"  # paying at the business works without a provider
+    assert s["status_label"] == "Working — payments at your place only"
+    assert "not connected" in s["ready_note"]
+    assert not any("online" in c.lower() for c in s["customer_can"])
+    assert any(t["label"] == "Connect online payments" for t in s["tips"])
+    # Other tools keep the plain words.
+    assert _setup(owner, bid, "leads")["ready_note"] is None

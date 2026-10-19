@@ -18,6 +18,8 @@ type Setup = {
   staff_can: string[]
   status: 'not_enabled' | 'deactivated' | 'restricted' | 'waiting' | 'setup_required' | 'partial' | 'ready' | 'unavailable'
   status_label: string
+  /** What "working" means right now when narrower than the plain words. */
+  ready_note?: string | null
   enabled: boolean
   included: boolean
   steps: Step[]
@@ -106,7 +108,7 @@ export default async function ModuleSetupPage({
           ) : null}
         </div>
         {s.status === 'ready' ? (
-          <p className="bos-hint">Working — customers can use it{s.website.length ? ` (${s.website.join(', ')})` : ''}.</p>
+          <p className="bos-hint">{s.ready_note ?? `Working — customers can use it${s.website.length ? ` (${s.website.join(', ')})` : ''}.`}</p>
         ) : s.status === 'restricted' ? (
           <p className="bos-hint">Your records are kept. It works again once your plan includes it.</p>
         ) : s.status === 'deactivated' ? (

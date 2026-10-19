@@ -95,14 +95,32 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
         tips.append({"text": "No opening hours are saved, so customers type the time they want and you check it. "
                              "Save your hours and they pick from times that are really free.",
                      "label": "Set opening hours", "href": "/locations"})
+    customer_can = list(info.customer_can)
+    status_label = STATUS_WORDS[status]
+    ready_note = None
+    if module_id == "payments" and not await _online_payments_active(session, business_id):
+        # Paying at the business works without a provider; paying online does
+        # not. "Working — customers can use it" over "Pay online" read as if
+        # online payment were live with no provider connected (owner lab, salon).
+        customer_can = ["Pay at your place or on delivery — you record it"]
+        if status == "ready":
+            status_label = "Working — payments at your place only"
+            ready_note = ("Customers pay at your place or on delivery, and you record it here. "
+                          "Online payments are not connected yet.")
+        tips.append({"text": "Online payments are not connected, so nobody is asked to pay online. "
+                             "Connect your Razorpay account to take payments on the website.",
+                     "label": "Connect online payments", "href": "/payments"})
     return {
         "module": module_id,
         "label": info.label,
         "does": info.does,
-        "customer_can": list(info.customer_can),
+        "customer_can": customer_can,
         "staff_can": list(info.staff_can),
         "status": status,
-        "status_label": STATUS_WORDS[status],
+        "status_label": status_label,
+        # What "working" means for this tool right now, when it is narrower than
+        # "customers can use it" (None: the plain words fit).
+        "ready_note": ready_note,
         "enabled": bool(row.get("enabled")),
         "included": bool(row.get("entitled")),
         "steps": steps,
@@ -116,6 +134,17 @@ async def setup(session: AsyncSession, business_id: uuid.UUID, module_id: str) -
         "home": HOMES.get(module_id),
         "tips": tips,
     }
+
+
+async def _online_payments_active(session: AsyncSession, business_id: uuid.UUID) -> bool:
+    """A verified payment provider account (Razorpay) the business connected."""
+    from sqlalchemy import select
+
+    from platform_core.models import MerchantConnection
+
+    rows = (await session.execute(select(MerchantConnection.status).where(
+        MerchantConnection.business_id == business_id))).scalars().all()
+    return "active" in rows
 
 
 async def _hours_saved(session: AsyncSession, business_id: uuid.UUID) -> bool:
