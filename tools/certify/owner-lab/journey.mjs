@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { mintToken, newOwner, sessionCookies } from './session.mjs'
 import { bookingJourney } from './booking-journey.mjs'
+import { stayJourney } from './stay-journey.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const API = process.env.CERTIFY_API || 'http://localhost:8020'
@@ -128,12 +129,16 @@ page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().s
 // The business model decides the steps after the build: an order business
 // (catalogue, stock, a customer order, fulfilment) or a booking business
 // (services, hours, the people customers book, an appointment and its changes).
-const MODEL = persona.modules.includes('bookings') && !persona.modules.includes('orders') ? 'booking' : 'order'
+// A hotel books nights in rooms of a room type (stay-journey.mjs).
+const MODEL = persona.kind === 'hotel' ? 'stay'
+  : persona.modules.includes('bookings') && !persona.modules.includes('orders') ? 'booking' : 'order'
 const from = opt('from', 'start')
 const ORDERS = {
   order: ['start', 'interview', 'build', 'tools', 'workspace', 'catalogue', 'stock', 'publish', 'customer', 'fulfil', 'team', 'lifecycle', 'return'],
   booking: ['start', 'interview', 'build', 'tools', 'workspace', 'services', 'hours', 'providers', 'publish', 'book', 'conflicts',
     'appointment', 'guest-cancel', 'team', 'lifecycle', 'return'],
+  stay: ['start', 'interview', 'build', 'tools', 'workspace', 'rooms', 'roomlist', 'publish', 'stay', 'overlap', 'arrival',
+    'guest-cancel', 'return'],
 }
 const ORDER = ORDERS[MODEL]
 const to = opt('to', ORDER[ORDER.length - 1])
@@ -165,6 +170,9 @@ try {
   // appointment and what happens to it): booking-journey.mjs.
   const BK = MODEL === 'booking'
     ? bookingJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
+    : null
+  const ST = MODEL === 'stay'
+    ? stayJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
     : null
 
   // --------------------------------------------------------- 2. interview
@@ -264,7 +272,8 @@ try {
     // at the door). A salon: services, bookings and payments as recommended
     // (the bridal advance online), plus Staff & rota for the stylists people
     // ask for by name.
-    const chosen = MODEL === 'booking'
+    const chosen = MODEL === 'stay' ? [...persona.modules]
+      : MODEL === 'booking'
       ? [...new Set(persona.modules.concat(['workforce']))]
       : [...new Set(persona.modules.concat(['inventory']))]
     journal.tools_chosen = chosen
@@ -433,6 +442,8 @@ try {
   if (BK && runs('services')) await BK.services()
   if (BK && runs('hours')) await BK.hours()
   if (BK && runs('providers')) await BK.providers()
+  if (ST && runs('rooms')) await ST.rooms()
+  if (ST && runs('roomlist')) await ST.roomlist()
 
   // ----------------------------------------------------------- 8. publish
   if (runs('publish')) {
@@ -469,7 +480,7 @@ try {
     s.note(`marketplace now: ${(await page.innerText('main')).replace(/\s+/g, ' ').slice(0, 400)}`)
     const after = (await (await fetch(`${API}/v1/public/websites/${biz.slug}`)).json())?.data?.capabilities || {}
     journal.capabilities_live = after
-    if (MODEL === 'booking') s.check('once live, the website takes bookings (public capabilities)', after.book === true, JSON.stringify(after).slice(0, 200))
+    if (MODEL !== 'order') s.check('once live, the website takes bookings (public capabilities)', after.book === true, JSON.stringify(after).slice(0, 200))
     else s.check('once live, the website takes orders (public capabilities)', after.order === true, JSON.stringify(after).slice(0, 200))
     const res = await fetch(journal.public_url)
     s.check('the public website answers', res.status === 200, `${journal.public_url} → ${res.status}`)
@@ -486,6 +497,11 @@ try {
   if (BK && runs('team')) await BK.team()
   if (BK && runs('lifecycle')) await BK.lifecycle()
   if (BK && runs('return')) await BK.ret(owner)
+  if (ST && runs('stay')) await ST.stay()
+  if (ST && runs('overlap')) await ST.overlap()
+  if (ST && runs('arrival')) await ST.arrival()
+  if (ST && runs('guest-cancel')) await ST.guestCancel()
+  if (ST && runs('return')) await ST.ret(owner)
 
   // ---------------------------------------------------------- 9. customer
   if (MODEL === 'order' && runs('customer')) {
