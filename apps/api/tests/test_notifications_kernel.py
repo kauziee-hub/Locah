@@ -457,3 +457,20 @@ def test_a_booking_notification_says_which_booking_and_when() -> None:
     for event in ("booking.created", "booking.cancelled"):
         assert _body(NOTIFICATION_RULES[event], payload) == "BKG-21715ABE · Women's haircut · Wed 21 Oct, 4:00 pm"
     assert _body(NOTIFICATION_RULES["booking.created"], {"starts_at": "not a time"}) is None
+
+
+def test_a_website_enquiry_tells_the_owner_who_and_what_about() -> None:
+    # Owner lab (gym): a join request reached Enquiries and nobody was told.
+    import asyncio
+    import uuid as _uuid
+
+    from platform_core.services.notification_dispatch import NOTIFICATION_RULES, NotificationDispatcher, _body
+
+    payload = {"lead_id": str(_uuid.uuid4()), "after": {
+        "display_name": "Rahul Nair", "source": "website_enquiry",
+        "origin_context": {"purpose_label": "Membership enquiry", "plan_title": "Monthly"}}}
+    assert _body(NOTIFICATION_RULES["lead.created"], payload) == "Rahul Nair · Membership enquiry · Monthly"
+    # A lead the team typed in themselves tells nobody.
+    typed = {**payload, "after": {**payload["after"], "source": "manual"}}
+    assert asyncio.run(NotificationDispatcher.dispatch(
+        None, event_type="lead.created", payload=typed, business_id=_uuid.uuid4(), correlation_id=None)) == 0  # type: ignore[arg-type]

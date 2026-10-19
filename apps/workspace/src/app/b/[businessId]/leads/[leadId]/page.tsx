@@ -22,6 +22,9 @@ type LeadDetail = {
   source: string
   lost_reason: string | null
   customer_contact_id: string | null
+  /** What brought them: the kind of request and the item or plan it was about. */
+  origin_context?: { purpose_label?: string; offering_title?: string; offering_kind?: string; plan_title?: string
+    preferred_date?: string }
   status_history: Array<{ from_status: string | null; to_status: string; created_at: string }>
   notes: Array<{ id: string; body: string; created_at: string }>
 }
@@ -76,6 +79,13 @@ export default async function LeadDetailPage({
           </span>
         )],
         ['Came from', SOURCE_WORDS[lead.source] ?? lead.source],
+        // "Membership enquiry · Monthly", "Quote request · 3BHK residence": what
+        // they asked about, so the reply starts from it (owner lab: a gym's
+        // join request showed only "Website").
+        ...(lead.origin_context?.purpose_label || lead.origin_context?.plan_title || lead.origin_context?.offering_title
+          ? ([['Asked about', [lead.origin_context.purpose_label, lead.origin_context.plan_title ?? lead.origin_context.offering_title,
+              lead.origin_context.preferred_date ? `for ${dayTimeLabel(lead.origin_context.preferred_date)}` : '']
+              .filter(Boolean).join(' · ')]] as [string, string][]) : []),
         ...(lead.lost_reason ? ([['Lost because', lead.lost_reason]] as [string, string][]) : []),
       ]}
     >

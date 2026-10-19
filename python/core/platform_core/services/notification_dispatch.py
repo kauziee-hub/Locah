@@ -43,6 +43,9 @@ class NotificationRule:
     resource_id_key: str | None = None
     location_id_key: str | None = None
     body_keys: tuple[str, ...] = field(default_factory=tuple)
+    # Only when the event's value at this key is one of these (e.g. a lead that
+    # came from outside the business, not one the team typed in).
+    only_if: tuple[str, tuple[str, ...]] | None = None
 
 
 # Doc 11 §17.7 Stage 7 scope: the launch set of notification-worthy events.
@@ -114,6 +117,18 @@ NOTIFICATION_RULES: dict[str, NotificationRule] = {
         body_keys=("booking_number", "after.title", "starts_at"),
     ),
     # --- Leads ----------------------------------------------------------
+    # A visitor asked on the website, Marketplace or WhatsApp (owner lab, gym:
+    # a join request reached Enquiries and nobody was told).
+    "lead.created": NotificationRule(
+        notification_type="lead.created",
+        title="New enquiry",
+        required_permission=perm.LEADS_READ,
+        resource_type="lead",
+        resource_id_key="lead_id",
+        body_keys=("after.display_name", "after.origin_context.purpose_label", "after.origin_context.plan_title",
+                   "after.origin_context.offering_title"),
+        only_if=("after.source", ("website_enquiry", "marketplace", "whatsapp")),
+    ),
     "lead.assigned": NotificationRule(
         notification_type="lead.assigned",
         title="A lead was assigned to you",
@@ -279,6 +294,8 @@ class NotificationDispatcher:
         """Create notifications for one published event. Returns the count."""
         rule = NOTIFICATION_RULES.get(event_type)
         if rule is None or business_id is None:
+            return 0
+        if rule.only_if is not None and _dig(payload, rule.only_if[0]) not in rule.only_if[1]:
             return 0
 
         resource_id = (
