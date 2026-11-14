@@ -213,6 +213,98 @@ async def patch_theme_navigation(
     }
 
 
+class AssistantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=1, max_length=600)
+    # The page the owner is looking at; the home page when not given.
+    page_id: UUID | None = None
+
+
+@router.get("/{business_id}/website/style-options")
+async def website_style_options(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_READ)),
+) -> dict[str, Any]:
+    """What an owner may personalise — fonts, sizes, corners — from the one registry."""
+    from platform_core.website.owner_style import style_options
+
+    return {"data": style_options(), "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+@router.post("/{business_id}/website/assistant")
+async def website_assistant(
+    business_id: UUID,
+    body: AssistantRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_EDIT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """The owner says what to change ("make the headings bigger", "move the
+    menu above our story"); the same governed edits the editor makes are
+    applied to the draft, and the reply says what was and was not done."""
+    from platform_core.services.website_assistant import WebsiteAssistantService
+
+    result = await WebsiteAssistantService.ask(
+        session, business_id=business_id, actor_id=actor.request.identity_id,
+        message=body.message, page_id=body.page_id,
+    )
+    await session.commit()
+    jobs: list[dict[str, Any]] = []
+    for section_id in result.pop("rewrite_section_ids", []):
+        try:
+            rewritten = await _regenerate(
+                business_id, actor, session,
+                section_id=UUID(section_id) if section_id else None,
+                page_id=None if section_id else UUID(result["page_id"]))
+            jobs.append(rewritten["data"])
+        except Exception:  # noqa: BLE001 — the other changes stand
+            result["not_done"].append("LOCAH could not start writing that again just now.")
+            result["reply"] = result["reply"].replace(
+                "LOCAH is writing that again — it takes about a minute.",
+                "LOCAH could not start writing that again just now.")
+    result["jobs"] = jobs
+    return {"data": result, "meta": {"correlation_id": actor.request.correlation_id}}
+
+
+class ReferenceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # A screenshot of a design the owner likes, base64 (6 MB decoded at most).
+    image_base64: str | None = Field(default=None, max_length=8_500_000)
+    mime_type: str = Field(default="image/jpeg", max_length=40)
+    undo: bool = False
+
+
+@router.post("/{business_id}/website/reference-style")
+async def website_reference_style(
+    business_id: UUID,
+    body: ReferenceRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_EDIT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """"Make it look like this": the picture's palette, lettering, corners and
+    scale are laid over the draft; its layout, pictures and words are not taken."""
+    import base64
+    import binascii
+
+    from platform_core.exceptions import ValidationError
+    from platform_core.services.website_assistant import WebsiteReferenceService
+
+    if body.undo:
+        result = await WebsiteReferenceService.undo(
+            session, business_id=business_id, actor_id=actor.request.identity_id)
+    else:
+        try:
+            image = base64.b64decode(body.image_base64 or "", validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValidationError("That picture could not be read") from exc
+        result = await WebsiteReferenceService.match(
+            session, business_id=business_id, actor_id=actor.request.identity_id,
+            image=image, mime_type=body.mime_type.lower())
+    await session.commit()
+    return {"data": result, "meta": {"correlation_id": actor.request.correlation_id}}
+
+
 @router.get("/{business_id}/website/preview-token")
 async def get_preview_token(
     business_id: UUID,

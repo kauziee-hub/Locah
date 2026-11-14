@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.entitlements.module_registry import ModuleRegistry
@@ -596,6 +597,22 @@ async def _sync_business(session: AsyncSession, business: Business, bp: Business
             meta = dict(business.metadata_ or {})
             meta["classification"] = wanted
             business.metadata_ = meta
+
+
+async def _photos_on_other_sites(session: AsyncSession, business_id: UUID) -> set[str]:
+    """Stock photographs other businesses already use ("provider:photo_id").
+
+    A site's pictures are its own: the search never offers the judge a
+    photograph another LOCAH business shows. Read before the provider calls,
+    so no transaction is held across them; the newest 20,000 are plenty to
+    keep neighbours apart."""
+    rows = (await session.execute(sql_text(
+        "SELECT DISTINCT provenance->>'provider', provenance->>'photo_id' FROM ("
+        "  SELECT provenance FROM media_assets WHERE business_id <> CAST(:b AS uuid) AND deleted_at IS NULL"
+        "  AND source_type = 'stock_photo' AND provenance->>'photo_id' IS NOT NULL"
+        "  ORDER BY created_at DESC LIMIT 20000) recent"), {"b": str(business_id)})).all()
+    await session.commit()
+    return {f"{provider}:{photo_id}" for provider, photo_id in rows if provider and photo_id}
 
 
 async def _queue_logo(
@@ -1196,11 +1213,35 @@ class BusinessInterviewService:
                         section_type_id=section_type, content=new[section_type]["content"],
                         layout_variant=new[section_type].get("layout_variant"), position=1)
         if "story" in kinds:
+            # A site also tells its story as the home page's statement (site_pages):
+            # the owner's own sentence, set large. It follows the story like the
+            # About section does. (Found 2026-11-13: on a site whose story lived
+            # in a statement, "that's your story on the website now" was said and
+            # nothing on the website had changed.)
+            fresh_home = next((p for p in fresh["pages"] if p.get("slug") == "home"), None) or {}
+            fresh_statement = next((s for s in fresh_home.get("sections") or []
+                                    if s["section_type_id"] == "statement"), None)
+            home_statements = [s for slug, s in placed.get("statement", []) if slug == str(page.get("slug"))]
             if "story:reset" in done:
                 # The story is taken off wherever it is told: its page and the
                 # home page's teaser of it.
                 for section in [s for _, s in placed.get("about", [])] + teasers():
                     await patch_one(section, {"is_visible": False})
+                if fresh_statement is None:
+                    for section in home_statements:
+                        await patch_one(section, {"is_visible": False})
+            if "story:set" in done and fresh_statement is not None:
+                if home_statements:
+                    for section in home_statements:
+                        await patch_one(section, {"content": fresh_statement["content"], "is_visible": True})
+                else:
+                    at = next((i for i, s in enumerate(fresh_home.get("sections") or [])
+                               if s["section_type_id"] == "statement"), 1)
+                    await WebsiteCompositionService.add_section(
+                        session, business_id=business.id, page_id=UUID(str(page["id"])), actor_id=actor_id,
+                        section_type_id="statement", content=fresh_statement["content"],
+                        layout_variant=fresh_statement.get("layout_variant"),
+                        position=max(1, min(at, len(page["sections"]))))
             if "story:set" in done and "about" in new:
                 if "about" in placed:
                     for slug, section in placed["about"]:
@@ -1722,6 +1763,10 @@ class BusinessInterviewService:
         except Exception as exc:  # noqa: BLE001 — the pictures still improve the site
             fallback = type(exc).__name__
             direction, copy, creative_source = baseline, None, "deterministic"
+            # A site built without its creative direction is the template owners
+            # complain of: say why in the log (the job row keeps only the type).
+            get_logger("business.interview").warning("interview.creative_plan_failed", business_id=str(job.business_id),
+                         job_id=str(job.id), error=fallback, detail=str(exc)[:300])
         scope = (job.intake or {}).get("scope")
         if scope:
             # A page or section written anew stays in the site's own design
@@ -1739,7 +1784,9 @@ class BusinessInterviewService:
         audit: list[dict[str, Any]] = []
         if picture_source() == "stock":
             # Real photographs, found and checked slot by slot (website.image_retrieval).
-            found = await retrieve_missing(bp, direction, trade)
+            found = await retrieve_missing(
+                bp, direction, trade,
+                used_elsewhere=await _photos_on_other_sites(session, job.business_id))
             drawn = found
             audit = photo_audit(found)
             images_ms = int((time.monotonic() - images_started) * 1000)

@@ -116,10 +116,21 @@ class WebsiteCompositionService:
             .scalars()
             .all()
         )
+        from platform_core.validation.website import validate_section_content
+        from platform_core.website.site_assistant import ADDABLE
+
         out: list[dict[str, Any]] = []
         for row in rows:
             needed = row.contributing_module or row.requires_module
             available = needed is None or needed in active
+            # Whether "Add" can put this on a page as it stands: its starter
+            # words (or none) must already satisfy the section's own schema,
+            # so the editor never offers an Add that the API would refuse.
+            try:
+                validate_section_content(row.id, dict(ADDABLE.get(row.id, {})), content_schema=row.content_schema)
+                can_start = True
+            except ValidationError:
+                can_start = False
             out.append(
                 {
                     "id": row.id,
@@ -129,6 +140,7 @@ class WebsiteCompositionService:
                     "requires_module": needed,
                     "available": available,
                     "unavailable_reason": None if available else "module_not_active",
+                    "can_start": can_start,
                 }
             )
         return out
@@ -216,6 +228,12 @@ class WebsiteCompositionService:
                 details={"code": "unknown_variant", "allowed": allowed},
             )
 
+        if content is None:
+            # Added bare from the editor: the section's starter words, for the
+            # owner to replace (website.site_assistant.ADDABLE).
+            from platform_core.website.site_assistant import ADDABLE
+
+            content = dict(ADDABLE.get(section_type_id, {}))
         validated = validate_section_content(
             section_type_id,
             content or {},

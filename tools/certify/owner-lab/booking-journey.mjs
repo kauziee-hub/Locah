@@ -20,6 +20,9 @@
 // way a crafted request would be, to prove the server refuses it too).
 import { mintToken, newOwner, sessionCookies } from './session.mjs'
 
+// The haircut a woman books, in whichever words this owner used for it: "Women's haircut"
+// in a careful telling, "Ladies cut" in a hurried one.
+const WOMENS_CUT = /(women.?s|ladies) (hair ?)?cut/i
 const TZ = 'Asia/Kolkata'
 const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
 const clockFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -38,7 +41,7 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 // 11 to 7 — inside the salon's 10 to 8 — and Sundays off.
 const STYLIST = {
   name: 'Farhan', designation: 'Senior stylist (lab)', phone: '+91 98940 11111',
-  services: [/women.?s haircut/i, /colou?r/i, /keratin/i], weekdays: [1, 2, 3, 4, 5], from: '11:00', until: '19:00',
+  services: [WOMENS_CUT, /colou?r/i, /keratin/i], weekdays: [1, 2, 3, 4, 5], from: '11:00', until: '19:00',
 }
 // How long each service takes, as this owner would put it.
 function minutesFor(title) {
@@ -47,7 +50,7 @@ function minutesFor(title) {
   if (t.includes('keratin')) return 180
   if (t.includes('colour') || t.includes('color')) return 120
   if (t.includes('facial')) return 60
-  if (t.includes('women')) return 45
+  if (t.includes('women') || t.includes('ladies')) return 45
   if (t.includes('men')) return 30
   return 45
 }
@@ -407,7 +410,7 @@ export function bookingJourney(ctx) {
         payment_methods: opts.payment_methods, policy: opts.policy,
       }
       s.note(`booking options (public API): ${JSON.stringify(journal.booking_options).slice(0, 400)}`)
-      const haircut = (opts.offerings || []).find((o) => /women.?s haircut/i.test(o.title))
+      const haircut = (opts.offerings || []).find((o) => WOMENS_CUT.test(o.title))
       journal.booking_ids.haircut = haircut?.id
       s.check('the public booking options carry the live services with their time and price',
         haircut && haircut.minutes === 45 && Number(haircut.price_amount) === 900, haircut ? `${haircut.title} ${haircut.minutes} min ₹${haircut.price_amount}` : 'no women\'s haircut')
@@ -431,11 +434,11 @@ export function bookingJourney(ctx) {
       await s.shot(g, 'book-page', true)
       const choices = (await g.locator('button.ls-book__choice').allInnerTexts()).map(flat)
       s.note(`the Book page offers: ${choices.join(' | ').slice(0, 400)}`)
-      s.check('each service says its time and price on the Book page', choices.some((c) => /women.?s haircut/i.test(c) && /45 min/.test(c) && /₹\s?900/.test(c)), choices.join(' | ').slice(0, 300))
+      s.check('each service says its time and price on the Book page', choices.some((c) => WOMENS_CUT.test(c) && /45 min/.test(c) && /₹\s?900/.test(c)), choices.join(' | ').slice(0, 300))
       const summary = flat(await g.locator('.ls-book__summary').innerText().catch(() => ''))
       s.check('the page says payment is at the visit, and offers no online payment', /pay at your visit/i.test(summary) && !/pay online|card|razorpay/i.test(summary), summary.slice(0, 200))
 
-      const r = await choose(g, { service: /women.?s haircut/i, provider: STYLIST.name, day: dayA })
+      const r = await choose(g, { service: WOMENS_CUT, provider: STYLIST.name, day: dayA })
       journal.slots_dayA_farhan_ui = r.times
       s.note(`with Farhan on ${dayA}: ${r.times.join(' ') || r.note}`)
       s.check('open times are offered for Farhan on a day he works', r.times.length > 0, r.note)
@@ -484,7 +487,7 @@ export function bookingJourney(ctx) {
         const m = flat(await g.innerText('main'))
         await s.shot(g, 'manage-link', true)
         journal.first.manage_text = m.slice(0, 300)
-        s.check('the manage link shows the booking, the service and the time', m.includes(done.number) && /women.?s haircut/i.test(m), m.slice(0, 200))
+        s.check('the manage link shows the booking, the service and the time', m.includes(done.number) && WOMENS_CUT.test(m), m.slice(0, 200))
         s.check('the manage link says where to come (the salon\'s address)', /RS Puram|DB Road/i.test(m), m.slice(0, 200))
       }
       await g.context().close()
@@ -500,13 +503,13 @@ export function bookingJourney(ctx) {
       // 1. The time Priya took is gone for everyone else.
       const g1 = await guestPage()
       await g1.goto(`${journal.public_url}/book`, { waitUntil: 'networkidle' })
-      const a = await choose(g1, { service: /women.?s haircut/i, provider: STYLIST.name, day: dayA })
+      const a = await choose(g1, { service: WOMENS_CUT, provider: STYLIST.name, day: dayA })
       s.check(`the time Priya booked (${journal.first?.time}) is no longer offered with Farhan`, !a.times.some((t) => t.startsWith(journal.first?.time)), a.times.join(' '))
       // 2. Two guests on the page at once, both choosing the same free time.
       const race = a.times.map((t) => t.split(' ')[0]).filter((t) => t > (journal.first?.time || '')).find((t) => t >= '14:00') || a.times[a.times.length - 1]?.split(' ')[0]
       const g2 = await guestPage()
       await g2.goto(`${journal.public_url}/book`, { waitUntil: 'networkidle' })
-      const b2 = await choose(g2, { service: /women.?s haircut/i, provider: STYLIST.name, day: dayA })
+      const b2 = await choose(g2, { service: WOMENS_CUT, provider: STYLIST.name, day: dayA })
       s.check(`both guests see ${race} free`, a.times.some((t) => t.startsWith(race)) && b2.times.some((t) => t.startsWith(race)), `${a.times.join(' ')} | ${b2.times.join(' ')}`)
       await fillIn(g1, race, MEENA)
       await fillIn(g2, race, KAVYA)
@@ -544,12 +547,12 @@ export function bookingJourney(ctx) {
       // 4. Times that are not offered — and refused if asked for anyway.
       const ui = await guestPage()
       await ui.goto(`${journal.public_url}/book`, { waitUntil: 'networkidle' })
-      const early = await choose(ui, { service: /women.?s haircut/i, provider: STYLIST.name, day: dayA })
+      const early = await choose(ui, { service: WOMENS_CUT, provider: STYLIST.name, day: dayA })
       const firstTime = early.times[0]?.split(' ')[0] || ''
       const lastTime = early.times[early.times.length - 1]?.split(' ')[0] || ''
       s.check('with Farhan, nothing before 11 or ending after 7 is offered (his week, inside the 10–8 salon day)',
         firstTime >= '11:00' && lastTime <= '18:15', `${firstTime} … ${lastTime}`)
-      const anyone = await choose(ui, { service: /women.?s haircut/i, provider: '', day: dayA })
+      const anyone = await choose(ui, { service: WOMENS_CUT, provider: '', day: dayA })
       journal.slots_dayA_anyone_ui = anyone.times
       s.note(`"Anyone available" on ${dayA}: ${anyone.times.join(' ').slice(0, 300)}`)
       await s.shot(ui, 'anyone-available', true)
@@ -563,12 +566,12 @@ export function bookingJourney(ctx) {
       s.check(`"Anyone available" does not offer ${journal.first?.time}, when the only stylist for it is booked`,
         !anyone.times.some((t) => t.startsWith(journal.first?.time)) && check.data?.available === false,
         `offered: ${anyone.times.some((t) => t.startsWith(journal.first?.time))}; availability API: ${JSON.stringify(check.data || check.error).slice(0, 160)}`)
-      const off = await choose(ui, { service: /women.?s haircut/i, provider: STYLIST.name, day: away })
+      const off = await choose(ui, { service: WOMENS_CUT, provider: STYLIST.name, day: away })
       await s.shot(ui, 'farhan-day-off', true)
       s.check(`on Farhan's day off (${away}) no time with him is offered`, off.times.length === 0, `${off.times.join(' ')} ${off.note}`)
-      const sun = await choose(ui, { service: /women.?s haircut/i, provider: STYLIST.name, day: sunday })
+      const sun = await choose(ui, { service: WOMENS_CUT, provider: STYLIST.name, day: sunday })
       s.check(`on Sunday (${sunday}; the salon is open, Farhan is not) no time with him is offered`, sun.times.length === 0, `${sun.times.join(' ')} ${sun.note}`)
-      const mon = await choose(ui, { service: /women.?s haircut/i, provider: '', day: monday })
+      const mon = await choose(ui, { service: WOMENS_CUT, provider: '', day: monday })
       await s.shot(ui, 'monday-closed', true)
       s.check(`on Monday (${monday}) the page says the salon is closed`, mon.times.length === 0 && /closed/i.test(mon.note), `${mon.times.join(' ')} ${mon.note}`)
       await ui.context().close()

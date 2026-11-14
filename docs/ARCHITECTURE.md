@@ -109,14 +109,50 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   polishes what it can by moving, re-laying or removing — never by writing — for up
   to three rounds; what it cannot fix stays in `theme_hints.quality.critic`. Each
   art direction tells the home page in its own order (`site_pages.arrange`; a page
-  order the model chose stands), and a range with pictured categories gets its own
-  page as editorial chapters. `site_vision_critic.py` adds a critic that *sees* the
+  order the model chose stands). The range's own-page layout is checked against
+  actual content (`composition.py`): unique photos, description depth, size and
+  brand concept. Independent opening, category-treatment and range-layout
+  choices and reasons persist in `theme.composition`. Photo-free hero fallbacks
+  typeset the business's actual range using its concept and theme; photographic
+  catalogue cards keep captions on a separate readable surface. Service media
+  briefs name the actual offerings rather than prescribe generic interior decor;
+  a decor-only image cannot qualify as the hero. `site_vision_critic.py` adds a critic that *sees* the
   rendered site: screenshots go to the configured provider's image call with an art
   director's rubric, and its findings map onto the same safe revisions (layouts,
   order, pictures — never words). `platform_testing/site_vision_loop.py` runs
   render → screenshot → critique → revise over the site lab with headless Chrome
   (reduced motion; phones through `/site-lab-frame`); `--dry-run` costs nothing.
   Personalization merges per page (`draft_merge.py`): owner edits win on every page.
+- **The owner personalises; the design stays.** A theme edit is laid over the
+  stored theme, never in place of it (`website/owner_style.py::merge_theme`): the
+  design pipeline's keys (`dna`, `experience`, `composition`, the family and type
+  system) cannot be dropped, colours must be hex, and `theme.owner_style` holds only
+  what the renderer can draw — a lettering pairing, heading and reading-text size,
+  corners. The renderer applies it last (`experience.ts::ownerStyle`,
+  `packages/ui/src/site-owner.css`); a test keeps the Python registry and the
+  renderer's lists identical. The Workspace editor
+  (`apps/workspace/.../website/preview`) has three tabs on that same API —
+  **Sections** (reword, re-picture, drag to reorder, hide, copy, remove, add),
+  **Design** (colours, lettering, sizes, corners) and **Ask LOCAH** — and shows the
+  real draft at a true desktop width, scaled to fit. Clicking a section in the
+  preview opens it in the editor (`apps/web/.../EditorBridge.tsx`, preview only).
+- **A design the owner likes is a direction, not a template.** In Design, "Match a
+  design you like" takes a screenshot; one vision call reads it into the governed
+  vocabulary only — palette, light or dark, a lettering pairing, corners, heading
+  scale (`website/reference_style.py`). Unreadable colours are replaced and said
+  so; the reference's layout, pictures and words are never taken, and the site's
+  own composition stays. Undo restores the draft exactly.
+- **A headline speaks in one voice.** `design_dna.py` draws `headline: none` most
+  often; a coloured italic phrase is an exception a concept must offer, and the
+  italic label of warm_craft / calm_care follows it. A tool's section (plans,
+  catalogue, booking band) is placed inside the page, beside the range it
+  completes, never under the closing band (`services/website_publish.py`).
+- **Changing the site by saying so.** `website/site_assistant.py` reads an owner's
+  words ("chnge colur to maroon", "move the menu above our story", "make the text
+  bigger") into the same governed changes, rules first; the model is asked only
+  for what the rules could not read and its answer is held to the same vocabulary
+  (`from_model`). `services/website_assistant.py` applies them through the
+  editor's own services and replies with what was done and, plainly, what was not.
 - **The catalogue is captured, not summarised.** For trades whose website is their
   catalogue, the interview asks for the real list early (`offerings.catalogue`:
   a photo/PDF of the menu or price list, or typed out) and then what a visitor
@@ -147,10 +183,28 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   preference). The model proposes; deterministic readers and planners decide what
   is stored and what is asked next. It works with the model down. English, Tamil
   and Tanglish are supported in the same conversation.
+- **An owner's slips never reach their customers, or their records.** Trade words
+  spelt wrong still name the trade (`catalog/taxonomy.py::respell`, a curated list —
+  a general spell-checker "corrected" real words); what a business mentions is not
+  what it is ("we design small hotels" is an architect; "near the temple" is a
+  place); a kitchen is read from what it cooks. A price list typed in one breath
+  ("chiken biriyani 280 mutton 360 appam 50 for 2") is every item with its price
+  (`catalogue_capture._run_on`), and dish and service names are put right
+  (`interview/spelling.py`; regional spellings such as "biriyani" are kept).
 - Website generation and document reading go through the provider abstraction
   (`AI_PROVIDER`: DeepSeek by default, Gemini selectable, `replay` locally; voice is
   separate, `VOICE_PROVIDER`, Gemini). Provider calls live in
   `website/ai_provider.py`; the Creative Director never names a vendor.
+- **The creative plan must arrive.** DeepSeek's `max_tokens` counts reasoning as
+  well as the answer: a purpose that thinks gets headroom and low effort, the
+  creative plan (`website.personalization`) answers without the reasoning pass,
+  an answer missing its last bracket is read (`loads_lenient`), a top-level part
+  written inside its sibling is put back (`_rehome`), and an empty or unreadable
+  answer is asked for once more without thinking. A build that still falls back to
+  the deterministic direction logs `interview.creative_plan_failed` with the reason.
+- **A site's photographs are its own.** A photo another business already shows is
+  never offered to the judge (`SiteMemory.elsewhere`), and each item is also
+  searched by its plain name.
 - **Website pictures are found, not drawn.** For each picture slot the
   MediaDirector plans (hero, categories, items, story), `website/image_retrieval.py`
   asks the provider for search queries, queries a photo API
@@ -168,6 +222,19 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   tiers (T0 read … T3 owner approval), an allowlist per employee, limits and a kill
   switch; every decision is an `ai_actions` row. The AI Employee Sandbox simulates
   an employee on the business's real records without writing or sending anything.
+
+## WhatsApp
+
+`messaging/journeys.py` is a structured chatbot — order, book, enquire, dues,
+track, reorder, cancel — with buttons and lists and zero model calls; every path
+ends in the same order, booking or lead the website creates. A short typed
+question is answered from the live catalogue ("biriyani rate?" → the biriyanis and
+their prices, in the customer's spelling); a wish typed as a sentence starts its
+journey; an unhappy or long message waits for a person. `MESSAGING_SANDBOX=1`
+(development only) connects a sandbox number whose inbound messages take the real
+webhook path (`tools/certify/owner-lab/whatsapp-check.mjs`). Meta's Cloud API,
+Embedded Signup and template approval need LOCAH's own Meta app and have not been
+exercised from this repository.
 
 ## Payments
 

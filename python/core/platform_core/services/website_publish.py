@@ -379,11 +379,24 @@ class WebsitePublishService:
             published_reviews=await caps.published_review_count(session, business.id), traits=traits)
         if extra and (page.slug == "home" or page.page_type == "home"):
             rows = list(serialized_page.get("sections") or [])
-            at = next((i for i, r in enumerate(rows) if r.get("section_type_id") == "contact"), len(rows))
-            for n, section in enumerate(extra):
+            # A tool's section belongs inside the page, not under it: before the
+            # page's closing (its call-to-action band and contact), and a plans
+            # or catalogue list right after the range it completes. (A gym's
+            # live Plans — the one place to join — sat below "Start with a
+            # trial", after the page had already ended.)
+            closing = next((i for i, r in enumerate(rows)
+                            if r.get("section_type_id") in {"contact", "cta_band"} and i >= len(rows) - 2), len(rows))
+            ranges = [i for i, r in enumerate(rows)
+                      if r.get("section_type_id") in {"product_showcase", "category_showcase"}]
+            for section in extra:
                 section["page_id"] = str(page.id)
-                section["sort_order"] = (rows[at - 1]["sort_order"] + 1 + n) if at > 0 else n
-            rows[at:at] = extra
+                beside_range = section.get("module") in {"memberships", "offerings-catalog"} and ranges
+                at = min(ranges[-1] + 1, closing) if beside_range else closing
+                rows.insert(at, section)
+                closing += 1
+                ranges = [i + 1 if i >= at else i for i in ranges]
+            for order, row in enumerate(rows):
+                row["sort_order"] = order
             serialized_page["sections"] = rows
         # The contact section states today's address, hours and phone from the
         # business's main location — what the owner keeps in Locations — not

@@ -614,6 +614,79 @@
 }
 
 /* ---------------------------------------------------------- the GL layer */
+/* Long copy must share the first screen with what the business sells. This
+   is content-responsive within the stage scene, not a business-type recipe. */
+@media (min-width: 901px) {
+  [data-locah-site] .fx-stage[data-copy-density='long'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(2rem, 5vw, 6rem);
+    padding-block: clamp(2rem, 5vh, 4rem);
+    padding-inline: max(3rem, calc((100vw - 1280px) / 2));
+    min-height: min(820px, calc(100svh - var(--fx-nav-h)));
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__copy {
+    text-align: start;
+    padding-top: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .ls-hero__headline {
+    max-width: 16ch;
+    font-size: calc(clamp(2.8rem, 4.3vw, 4.8rem) * var(--site-display-scale, 1));
+    margin-inline: 0;
+    text-wrap: balance;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__foot {
+    align-items: start;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .ls-hero__cta {
+    justify-content: flex-start;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .ls-hero__sub {
+    margin-inline: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__frame {
+    width: 100%;
+    margin: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__mat {
+    padding: 0;
+    border: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__mat img {
+    aspect-ratio: 4 / 5;
+  }
+}
+@media (max-width: 900px) {
+  [data-locah-site] .fx-stage[data-copy-density='long'] {
+    display: flex;
+    flex-direction: column;
+    padding-top: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__frame {
+    order: -1;
+    margin-top: 0;
+    width: calc(100% + 2 * var(--g));
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__mat {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__mat img {
+    aspect-ratio: 2 / 1;
+    border-radius: 0;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .fx-stage__copy {
+    padding-block: 1.75rem 2.5rem;
+  }
+  [data-locah-site] .fx-stage[data-copy-density='long'] .ls-hero__headline {
+    max-width: 19ch;
+    font-size: calc(clamp(2.3rem, 6.2vw, 3.7rem) * var(--site-display-scale, 1));
+    text-wrap: balance;
+  }
+}
+
 /* WebGL is progressive enhancement over a real <img> (experience/gl/): the
    canvases below exist only once a renderer has started — motion on, a
    capable device, a design whose DNA chose living, ribbon or dissolve as its
@@ -659,7 +732,7 @@
   background: transparent;
 }
 [data-locah-site] [data-ribbon-live] .fx-rail__card[data-gl-drawn] .fx-rail__media > img,
-[data-locah-site] [data-ribbon-live] .fx-bento__cell[data-gl-drawn] > img {
+[data-locah-site] [data-ribbon-live] .fx-bento__cell[data-gl-drawn] .fx-bento__media > img {
   opacity: 0;
 }
 /* The bend is the movement: once the cards have arrived they stop leaning. */

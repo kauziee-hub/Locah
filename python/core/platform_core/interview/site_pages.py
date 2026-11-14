@@ -482,6 +482,24 @@ def _featured(items: list[dict[str, Any]], at_most: int = 6) -> list[dict[str, A
     return ranked[:at_most]
 
 
+def range_title(copy: WebsiteCopy, content: dict[str, Any], trade: str) -> str:
+    """An editorial opening, not the UI instruction used over a home teaser."""
+    if copy.catalogue_title:
+        return str(copy.catalogue_title)
+    title = str(content.get("title") or "").strip()
+    generic = {"shop by category", "shop by categories", "our menu", "our services", "our products",
+               "what we do", "what we offer", "featured projects", "shop", "menu", "services"}
+    if title and title.casefold().rstrip(".!:") not in generic:
+        return title[:90]
+    names = list(dict.fromkeys(str(c.get("name") or "").strip() for c in content.get("categories") or []))
+    names = [n for n in names if n]
+    if 2 <= len(names) <= 3:
+        joined = ", ".join(names[:-1]) + " & " + names[-1]
+        if len(joined) <= 90:
+            return joined
+    return trade[:90]
+
+
 def build(
     bp: BusinessBlueprint,
     *,
@@ -501,6 +519,7 @@ def build(
     range_variant: str = "",
     order_link: str = "",
     concept: str = "",
+    range_layout: str = "",
     keep_order: bool = False,
     lead: str = "",
 ) -> Site:
@@ -682,22 +701,24 @@ def build(
     # ---- the range
     if range_page and showcase:
         full = {**showcase, "content": {**showcase["content"]}}
-        variant = range_variant or showcase["layout_variant"]
-        if variant == "menu_grid" and showcase["layout_variant"] == "menu_book":
+        full["content"]["title"] = range_title(copy, full["content"], trade_label)
+        variant = range_layout or range_variant or showcase["layout_variant"]
+        if not range_layout and variant == "menu_grid" and showcase["layout_variant"] == "menu_book":
             variant = "menu_book"  # the menu as a book, on its own page too
         pictured_all = sum(1 for i in items if i.get("image_asset_id"))
         kinds = [c for c in full["content"].get("categories") or [] if c.get("name")]
-        if len(kinds) >= 2 and sum(1 for c in kinds if c.get("image_asset_id")) >= 2:
+        if not range_layout and len(kinds) >= 2 and sum(1 for c in kinds if c.get("image_asset_id")) >= 2:
             # Each kind its own chapter: a large picture, its name, where its
             # prices start, its lines like a printed menu.
             variant = "chapters"
-        elif variant in {"commerce_grid", "compact_list"} and pictured_all >= 4 and dna_seed % 2:
+        elif not range_layout and variant in {"commerce_grid", "compact_list"} and pictured_all >= 4 and dna_seed % 2:
             variant = "hover_list"  # a price list whose pictures follow the pointer
         full["layout_variant"] = variant
         # An opening picture the range below does not show again.
         first = pictures.get("detail") or hero_picture or pictures.get("range")
         range_sections = [_page_hero(trade_label, str(full["content"].get("title") or trade_label),
                                      copy.catalogue_intro or str(full["content"].get("subtitle") or ""), first), full]
+        range_sections[0]["content"].update(cta_label=trade_label, cta_url="#shop")
         # How it is made or sourced, and how it reaches you: the owner's words,
         # beside pictures, between the range and the ordering details.
         made = [r for r in rows if r.get("eyebrow") != trade_label]
@@ -728,14 +749,33 @@ def build(
 
     # ---- about
     if about_page and story:
-        content = story["content"]
+        # The first screen should start telling the story, not just repeat the
+        # wordmark at display size. Move one existing sentence to the opening;
+        # never invent a founder, history, review or photograph to fill it.
+        about_story = deepcopy(story)
+        content = about_story["content"]
+        sentences = _sentences(str(content.get("body") or ""))
+        intro = copy.about_intro
+        if not intro and sentences and 6 <= len(sentences[0].split()) <= 36 and len(sentences[0]) <= 240:
+            intro = sentences[0].rstrip(".!?") + "."
+        if intro and sentences and intro.strip(" .!?").casefold() == sentences[0].strip(" .!?").casefold():
+            content["body"] = ". ".join(sentences[1:]) + ("." if sentences[1:] else "")
+        if str(content.get("quote") or "").strip(" .!?").casefold() == intro.strip(" .!?").casefold():
+            content.pop("quote", None)
         # The page opens on the business's name, over a picture the home page
         # has not shown — or in type; the story below keeps its own title and
         # its own picture (the story lives here; home only teases it).
         story_picture = content.get("image_asset_id")
         about_hero_picture = unseen(*(p for p in (pictures.get("story"), pictures.get("process"),
                                                   pictures.get("detail")) if p != story_picture))
-        about_sections = [_page_hero("About", name, copy.about_intro or "", about_hero_picture), story]
+        if not content.get("body") and not content.get("quote") and not about_hero_picture:
+            about_hero_picture = content.pop("image_asset_id", None)
+        title = copy.about_title if copy.about_title and copy.about_title.casefold() not in {"our story", "about us"} else name
+        about_sections = [_page_hero("About", title, intro, about_hero_picture)]
+        if range_path:
+            about_sections[0]["content"].update(cta_label=trade_label, cta_url=range_path)
+        if content.get("body") or content.get("quote"):
+            about_sections.append(about_story)
         if statement_section and statement_section not in home_out:
             about_sections.append(statement_section)
         if rows_section:
@@ -804,9 +844,9 @@ def build(
             content = section.get("content") or {}
             for key in ("cta_url", "more_path"):
                 value = str(content.get(key) or "")
-                if value == "#shop" and range_page:
+                if value == "#shop" and range_page and page["slug"] != range_path.lstrip("/"):
                     content[key] = range_path
-                elif value == "#contact" and visit_page:
+                elif value == "#contact" and visit_page and page["slug"] != "visit":
                     content[key] = visit_path
     return Site(pages=pages, navigation=navigation, range_path=range_path, visit_path=visit_path,
                 notes=[] if multi else ["single page: not enough yet for inner pages"])

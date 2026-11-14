@@ -54,6 +54,11 @@ _UNIT_WORDS = re.compile(
 _DIGITS = re.compile(r"\d[\d,.]*")
 
 
+_TRAILING_FILLER = re.compile(r"(?:\s+(?:also|too|as well|only|both|etc\.?))+$", re.I)
+_WHO_FOR = re.compile(r"(?:(?:ladies|gents|men|mens|women|womens|boys|girls|kids|children|unisex|everyone|all|and|&|,|"
+                      r"both|for)\W*)+", re.I)
+
+
 def normalise_name(text: str) -> tuple[str, bool]:
     """(clean name, whether the owner signalled more of it).
 
@@ -65,7 +70,11 @@ def normalise_name(text: str) -> tuple[str, bool]:
     deep = bool(_DEPTH.search(raw))
     name = _DEPTH.sub(" ", raw)
     name = re.sub(r"\b(?:of|and|the)\s*$", "", " ".join(name.split()), flags=re.I).strip(" .,;:-")
-    if not name:
+    # "Bridal makeup also", "facial too": how it was said, not what it is called.
+    name = _TRAILING_FILLER.sub("", name).strip(" .,;:-")
+    if not name or (_WHO_FOR.fullmatch(name) and len(name.split()) >= 2):
+        # "Ladies gents both" says who the business serves; it is not a shelf.
+        # (One word — "Kids", "Men" — is a clothes shop's real shelf.)
         return "", deep
     return name[0].upper() + name[1:], deep
 
@@ -148,7 +157,13 @@ def govern_catalogue(bp: BusinessBlueprint, proposals: list[GroupProposal], hear
     before = [g.model_dump() for g in groups]
     for proposal in proposals:
         label, label_deep = normalise_name(proposal.group)
-        if not label or len(label.split()) > 5 or not _grounded(label, corpus):
+        if not label and proposal.items and (proposal.group or "").strip():
+            # The model's shelf was no shelf ("Ladies gents both"): its items
+            # are still the owner's, and go on the trade's plain one.
+            from platform_core.interview.catalogue_capture import _default_group
+
+            label = _default_group(bp)
+        elif not label or len(label.split()) > 5 or not _grounded(label, corpus):
             continue
         items: list[CatalogueItem] = []
         unknown = set(proposal.unknown)
@@ -219,6 +234,9 @@ def govern_catalogue(bp: BusinessBlueprint, proposals: list[GroupProposal], hear
         group.needs = structural + (["price"] if "price" in group.needs else [])
     groups = _tidy(groups)[:12]
     bp.taxonomy.groups = groups
+    from platform_core.interview.catalogue_capture import respell
+
+    respell(bp)
     refresh_needs(bp)
     return [g.model_dump() for g in bp.taxonomy.groups] != before
 

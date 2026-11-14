@@ -13,6 +13,93 @@ the UI makes, plus DB/API checks — the UI itself not clicked), **TESTED**
 
 ## Environment (local only)
 
+### Checkpoint — 2026-11-14, "anyone can use it": messy owners, the editor, WhatsApp
+
+Driven with owners who type fast and wrong (`bad_input` personas), real DeepSeek
+and photo providers, local stack. Nothing pushed or deployed: **staging still runs
+`origin/main` (2026-10-14), 89 commits behind this branch** — the premium site
+pipeline is not what the founder sees there.
+
+Why sites came out "template-like" — three causes found and fixed:
+
+1. The creative plan never arrived. DeepSeek spent the call's whole allowance
+   reasoning, or wrote `copy` inside `creative` with a bracket missing; either way
+   the build silently used the deterministic direction (`strategy_source:
+   deterministic`, `fallback_reason: RuntimeError`). Now `strategy_source: ai`, ~7 s.
+2. The Workspace Theme page replaced the whole theme with two colours, erasing
+   `dna` / `experience` / `composition`. Theme edits now merge; design keys cannot
+   be dropped.
+3. "pepper vine kichen … we make kerala food" was filed as `other`: dishes became
+   bookable services and the live site could not take an order.
+
+| Run | Result |
+|---|---|
+| `restaurant-delivery bad_input` r1 (before) | menu read "Chiken biriyani", "Stew chiken 240 veg"; appam and duck roast lost their prices; **0 Add buttons**, the guest could not order |
+| `restaurant-delivery bad_input` r2 (after) | VERIFIED-BROWSER: 8 priced items, guest orders Appam + Duck roast (ORD-CF6F4342, ₹470), owner fulfils, cash recorded, team, lifecycle, return. One lab-only miss (a store keeper's page is titled "Ingredients and supplies") |
+| `salon bad_input` r1 | VERIFIED-BROWSER: 96/97 — services with prices and durations from "ladies cut 900 gents 450 colur 3500 onwards…", booking with a stylist, conflicts, guest cancel, team, lifecycle. The miss is the lab looking for the word "haircut" |
+| Editor (`editor-check.mjs`) | VERIFIED-BROWSER 21/21: click-to-select, drag and arrow reorder, hide/show, add/remove, Design (pair, lettering, size), Ask LOCAH with typos, refusal of what it cannot do, design keys untouched, Look & menu page |
+| WhatsApp sandbox (`whatsapp-check.mjs`) | VERIFIED-API: connect, inbound "hi" → menu, conversation in the inbox, customer record. Price questions answered from the catalogue: TESTED (`test_journeys`) |
+
+Found on the salon and fixed: "ladies gents **both**" put "Home delivery" and
+"Pickup" on a salon's website; "Ladies gents both" and "Bridal makeup also" were
+catalogue shelves. Found in the suite and fixed: LOCAH said "that's your story on
+the website now" on a site whose story lives in a statement, and nothing changed.
+
+Later the same day (founder: "the AI slop design of italics text and colouring…
+it makes this as template"): the coloured italic accent is now the exception
+(`headline: none` in most draws); `gym bad_input` r1 VERIFIED-BROWSER 42 checks,
+with fixes for "quartly" plans, "6am-10pm sunday till 12" (the live site said
+Mon–Sat closed), owner shorthand on the page ("Ppl shud…", "hsr layout blr") and
+the Plans section sitting under the closing band; "Match a design you like"
+VERIFIED with one live vision call (`reference-check.mjs`: applied, design keys
+untouched, undo exact). The 15 reference images named in
+`LOCAH_CLAUDE_VISUAL_REFERENCE_BRIEF.md` are still not on disk — only its text
+was read.
+
+Still open: photo slots stay empty where the libraries have no honest picture
+(6 of 10 on the Kerala kitchen) and there is no working image generator to fall
+back on (Gemini image quota is 0); the Unsplash demo key allows 50 requests an
+hour; gym / hotel / clinic / retail / NGO have not been re-run with `bad_input`;
+Meta's real API, Razorpay sandbox and email/password sign-up remain unexercised;
+the editor changes fonts, sizes, colours and order, not free positioning.
+
+### Resumption checkpoint — 2026-10-19, design composition
+
+Latest cross-business pass: **35 cases** (12 previous real generations and
+23 fresh scripted-interview builds), **261 broad responsive page checks**,
+plus final targeted catalogue/action/motion checks. Card captions now have
+their own surface; the desktop pill is removed; photo-free openings use
+the actual range; service photo briefs name the actual work. A property
+browsing link no longer incorrectly depends on online ordering. **247
+relevant Python tests passed**. One external restaurant photo failed once
+and passed the recorded recheck. See
+[`MULTI_BUSINESS_DESIGN_REVIEW_2026-10-19.md`](MULTI_BUSINESS_DESIGN_REVIEW_2026-10-19.md)
+for exact sources, evidence and remaining image/copy limitations. This is
+visual/renderer verification, not a rerun of the owner journeys below.
+
+Follow-up product review: three render/review cycles improved the long-copy
+home, story openings, range browsing and local anchors. The lab screenshot
+loop now retains reviewed improvements and restores the best state on
+regression/failure. **159 relevant Python tests passed**; two successive
+27-capture browser batches passed. Current evidence and limits:
+[`BUILDER_PRODUCT_REVIEW_2026-10-19.md`](BUILDER_PRODUCT_REVIEW_2026-10-19.md).
+Owner preference and conversion are not inferred from those checks.
+
+Current user priority: substantially better, coherent and personalised
+website design; references establish a quality bar rather than a screen
+to reproduce. Implemented content-aware inner-page composition and removed
+the override that forced pictured categories into one layout. Full changes,
+executed checks, screenshots and limitations:
+[`COMPOSITION_REVIEW_2026-10-19.md`](COMPOSITION_REVIEW_2026-10-19.md).
+No premium certification or new owner-flow pass is claimed.
+
+Saved journals were inspected, not rerun: hotel r2 **73/73**; gym r2
+**43/46**; architecture r1 **32/33**; consultant r1 **32/32**. NGO r1
+stopped after six steps (**12/12 recorded checks**, one interruption), with
+`items.map is not a function` at `enquiry-journey.mjs:69`. The lab file
+already had uncommitted changes when this session began; they are preserved.
+The older Phase 2/Next text below predates this checkpoint.
+
 | Piece | Where | Notes |
 |---|---|---|
 | Postgres | :54329, db `locah_certify` | migrations applied by hand to this db |

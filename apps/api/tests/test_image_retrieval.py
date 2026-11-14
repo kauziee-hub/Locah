@@ -343,6 +343,16 @@ def test_a_picture_qualifies_only_on_LOCAHs_own_rule(monkeypatch: pytest.MonkeyP
     assert not qualifies(Verdict(**good(0, score=90)), b)                         # the bar is configurable
 
 
+def test_generic_decor_cannot_be_the_hero_even_with_a_high_score() -> None:
+    verdict = Verdict(**good(0, score=98, decor_only=True, business_relevance=9))
+    assert not qualifies(verdict, brief(trade="a clinic", subject="family healthcare"))
+    assert why_not(verdict, brief()).startswith("decor_only:")
+    # A supporting mood detail can still serve its brief. Plants that the
+    # business actually sells are judged as offerings, rather than decor.
+    assert qualifies(verdict, brief(key="detail", purpose="detail", aspect="4:3"))
+    assert qualifies(Verdict(**good(0, decor_only=False)), brief(trade="a plant nursery"))
+
+
 def test_the_rubric_is_weighted_for_the_slots_role() -> None:
     rubric = dict(business_relevance=9, section_fit=8, photo_quality=9, composition=8, text_space=2,
                   authenticity=8, art_direction_fit=8, mobile_crop=8)
@@ -478,7 +488,10 @@ async def test_a_minor_slot_spends_one_editorial_search_at_most() -> None:
     ai = FakeAI([[good(0), good(1)]], queries=[["raw chicken pieces", "chicken curry cut", "chicken wings"]])
     item = brief(key="item:chicken", purpose="item", aspect="4:3", section="product_showcase")
     await retrieve_for_slot(item, provider=ai, search=MultiSearch([unsplash, pixabay]))
-    assert len(unsplash.calls) == 1 and len(pixabay.calls) == 3
+    # Unsplash's hourly allowance is the scarce one: still one editorial search.
+    # The tag library also gets the item's plain name beside the three styled searches.
+    assert len(unsplash.calls) == 1 and len(pixabay.calls) == 4
+    assert pixabay.calls[-1]["query"] == "fresh chicken cuts"
 
 
 @pytest.mark.asyncio
@@ -785,3 +798,29 @@ async def test_a_thin_editorial_answer_is_widened_with_the_subject_tags() -> Non
     await retrieve_for_slot(brief(), provider=ai, search=MultiSearch([unsplash]))
     assert [c["query"] for c in unsplash.calls] == [
         "raw chicken wings glistening on dark slate dramatic side light", "raw chicken wings"]
+
+
+# ---------------------------------------------------------------- one business, its own pictures
+def test_a_photograph_on_another_business_site_is_never_offered_again() -> None:
+    """Two kitchens in one city must not open on the same biriyani."""
+    import inspect
+
+    from platform_core.website import image_retrieval as ir
+
+    memory = ir.SiteMemory(elsewhere={"pixabay:111", "unsplash:abc"})
+    assert memory.elsewhere == {"pixabay:111", "unsplash:abc"} and memory.used == set()
+    # The search loop keeps them out of every round's pool, with this site's own and the rejected.
+    assert "site.used | rejected | site.elsewhere" in inspect.getsource(ir._loop)
+
+
+def test_an_item_is_also_searched_by_its_plain_name() -> None:
+    from types import SimpleNamespace
+
+    from platform_core.website.image_retrieval import plain_subject_query
+
+    brief = SimpleNamespace(key="item:appam", subject="Appam, soft and lacy, served in a clay bowl on banana leaf")
+    assert plain_subject_query(brief) == "appam"  # type: ignore[arg-type]
+    stew = SimpleNamespace(key="item:chicken-stew", subject="chicken stew with appam")
+    assert plain_subject_query(stew) == "chicken stew"  # type: ignore[arg-type]
+    hero = SimpleNamespace(key="hero", subject="a Kerala kitchen's table")
+    assert plain_subject_query(hero) == ""  # type: ignore[arg-type]

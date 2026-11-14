@@ -2640,63 +2640,6 @@
   border-radius: var(--site-radius);
 }
 
-/* The action dock (WebsitePageView + SiteMotion): the live action and one
-   channel, a glance away once the cover has scrolled off — desktop only; the
-   phone's bar carries the same. Hidden without JavaScript (the header keeps
-   the action). */
-.fx-dock {
-  position: fixed;
-  left: 50%;
-  bottom: clamp(1rem, 0.6rem + 1.2vw, 1.75rem);
-  z-index: 45;
-  display: none;
-  align-items: center;
-  gap: 0.35rem 1rem;
-  padding: 0.45rem 0.45rem 0.45rem 1.1rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--site-bg) 86%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 0.45);
-  transform: translate(-50%, 140%);
-  opacity: 0;
-  transition:
-    transform 520ms var(--fx-ease, ease),
-    opacity 320ms ease;
-}
-@media (min-width: 761px) {
-  .fx-dock {
-    display: flex;
-  }
-  .fx-dock[data-on] {
-    transform: translate(-50%, 0);
-    opacity: 1;
-  }
-  /* The dock holds the chat beside the action: no second floating button. */
-  [data-locah-site]:has(.fx-dock[data-on]) .ls-wa-float {
-    opacity: 0;
-    pointer-events: none;
-  }
-}
-[data-locah-site] .fx-dock__primary {
-  min-height: 44px;
-}
-[data-locah-site] a.fx-dock__channel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--site-ink);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.3em;
-  padding-right: 0.6rem;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fx-dock {
-    transition: none;
-  }
-}
-
 /* Open now · until 11 pm — from the location's own hours (OpenNow). */
 .fx-open {
   display: inline-flex;

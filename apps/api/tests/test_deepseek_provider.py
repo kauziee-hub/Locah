@@ -148,8 +148,9 @@ async def test_a_structured_request_is_built_for_the_chat_completions_endpoint(m
     assert system["role"] == "system" and system["content"].startswith("Be brief.")
     assert '"properties"' in system["content"] and "json" in system["content"].lower()
     assert user == {"role": "user", "content": "hello"}
-    # The website's strategy keeps the model's own reasoning; routine purposes skip it.
-    assert "thinking" not in body
+    # The creative plan answers without the reasoning pass: with it, a real build
+    # spent the whole allowance thinking and returned no answer (2026-11-13).
+    assert body["thinking"] == {"type": "disabled"} and "reasoning_effort" not in body
     # The answer is held to the limits the model was only told about.
     assert result == {"ok": True, "name": "abcde"}
 
@@ -208,9 +209,12 @@ async def test_usage_is_recorded_and_reasoning_is_never_the_answer(monkeypatch: 
 async def test_an_unusable_reply_is_an_error_the_caller_can_fall_back_from(
     monkeypatch: pytest.MonkeyPatch, content: str
 ) -> None:
-    monkeypatch.setattr(ai_provider.httpx, "AsyncClient", Script(_answer(content)).client)
+    # A purpose that thinks is asked once more without thinking; unusable twice is the error.
+    script = Script(_answer(content), _answer(content))
+    monkeypatch.setattr(ai_provider.httpx, "AsyncClient", script.client)
     with pytest.raises(RuntimeError):
         await DeepSeekProvider("k").generate_structured("x", {}, {"purpose": "website.generate"}, 5)
+    assert len(script.calls) == 2 and script.calls[1]["body"]["thinking"] == {"type": "disabled"}
 
 
 @pytest.mark.asyncio
@@ -263,3 +267,42 @@ def test_deepseek_and_pexels_keys_are_redacted_from_logs() -> None:
 
     assert _redact_value("DEEPSEEK_API_KEY", "sk-live") == "***redacted***"
     assert _redact_value("pexels_key", "abc") == "***redacted***"
+
+
+# ---------------------------------------------------------------- answers a model nearly got right
+def test_a_long_answer_missing_its_last_bracket_is_read_not_thrown_away() -> None:
+    value, repaired = ai_provider.loads_lenient('{"creative":{"concept":"warm_craft","copy":{"headline":"Kerala food"}}')
+    assert repaired and value == {"creative": {"concept": "warm_craft", "copy": {"headline": "Kerala food"}}}
+    assert ai_provider.loads_lenient('{"a":[1,2,],}') == ({"a": [1, 2]}, True)
+    assert ai_provider.loads_lenient('{"a":"}"}') == ({"a": "}"}, False)
+
+
+def test_an_answer_cut_off_inside_a_sentence_is_never_repaired() -> None:
+    with pytest.raises(json.JSONDecodeError):
+        ai_provider.loads_lenient('{"headline":"Kerala food from Pep')
+
+
+def test_a_part_written_inside_its_sibling_is_put_back() -> None:
+    schema = {"type": "object", "properties": {
+        "creative": {"type": "object", "properties": {"concept": {"type": "string"}}},
+        "copy": {"type": "object", "properties": {"headline": {"type": "string"}}}}}
+    nested = {"creative": {"concept": "warm_craft", "copy": {"headline": "Kerala food"}}}
+    assert ai_provider._rehome(nested, schema) == {
+        "creative": {"concept": "warm_craft"}, "copy": {"headline": "Kerala food"}}
+    right = {"creative": {"concept": "x"}, "copy": {"headline": "y"}}
+    assert ai_provider._rehome(right, schema) == right
+
+
+@pytest.mark.asyncio
+async def test_a_thinking_call_that_returns_no_answer_is_asked_once_more_without_thinking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = Script(_answer(""), _answer(json.dumps({"ok": True, "name": "abc"})))
+    monkeypatch.setattr(ai_provider.httpx, "AsyncClient", script.client)
+    provider = DeepSeekProvider("ds-secret")
+    result = await provider.generate_structured(
+        "hello", SCHEMA, {"purpose": "website.design_strategy", "max_output_tokens": 500}, timeout_seconds=5)
+    first, second = script.calls[0]["body"], script.calls[1]["body"]
+    assert first["reasoning_effort"] == "low" and first["max_tokens"] > 500
+    assert second["thinking"] == {"type": "disabled"} and second["max_tokens"] == 500
+    assert result["ok"] is True

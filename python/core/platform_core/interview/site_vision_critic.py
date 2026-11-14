@@ -33,12 +33,19 @@ CRITIC_VERSION = "vision-critic-v1"
 # What the critic may say. The first group the polish loop can act on.
 FIXABLE = ("generic_hero", "excessive_cards", "repetitive_layout", "underdesigned_range", "poor_image",
            "thin_section")
-RECORDED = ("weak_hierarchy", "awkward_spacing", "bland_mobile", "ai_generated_feel", "weak_contrast")
+RECORDED = ("weak_hierarchy", "awkward_spacing", "bland_mobile", "ai_generated_feel", "weak_contrast",
+            "unclear_offer", "buried_action", "generic_copy", "unhelpful_page")
 CODES = FIXABLE + RECORDED
 
 PROMPT = """You are the art director of a premium web studio reviewing a website your team built for a real
 small business, before the client sees it. The bar: a site that looks custom-designed and expensive — a strong
 type hierarchy, purposeful whitespace, image-led composition, varied section rhythm, no generic template feel.
+
+Act as the person responsible for a website builder, not an admirer of its demo. A beautiful photograph or an
+animation does not excuse an unclear offer, a buried useful action, missing prices or an empty inner page.
+Ask: can a first-time visitor tell what this business offers, why it is different, and what to do next?
+Would an owner willingly publish this exact page? Record a specific visible reason when the answer is no.
+Do not predict conversion or claim preference over another builder without a controlled owner comparison.
 
 You are shown screenshots. The manifest says, for each one, the page, the viewport (desktop or phone) and which
 sections (by index and type) it shows. Judge only what you can see. For every real problem return one finding:
@@ -48,6 +55,8 @@ sections (by index and type) it shows. Judge only what you can see. For every re
   page reads as a plain list; poor_image — a picture is low quality, badly cropped or wrong for the business;
   thin_section — a section has too little in it to earn its space; weak_hierarchy, awkward_spacing,
   bland_mobile, ai_generated_feel, weak_contrast — say so, they are recorded for the design system.
+  unclear_offer — cannot tell what is actually offered; buried_action — the useful next action is hard to find;
+  generic_copy — headings could belong to any business; unhelpful_page — the page adds little beyond navigation.
 - page and section: the page slug and the section index from the manifest.
 - severity: high (a client would object), medium, low.
 - note: one short sentence a designer would act on.
@@ -88,6 +97,26 @@ class Review:
     scores: dict[str, int] = field(default_factory=dict)
     findings: list[Finding] = field(default_factory=list)
     raw: list[dict[str, Any]] = field(default_factory=list)
+
+
+def prefer_review(candidate: Review, baseline: Review, *, margin: float = 0.5) -> bool:
+    """A bounded repair is a proposal, not evidence that a site improved.
+
+    Keep a meaningful overall gain only with complete comparable scores, no
+    severely regressed dimension, and no increase in high-severity findings.
+    A single judgment remains noisy; this is a rollback rule, not certification.
+    """
+    keys = ("hierarchy", "imagery", "rhythm", "distinctness", "mobile")
+    if any(k not in r.scores for r in (candidate, baseline) for k in keys):
+        return False
+    if any(not 1 <= r.scores[k] <= 10 for r in (candidate, baseline) for k in keys):
+        return False
+    if any(candidate.scores[k] < baseline.scores[k] - 1 for k in keys):
+        return False
+    high_before = sum(r.get("severity") == "high" for r in baseline.raw)
+    high_after = sum(r.get("severity") == "high" for r in candidate.raw)
+    return (high_after <= high_before
+            and sum(candidate.scores[k] - baseline.scores[k] for k in keys) / len(keys) >= margin)
 
 
 class VisionProvider(Protocol):
@@ -182,16 +211,26 @@ def revise(payload: dict[str, Any], findings: list[Finding],
         if not f.fixable or not f.code.startswith("vision:"):
             continue
         code = f.code.split(":", 1)[1]
+        if f.page not in pages:
+            continue
         page = pages[f.page]
         if code == "underdesigned_range":
             showcase = next((s for s in page["sections"] if s["section_type_id"] == "product_showcase"), None)
             if showcase:
-                kinds = [c for c in showcase["content"].get("categories") or [] if c.get("image_asset_id")]
+                from platform_core.interview.composition import plan
+
                 before = showcase["layout_variant"]
-                after = "chapters" if len(kinds) >= 2 else "menu_book"
-                if before != after:
-                    showcase["layout_variant"] = after
-                    done.append(f"{f.page}: range {before} → {after}")
+                index = page["sections"].index(showcase)
+                tried.add((f.page, index, before))
+                content = showcase["content"]
+                theme = payload.get("theme_hints") or {}
+                candidates = plan(items=content.get("items") or [], categories=content.get("categories") or [],
+                                  concept=str((theme.get("dna") or {}).get("concept") or ""),
+                                  archetype=str(theme.get("site_archetype") or ""), seed=f.page)["candidates"]
+                alternatives = [v for v in candidates if (f.page, index, v) not in tried]
+                if alternatives:
+                    showcase["layout_variant"] = alternatives[0]
+                    done.append(f"{f.page}: range {before} → {alternatives[0]}")
             continue
         try:
             index = int(f.where.rsplit("#", 1)[1])
@@ -209,6 +248,16 @@ def revise(payload: dict[str, Any], findings: list[Finding],
                 done.append(f"home: hero {before} → {options[0]}")
         elif code in {"excessive_cards", "repetitive_layout"} and kind in _ALTERNATIVE:
             options = [v for v in _ALTERNATIVE[kind] if (f.page, index, v) not in tried]
+            if kind == "product_showcase":
+                from platform_core.interview.composition import plan
+
+                content = section["content"]
+                theme = payload.get("theme_hints") or {}
+                options = [v for v in plan(
+                    items=content.get("items") or [], categories=content.get("categories") or [],
+                    concept=str((theme.get("dna") or {}).get("concept") or ""),
+                    archetype=str(theme.get("site_archetype") or ""), seed=f.page)["candidates"]
+                    if (f.page, index, v) not in tried]
             if kind == "statement":
                 options = [v for v in options if v == "giant" or section["content"].get("image_asset_id")]
             if kind == "product_showcase" and f.page == "home":

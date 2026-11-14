@@ -73,6 +73,7 @@ export default async function WebsiteEditorPage({
     <SiteEditor
       businessId={params.businessId}
       pages={draft.pages}
+      theme={draft.theme || {}}
       previewPath={previewRes.ok ? previewRes.data.data.preview_path : null}
       webUrl={webUrl}
       publishHref={`${base}/publish`}

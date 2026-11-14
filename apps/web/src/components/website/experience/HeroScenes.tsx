@@ -17,7 +17,7 @@ import { GlLiving } from './gl/GlLiving'
  *   plane           a tilted wall of pictures that straightens toward you
  *   kinetic         poster type that pulls apart around a growing picture
  *   depth           a picture with floating, layered cards at different depths
- *   aurora          a living gradient in the brand's colours (no photos needed)
+ *   aurora          typographic range, or a colour field when content is sparse
  */
 
 export type Pic = { url: string; alt_text?: string | null }
@@ -81,12 +81,16 @@ export function HeroScene({
   image,
   pictures,
   longest,
+  offeringNames = [],
+  concept = '',
 }: {
   variant: string
   parts: HeroParts
   image?: Pic
   pictures: Pic[]
   longest: number
+  offeringNames?: string[]
+  concept?: string
 }) {
   const lead = image || pictures[0]
   const base: Vars = { '--hero-longest': longest }
@@ -248,6 +252,33 @@ export function HeroScene({
   }
 
   // aurora — and the floor for any scene without the pictures it needs.
+  // With a real range to introduce, missing photos are an editorial problem,
+  // not a reason to give every business the same animated gradient banner.
+  const names = [...new Set(offeringNames.filter(Boolean))].slice(0, 4)
+  if (names.length >= 2) {
+    const layout = ['kinetic_sport', 'playful_pop'].includes(concept)
+      ? 'poster'
+      : ['warm_craft', 'quiet_luxury', 'calm_care'].includes(concept) ? 'letter' : 'index'
+    return (
+      <section className="ls-hero fx-typecover" data-type-layout={layout} style={{ ...base, '--type-range-count': names.length } as Vars}>
+        <div className="fx-typecover__inner">
+          <div className="fx-typecover__copy">
+            <Copy parts={parts} />
+          </div>
+          <ol className="fx-typecover__range">
+            {names.map((name, i) => (
+              <li key={name}>
+                <span className="fx-typecover__number" aria-hidden="true">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span>{name}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+    )
+  }
   return (
     <section className="ls-hero fx-aurora" data-progress="" data-pointer="" style={base}>
       <div className="fx-aurora__wash" aria-hidden="true">

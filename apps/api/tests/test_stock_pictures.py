@@ -20,6 +20,7 @@ from test_site_composer import compose, meat, sections
 
 from platform_core.exceptions import ValidationError
 from platform_core.interview.creative_director import direct
+from platform_core.interview.models import BusinessBlueprint, CatalogueGroup
 from platform_core.interview.media_director import (
     draw_missing,
     pictures_expected,
@@ -46,6 +47,18 @@ from platform_core.website.image_search import (
 pytestmark = pytest.mark.usefixtures("stubbed_ai_transport")
 
 STORAGE = "https://storage.locah.test"
+
+
+@pytest.mark.parametrize("offering", ["General medicine", "Cottage stays", "Haircuts", "Pricing strategy"])
+def test_service_photo_briefs_identify_the_actual_work(offering: str) -> None:
+    bp = BusinessBlueprint(business_id=uuid4())
+    bp.taxonomy.groups = [CatalogueGroup(name=offering)]
+    direction = direct(bp, None).model_copy(update={"archetype": "service_appointment", "story_variant": "story_split"})
+    slots = {s.key: s for s in plan_slots(bp, direction)}
+    assert offering in slots["hero"].subject
+    assert offering in slots["story"].subject
+    assert "plants" not in slots["hero"].subject
+    assert slots["hero"].truth_class == slots["story"].truth_class == "mood"
 
 
 def _chosen(candidate: ImageCandidate) -> FoundImage:

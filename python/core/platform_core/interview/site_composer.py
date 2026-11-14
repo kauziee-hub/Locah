@@ -41,7 +41,7 @@ from platform_core.interview.taxonomy import normalise_name
 from platform_core.interview.website_copy import WebsiteCopy
 from platform_core.validation.website import validate_generation_payload
 
-COMPOSER_VERSION = "creative-composer-v5"
+COMPOSER_VERSION = "creative-composer-v6"
 
 # What the browse section is called, by archetype. "What we do" is for services
 # only — for a shop it hides the fact that there are things to buy.
@@ -121,15 +121,26 @@ def _expected_pictures(bp: BusinessBlueprint) -> int:
     return ready + planned
 
 
+# Facts whose value is a sentence the owner typed, shown on the page as said.
+# Numbers, hours and the name are left exactly as stored.
+_SAID_FACTS = frozenset({"locations", "description", "operational_characteristics", "operating_model",
+                         "customer_actions", "story", "delivery_area", "service_area", "differentiators"})
+
+
 def _facts(bp: BusinessBlueprint) -> dict[str, str]:
-    return {k: f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items()}
+    from platform_core.interview.spelling import for_the_page
+
+    return {k: (for_the_page(f.value) if k in _SAID_FACTS else f.value)
+            for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items()}
 
 
 def _answer(bp: BusinessBlueprint, target: str) -> str:
+    from platform_core.interview.spelling import for_the_page
+
     state = bp.discovery.get(target)
     if not state or state.status not in {"answered", "partial"}:
         return ""
-    return f"{state.summary} {state.quote}".strip()
+    return for_the_page(f"{state.summary} {state.quote}".strip())
 
 
 def _display_phone(text: str) -> str:
@@ -773,6 +784,14 @@ def compose_site(
     # How the range browses before the experience makes a scene of it: kept
     # for the range's own page.
     range_variant = str(showcases[0]["layout_variant"]) if showcases else ""
+    from platform_core.interview.composition import plan as plan_composition
+
+    range_content = showcases[0]["content"] if showcases else {}
+    composition = plan_composition(
+        items=range_content.get("items") or [], categories=range_content.get("categories") or [],
+        concept=dna.concept, archetype=arche, seed=seed, preferred=range_variant,
+        choices=(direction.model_choices or {}).get("composition") or None,
+    )
     for section in sections:
         kind = section["section_type_id"]
         if kind == "hero" and experience.hero:
@@ -820,6 +839,7 @@ def compose_site(
                   "story": story_picture},
         dna_seed=int(hashlib.sha256(f"{seed}:pages".encode()).hexdigest()[:8], 16), range_variant=range_variant,
         order_link=wa_link, concept=dna.concept,
+        range_layout=composition["range_layout"],
         # A page order the creative director (the model) chose stands.
         keep_order=bool(direction.page_order) and direction.source == "ai",
         lead=bp.website_prefs.lead_section or "",
@@ -860,6 +880,7 @@ def compose_site(
         "creative_direction": direction.model_dump(mode="json"),
         # Motion language and scenes — read by the renderer's experience layer.
         "experience": experience.theme(),
+        "composition": composition,
         "mobile": direction.mobile,
         "composer_version": COMPOSER_VERSION,
         "generation": meta or {},

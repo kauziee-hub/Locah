@@ -459,7 +459,11 @@ def fulfilment_modes(text: str) -> list[str]:
                           ("dine_in", _DINE_IN), ("on_site", _ON_SITE)):
         if _find(pattern, text):
             modes.append(mode)
-    if re.search(r"\bboth\b", text, re.I) and not modes:
+    # "Both" answers "delivery or pickup?" only when it IS the answer — a few
+    # words. Inside a sentence it is about something else: "ladies gents both"
+    # put "Home delivery" and "Pickup" on a salon's website (owner run, 2026-11-13).
+    if re.search(r"\bboth\b", text, re.I) and not modes and len(text.split()) <= 4 and not re.search(
+            r"\b(?:ladies|gents|men|women|boys|girls|kids|veg|non[- ]?veg)\b", text, re.I):
         modes = ["delivery", "pickup"]
     if "shipping" in modes and "delivery" not in modes and re.search(r"\ball (?:over )?india\b", text, re.I):
         modes.insert(0, "delivery")

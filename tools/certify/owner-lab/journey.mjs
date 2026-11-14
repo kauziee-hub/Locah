@@ -405,7 +405,10 @@ try {
     s.done()
   }
   // ------------------------------------------------------------- 7. stock
-  if (MODEL === 'order' && runs('stock')) {
+  // The stock step weighs in a meat shop's morning arrival (kg on the counter);
+  // a kitchen or a bakery has no such counter, and its journey goes on without it.
+  const WEIGHED = scenarioKey === 'meat-shop'
+  if (MODEL === 'order' && WEIGHED && runs('stock')) {
     const s = step('stock: keep stock of what sells out, record this morning\'s arrival')
     const KEEP = [/chicken curry cut/i, /^mutton/i, /seer fish/i]
     await page.goto(`${WS}/b/${B}/inventory?view=setup`, { waitUntil: 'networkidle', timeout: 120000 })
@@ -690,7 +693,7 @@ try {
     s.check('the cash is recorded as paid', /paid/i.test(String(final.payment_status)) && !/not|un/i.test(String(final.payment_status)), String(final.payment_status))
     const stockAfter = ((await api('GET', `/v1/platform/businesses/${B}/stock`)).data?.items || []).map((r) => `${r.title} ${r.on_hand_text}`)
     s.note(`stock before: ${stockBefore.join('; ')} | after: ${stockAfter.join('; ')}`)
-    s.check('the curry cut sold came off the stock', stockBefore.join() !== stockAfter.join(), '')
+    if (WEIGHED) s.check('the curry cut sold came off the stock', stockBefore.join() !== stockAfter.join(), '')
     if (track) {
       await track.goto(journal.track_url, { waitUntil: 'networkidle' })
       await track.screenshot({ path: path.join(OUT, `shots/${String(++shotNo).padStart(2, '0')}-customer-tracking-final.png`), fullPage: true })

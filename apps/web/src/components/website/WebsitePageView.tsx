@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { CommerceCart } from './CommerceCart'
 import { PublicLicences } from './PublicLicences'
-import { SectionRenderer, resolvePath, type CoverFacts, type SiteContact } from './SectionRenderer'
+import { SectionRenderer, resolvePath, actionNeeds, type CoverFacts, type SiteContact } from './SectionRenderer'
 import { siteFontVariables } from './site-fonts'
 import { withPreviewToken } from './preview-links'
 import { LanguageSwitch } from './LanguageSwitch'
@@ -9,7 +9,8 @@ import { SiteWordsProvider } from './SiteWords'
 import type { PublicWebsitePayload, PhotoCredit } from '@/lib/public-website'
 import { LANG_LOCALE, offered, siteWords, type SiteLang } from '@/lib/site-words'
 import { MOTION_BOOT, OpenNow, SiteMotion } from './experience/SiteMotion'
-import { hasMoment, siteDna, siteExperience } from './experience/experience'
+import { hasMoment, ownerStyle, siteDna, siteExperience } from './experience/experience'
+import { EditorBridge } from './EditorBridge'
 import { readHours, type OpenWords } from './experience/open-now'
 import type { Pic } from './experience/HeroScenes'
 
@@ -258,8 +259,16 @@ export function WebsitePageView({
   const reachable = Boolean(contact.phone || waHref)
   const nav = data.navigation || []
   const sections = data.page.sections.filter((s) => s.is_visible !== false)
+  const pagePurpose = data.page.slug === 'home' ? 'home' : sections.some(
+    (s) => s.section_type_id === 'product_showcase' && s.content?.anchor === 'shop'
+  ) ? 'range' : 'story'
   const experience = siteExperience(theme)
   const dna = siteDna(theme)
+  const owner = ownerStyle(theme)
+  // Composition is presentation only. Unknown/stale values keep the existing
+  // renderer, and an opening without a photo retains a complete type layout.
+  const composition = theme.composition && typeof theme.composition === 'object'
+    ? theme.composition as Record<string, unknown> : {}
   // A designed site closes on its name, set as wide as the page: every site
   // with a design DNA, and a family that asked for a statement footer.
   const closingName = Boolean(dna.concept) || Boolean(family && footerStyle === 'statement')
@@ -280,10 +289,24 @@ export function WebsitePageView({
   // What a cover may draw on besides the hero's words: where and when (the
   // owner's main location), and the range's best priced things — tagged
   // ones ("Bestseller") first, then pictured ones — with the range's page.
-  const coverFacts: CoverFacts = { place: place ?? undefined, signatures: [] }
+  const offeringNames: string[] = []
+  const coverFacts: CoverFacts = { place: place ?? undefined, signatures: [], offeringNames, concept: dna.concept }
   for (const section of sections) {
-    if (section.section_type_id !== 'product_showcase') continue
+    if (!['product_showcase', 'category_showcase'].includes(section.section_type_id)) continue
     const content = (section.content || {}) as Record<string, unknown>
+    // A single umbrella category ("Projects") tells the visitor less than
+    // the three actual projects underneath it.
+    const categoryNames = Array.isArray(content.categories) ? content.categories : []
+    const itemNames = Array.isArray(content.items) ? content.items : []
+    const named = categoryNames.length >= 2 ? categoryNames : itemNames.length >= 2 ? itemNames : categoryNames
+    if (Array.isArray(named)) {
+      for (const row of named) {
+        if (!row || typeof row !== 'object') continue
+        const value = typeof row.name === 'string' ? row.name.trim()
+          : typeof row.title === 'string' ? row.title.trim() : ''
+        if (value && !offeringNames.includes(value) && offeringNames.length < 4) offeringNames.push(value)
+      }
+    }
     const rows = (Array.isArray(content.items) ? content.items : []).filter(
       (row): row is Record<string, unknown> =>
         Boolean(row) && typeof row === 'object' && Boolean((row as Record<string, unknown>).name) &&
@@ -313,10 +336,10 @@ export function WebsitePageView({
   // (Guide §4): a designed "Order now" or "Book" whose tool is not ready yet
   // gives way to the business's primary action — or to nothing.
   const designedHref = designedCta ? String(designedCta.href || '') : ''
-  const needs =
-    /checkout|#shop|#menu|#products/.test(designedHref) ? 'order'
-      : designedHref.includes('/book') ? 'book'
-        : /#plans|#join/.test(designedHref) ? 'join' : null
+  // Browsing published projects or a menu does not require online ordering.
+  // Use the same capability contract as section actions; checkout, booking
+  // and joining keep their independent gates.
+  const needs = actionNeeds(designedHref)
   const primaryPath = typeof capabilities.primary_path === 'string' ? capabilities.primary_path : ''
   const primaryLabel = typeof capabilities.primary_label === 'string' ? capabilities.primary_label : ''
   // A designed button that only opens a channel ("Order on WhatsApp", "Call")
@@ -383,16 +406,6 @@ export function WebsitePageView({
   }
   const openChip = (className: string) =>
     hours ? <OpenNow hours={hours} words={openWords} locale={LANG_LOCALE[lang]} className={className} /> : null
-  // The desktop action dock: the header's live action and one channel beside
-  // it — WhatsApp, or Call when the action already is the chat.
-  const ctaIsChannel = /wa\.me|^whatsapp:|^tel:/.test(ctaTarget)
-  const dockChannel =
-    waHref && !/wa\.me|^whatsapp:/.test(ctaTarget)
-      ? { href: waHref, label: journey ? t(journey.label) : 'WhatsApp', key: 'chat', external: true }
-      : contact.phone && !ctaTarget.startsWith('tel:')
-        ? { href: `tel:${contact.phone}`, label: callLabel, key: 'call', external: false }
-        : null
-  const dock = ctaLabel && ctaTarget && !ctaIsChannel ? { label: ctaLabel, href: ctaTarget } : null
   // The pointer's ring and the words it may say (motion.ts reads them).
   const cursorLive = dna.cursor === 'dot' || hasMoment(dna, 'cursor_label')
   const cursorWords = cursorLive
@@ -403,6 +416,7 @@ export function WebsitePageView({
     <div
       className={siteFontVariables}
       data-locah-site=""
+      data-page-purpose={pagePurpose}
       lang={LANG_LOCALE[lang]}
       data-personality={personality}
       data-typography={typography}
@@ -427,6 +441,9 @@ export function WebsitePageView({
       data-motion-lang={experience.motion}
       data-display={dna.display}
       data-body={dna.body}
+      data-owner-heading={owner.heading_size}
+      data-owner-text={owner.text_size}
+      data-owner-corners={owner.corners}
       data-headline={dna.headline}
       data-texture={dna.texture}
       data-pattern={dna.pattern}
@@ -438,6 +455,10 @@ export function WebsitePageView({
       data-cursor={dna.cursor}
       data-invert={dna.invert}
       data-concept={dna.concept}
+      data-page-opening={finite(composition.opening, ['masthead', 'offset', 'poster'], '') || undefined}
+      data-chapter-layout={finite(composition.chapters, ['alternating', 'gallery', 'index'], '') || undefined}
+      data-range-layout={finite(composition.range_layout,
+        ['chapters', 'menu_book', 'hover_list', 'spotlight', 'bento', 'compact_list'], '') || undefined}
       data-space={dna.space}
       data-photo={dna.photo}
       data-budget={dna.budget}
@@ -463,6 +484,7 @@ export function WebsitePageView({
         </div>
       ) : null}
       <SiteWordsProvider lang={lang}>
+      {data.is_preview ? <EditorBridge /> : null}
       {data.is_preview ? (
         <aside
           aria-label="Preview status"
@@ -589,6 +611,9 @@ export function WebsitePageView({
             key={section.id}
             style={{ display: 'contents' }}
             data-emphasis={emphasisFor(section.section_type_id)}
+            // The Workspace editor points at a section by its id (EditorBridge);
+            // a visitor's page does not carry it.
+            data-section-id={data.is_preview ? section.id : undefined}
           >
             <SectionRenderer
               section={section}
@@ -607,28 +632,6 @@ export function WebsitePageView({
           </div>
         ))}
       </main>
-
-      {dock ? (
-        // The live action within a glance once the cover has gone (SiteMotion
-        // shows it; hidden at the closing band and the footer, and on phones,
-        // whose bar carries the same).
-        <aside className="fx-dock" aria-label={name}>
-          {openChip('fx-open--dock')}
-          <a className="ls-btn fx-dock__primary" href={dock.href} data-cursor-label={cursorKey(dock.href)}>
-            {dock.label}
-          </a>
-          {dockChannel ? (
-            <a
-              className="fx-dock__channel"
-              href={dockChannel.href}
-              data-cursor-label={dockChannel.key}
-              {...(dockChannel.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-            >
-              {dockChannel.label}
-            </a>
-          ) : null}
-        </aside>
-      ) : null}
 
       {waHref ? (
         <a

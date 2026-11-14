@@ -112,6 +112,9 @@ def test_talking_after_the_website_exists_changes_it(owner) -> None:  # noqa: F8
         data = talk.say("That isn't our story.")
         assert "What would you like people to know" in data["blueprint"]["messages"][-1]["text"]
         data = talk.say("We have cut meat fresh every morning for eight years, only after you order.")
-        story = of(talk.site(), "about")
+        # The story is told where this site's design tells it: an About section,
+        # or the home page's statement — the owner's sentence, set large. Saying
+        # "that's your story on the website now" must mean it is there.
+        story = next(s for s in every_section(talk.site())
+                     if s["section_type_id"] in {"about", "statement"} and "eight years" in str(s["content"]))
         assert story["is_visible"] is True
-        assert "eight years" in str(story["content"])

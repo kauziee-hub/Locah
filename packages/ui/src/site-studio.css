@@ -948,7 +948,7 @@
   font-weight: 800;
 }
 [data-locah-site] .fx-bento__cell--pic .ls-price strong {
-  color: #fff;
+  color: var(--site-ink);
 }
 [data-locah-site] .fx-stack__card:nth-child(3n + 3) .ls-price strong {
   color: inherit;

@@ -296,8 +296,11 @@ export function Cover({
   }
 
   if (variant === 'stage') {
+    // A long headline cannot consume the first screen before the product
+    // appears. Keep the same scene, but compose its words beside the photo.
+    const dense = parts.headline.trim().split(/\s+/u).length > 6 || parts.headline.length > 34
     return (
-      <section className="ls-hero fx-cover fx-stage" data-progress="">
+      <section className="ls-hero fx-cover fx-stage" data-progress="" data-copy-density={dense ? 'long' : 'short'}>
         <div className="ls-hero__inner fx-stage__copy">
           {parts.eyebrow}
           {parts.title}

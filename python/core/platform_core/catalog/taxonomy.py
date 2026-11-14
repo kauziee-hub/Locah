@@ -312,7 +312,8 @@ CATEGORIES: tuple[Category, ...] = (
            "strength training"),
         _s("yoga", "Yoga", "studio", STUDIO, "yoga studio", "yoga classes", "yoga centre"),
         _s("pilates", "Pilates", "studio", STUDIO, "pilates studio"),
-        _s("crossfit", "CrossFit", "gym", GYM, "cross fit", "functional training"),
+        _s("crossfit", "CrossFit", "gym", GYM, "cross fit", "functional training", "functional fitness",
+           "crossbox"),
         _s("powerlifting", "Powerlifting", "gym", GYM, "powerlifting gym", "weightlifting", "barbell club"),
         _s("martial_arts", "Martial arts", "studio", STUDIO, "karate", "silambam", "taekwondo",
            "kickboxing", "mma", "kalari"),
@@ -410,7 +411,8 @@ CATEGORIES: tuple[Category, ...] = (
            "office space", "commercial property"),
     )),
     Category("design_build", "Architecture, interiors & construction", "professional_service", True, (
-        _s("architect", "Architect", "design_studio", DESIGN, "architecture firm", "architects"),
+        _s("architect", "Architect", "design_studio", DESIGN, "architecture firm", "architects",
+           "architecture", "architecture practice", "architecture studio", "architectural"),
         _s("interior_designer", "Interior designer", "design_studio", DESIGN, "interiors", "interior design",
            "home interiors", "interior decorator"),
         _s("landscape_architect", "Landscape architect", "design_studio", DESIGN, "landscaping",
@@ -1115,6 +1117,9 @@ def _singular(text: str) -> str:
 # chicken, mutton and seafood" is a meat shop. Each is only a prior, shown as
 # "Looks like…" and corrected with one tap — never a fact on the website.
 _DOING: tuple[tuple[re.Pattern[str], str, float], ...] = (
+    (re.compile(r"\b(?:chicken|mutton|meat)\b[^.]{0,30}\b(?:shop|stall)\b", re.I), "meat_shop", 0.95),
+    (re.compile(r"\bi (?:help|advise|work with)\b[^.]{0,80}\b(?:businesses|brands|companies|founders|startups|"
+                r"owners)\b", re.I), "business_consultant", 0.8),
     (re.compile(r"\b(?:sell|selling|sold|supply)\w*\b[^.]{0,50}\b(?:chicken|mutton|seafood|prawns?|"
                 r"fish|meat|crabs?|squid)\b", re.I), "meat_shop", 0.78),
     (re.compile(r"\b(?:chicken|mutton|seafood|meat)\b[^.]{0,40}\b(?:by (?:the )?kg|per kg|kilo)", re.I),
@@ -1141,6 +1146,17 @@ _DOING: tuple[tuple[re.Pattern[str], str, float], ...] = (
 # "…a physiotherapy centre with a small gym": what comes after "with a small"
 # is the lesser part of the business.
 _SECONDARY = re.compile(r"\b(?:with|and|plus|also)\s+(?:a\s+|an\s+)?(?:small|little|tiny)?\s*$")
+# "…and a small in-house lab for blood tests": a part of the business, not its kind.
+_IN_HOUSE = re.compile(r"\b(?:in house|inhouse)\s+(?:\w+\s+){0,3}$")
+# What the business works on, sits beside or buys from is not what it is:
+# "we design homes and small hotels" is an architect, "near the temple" is
+# a place, "from one supplier farm" is a supplier (owner personas, 2026-11-13).
+_SOMEONE_ELSES = re.compile(
+    r"\b(?:design|designs|designing|designed|build|builds|building|built|near|beside|opposite|behind|"
+    r"from|into|supplier|suppliers|including|across)\s+(?:\w+\s+){0,4}$")
+# "…is a bakery", "we run a small salon": the plainest way an owner names the kind.
+_NAMED_AS = re.compile(
+    r"\b(?:is|are|am|run|runs|running|have|own|owns|started|opened)\s+(?:a|an|the|our|my)?\s*(?:\w+\s+){0,3}$")
 # A word used for HOW they work, not WHAT they are: "we courier them" is a
 # pickle maker that ships, not a courier company.
 _MEANS: dict[str, re.Pattern[str]] = {
@@ -1153,12 +1169,193 @@ _MEANS: dict[str, re.Pattern[str]] = {
 }
 
 
+# ----------------------------------------------------------------- spelling
+# Owners type on a phone, fast, in their second or third language: "kichen",
+# "resturant", "bekary", "tution", "mobail shop", "gymm". A trade word spelt
+# wrong is still the trade. Found on a real owner run (2026-11-13): "pepper
+# vine kichen … we make kerala food biriyani appam" was filed as "other", so
+# its dishes were imported as bookable services and its website could not take
+# an order. The repair is deliberately narrow — a word is only read as a trade
+# word when it is not a word of its own and differs from that trade word the
+# way a slip does (vowels, a doubled or dropped letter) — and it is checked
+# against every certification persona so clean sentences are left alone.
+
+# The slips owners actually make on the words that name a trade, each one seen
+# in an interview or a certification persona. A general spell-checker was tried
+# and thrown away the same day: without a dictionary it "corrected" real words
+# ("stuff" to "staff", "message" to "massage") and misfiled two businesses.
+_SLIPS: dict[str, str] = {
+    slip: word
+    for word, slips in {
+        "restaurant": "resturant restarant restaurent resturent restrant restorent restaraunt resturaunt restraunt",
+        "kitchen": "kichen kitchn kithcen kitchan kitchin",
+        "bakery": "bekary bakary backery bekery bakry",
+        "parlour": "parler parlur parlar",
+        "tuition": "tution tutions tuision tutition",
+        "grocery": "grocary grosery grossery grocry",
+        "boutique": "boutiqe botique butique boutiq botiq",
+        "tailoring": "tailering tailoring tailaring",
+        "tailor": "tailer taylor tailar",
+        "physiotherapy": "physiotherpy phisiotherapy physiotheraphy physiotheropy fisiotherapy",
+        "photography": "photografy fotography photograpy photogrphy",
+        "photographer": "photografer fotographer photograper",
+        "mobile": "mobail mobil moble",
+        "dental": "dentel dentl",
+        "coaching": "coching coachng",
+        "clinic": "clinc clinik clenic",
+        "hospital": "hospitel hosptal hospitl",
+        "pharmacy": "pharmasy farmacy pharmecy",
+        "jewellery": "jewelery jwellery jewellry jwelery",
+        "hotel": "hotal hotl",
+        "catering": "catring cattering caterng",
+        "consultant": "consultent consltant consultnt",
+        "consulting": "consultng consalting",
+        "architect": "archtect architec archetect",
+        "architects": "archtects architecs",
+        "beauty": "beuty beauti buety",
+        "fitness": "fitnes fittness",
+        "furniture": "furnitur furnture furniter",
+        "electronics": "electonics electronic electroniks",
+        "stationery": "stationry stationary",
+        "supermarket": "supermaket supermarkt",
+        "textile": "textail textil",
+        "garments": "garmets garmants",
+        "academy": "acadamy acadmy",
+        "institute": "institue instute",
+        "coffee": "cofee coffe",
+        "cottage": "cotage cottege",
+        "vegetables": "vegitables vegetabls",
+        "sweets": "sweats",
+        "laundry": "laundary londry",
+        "nursery": "nursary",
+        "accessories": "accesories acessories",
+        "cosmetics": "cosmatics",
+        "ayurveda": "ayurvedha ayurved",
+        "driving": "drivng",
+        "repair": "repar repiar",
+        "service": "servise",
+        "biryani": "biriyani briyani biriani biryni",
+    }.items()
+    for slip in slips.split()
+}
+_DOUBLED = re.compile(r"(.)\1+")
+
+
+def _one_slip(a: str, b: str) -> bool:
+    """One letter missing, extra, wrong or swapped — and not near the end
+    (where "designed" / "designer" and "properly" / "property" are real words)."""
+    if abs(len(a) - len(b)) > 1 or a == b:
+        return False
+    i = 0
+    while i < min(len(a), len(b)) and a[i] == b[i]:
+        i += 1
+    if i >= min(len(a), len(b)) - 2:
+        return False
+    if len(a) == len(b):
+        return a[i + 1:] == b[i + 1:] or (a[i] == b[i + 1] and a[i + 1] == b[i] and a[i + 2:] == b[i + 2:])
+    longer, shorter = (a, b) if len(a) > len(b) else (b, a)
+    return longer[i + 1:] == shorter[i:]
+
+
+@lru_cache(maxsize=1)
+def _trade_words() -> tuple[frozenset[str], dict[str, tuple[str, ...]]]:
+    """(every word of every label and synonym, the long ones by first letter)."""
+    words = {w for phrase, _key, weight in _index() if weight for w in _singular(phrase).split()}
+    words |= {w for phrase, _key, weight in _index() if weight for w in phrase.split()}
+    by_letter: dict[str, list[str]] = {}
+    for word in sorted(words):
+        if len(word) >= 8 and word.isalpha():
+            by_letter.setdefault(word[0], []).append(word)
+    return frozenset(words), {k: tuple(v) for k, v in by_letter.items()}
+
+
+def _respell(token: str) -> str:
+    """The trade word a misspelt token is, or the token itself."""
+    known, by_letter = _trade_words()
+    if token in _SLIPS and token not in known:
+        return _SLIPS[token]
+    if len(token) < 4 or not token.isalpha() or token in known:
+        return token
+    collapsed = _DOUBLED.sub(lambda m: m.group(1), token)
+    if collapsed != token and collapsed in known and (
+            len(collapsed) >= 5 or (len(collapsed) >= 3 and token[-1] == token[-2])):
+        return collapsed  # "gymm" — never "noon", which is a word of its own
+    if len(token) >= 8:
+        # A long word one slip from a long trade word: at this length a real
+        # word of its own is rare ("restarant").
+        close = [w for w in by_letter.get(token[0], ()) if _one_slip(token, w)]
+        if len(close) == 1:
+            return close[0]
+    return token
+
+
+def respell(text: str) -> str:
+    """An owner's sentence with its misspelt trade words put right; nothing else changes."""
+    return " ".join(_respell(token) for token in _norm(text).split())
+
+
+# What is cooked and served, in the words owners use for it. Two of these in a
+# sentence, or one after "we make / cook / serve", is a kitchen — whatever it
+# calls itself.
+_DISHES = (
+    r"biri?yanis?|dosas?|dosai|idl[iy]s?|vadas?|pongal|upma|poori|puri|parottas?|porottas?|"
+    r"chapat[ih]i?s?|rotis?|naans?|meals|thalis?|curr(?:y|ies)|appams?|puttu|idiyappam|fried rice|"
+    r"noodles|momos?|shawarma|kebabs?|tandoori|pulao|sambar|rasam|kurma|korma|gravy|tiffins?|"
+    r"chaats?|pani ?puri|samosas?|pav bhaji|pizzas?|burgers?|sandwich(?:es)?|stew|"
+    r"payasam|halwa|mandi|kothu"
+)
+_COOKS = re.compile(
+    r"\b(?:make|makes|making|cook|cooks|cooking|serve|serves|serving|prepare|prepares)\b[^.]{0,60}\b"
+    r"(?:food|dishes|lunch|dinner|breakfast|" + _DISHES + r")\b", re.I)
+_DISH = re.compile(r"\b(?:" + _DISHES + r")\b", re.I)
+_BAKES = re.compile(r"\b(?:make|makes|making|bake|bakes|baking)\b[^.]{0,40}\b(?:cakes?|cupcakes?|brownies|"
+                    r"cookies|pastr(?:y|ies)|breads?)\b", re.I)
+_FROM_HOME = re.compile(r"\b(?:from|at) (?:my |our )?home\b|\bhome ?made\b|\bhome ?based\b", re.I)
+_TIFFIN = re.compile(r"\btiffin (?:cent(?:re|er)|shop|stall|kadai|room)\b", re.I)
+
+
+_WE_COOK = re.compile(r"\b(?:we|i) cook\b", re.I)
+
+
+def _kitchen(text: str) -> tuple[str, float] | None:
+    """A food business read from what it cooks, when no trade word named it."""
+    if _BAKES.search(text):
+        return ("home_bakery", 0.78) if _FROM_HOME.search(text) else ("bakery", 0.76)
+    dishes = {m.group(0).casefold() for m in _DISH.finditer(text)}
+    if _COOKS.search(text) or len(dishes) >= 2 or _TIFFIN.search(text):
+        if _FROM_HOME.search(text):
+            return "home_kitchen", 0.78
+        return "restaurant", 0.76
+    return None
+
+
 def infer_from_text(text: str) -> tuple[str, float] | None:
     """The subcategory an owner's own words most clearly name, with a confidence.
 
     Used only as a seed when the owner did not pick one — never shown as fact.
-    Whole-phrase matches only, so "customers" never reads as "custom".
+    Whole-phrase matches only, so "customers" never reads as "custom". Read as
+    written first; if nothing is named, once more with misspelt trade words put
+    right, and last from what the business cooks.
     """
+    found = _infer(text)
+    if found is None:
+        fixed = respell(text)
+        if fixed != _norm(text):
+            found = _infer(fixed)
+    kitchen = _kitchen(text or "")
+    if kitchen and (found is None or found[1] < 0.72 or (found[1] < kitchen[1] and (
+            _is_food(found[0]) or _WE_COOK.search(text or "")))):
+        # One dish named among several ("biriyani appam stew meals") is a
+        # kitchen that cooks them all, not a biryani shop.
+        found = kitchen
+    return found
+
+
+def _is_food(subcategory_key: str) -> bool:
+    return SUBCATEGORIES[subcategory_key][0].key in {"home_food", "food_service"}
+
+
+def _infer(text: str) -> tuple[str, float] | None:
     haystack = f" {_singular(_norm(text))} "
     if len(haystack) < 4:
         return None
@@ -1172,12 +1369,17 @@ def infer_from_text(text: str) -> tuple[str, float] | None:
             # The longer phrase is the more specific reading: "gym app" is a
             # software business, not a gym. Between equals, the first said.
             score = 0.6 + 0.08 * len(phrase.split()) + weight * 0.03
-            if _SECONDARY.search(haystack[:at + 1]):
+            before = haystack[:at + 1]
+            if _SECONDARY.search(before) or _IN_HOUSE.search(before):
                 score -= 0.12
+            if _SOMEONE_ELSES.search(before):
+                score -= 0.15
+            elif _NAMED_AS.search(before):
+                score += 0.05
             if best is None or score > best[1]:
                 best = (key, score)
     for pattern, key, confidence in _DOING:
-        if pattern.search(text or "") and (best is None or confidence > best[1]):
+        if pattern.search(text or "") and (best is None or confidence >= best[1] - 1e-9):
             best = (key, confidence)
     if best is None:
         # Tamil script is not in the latin index: a few trade words an owner

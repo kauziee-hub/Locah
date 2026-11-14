@@ -120,8 +120,11 @@ def days_named(text: str) -> list[str]:
 _CLAUSE = re.compile(
     r"\s*(?:[,;]|\.(?=\s|$)|\bbut\b|"
     r"\band\b(?=\s+(?:on\s+)?(?:closed|open|mon|tue|wed|thu|fri|sat|sun|week))|"
-    r"(?<=\d)\s+(?=(?:on\s+)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\s+"
-    r"(?:mornings?|evenings?|nights?|only|half|closed|holiday|leave|off)\b))\s*", re.I)
+    r"(?:(?<=\d)|(?<=[ap]m)|(?<=days)|(?<=daily))\s+(?=(?:on\s+)?(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\s+"
+    r"(?:(?:mornings?|evenings?|nights?|only|half|closed|holiday|leave|off)\b|"
+    # "6am-10pm sunday till 12": that day's own closing time (it was read as
+    # Sunday 6 am–10 pm and every other day closed — on a gym's live site).
+    r"(?:till|until|upto|up to|from|opens?|closes?)\s+(?:at\s+)?\d)))\s*", re.I)
 # Times are read only in a clause that is about opening: "deliver within 5 to
 # 7 km" has numbers, not hours.
 _CUE = re.compile(

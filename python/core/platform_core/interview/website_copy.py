@@ -89,6 +89,7 @@ class WebsiteCopy(_Model):
     pillars_title: str = Field(default="", max_length=60)
     pillars: list[PillarCopy] = Field(default_factory=list, max_length=4)
     catalogue_intro: str = Field(default="", max_length=200)
+    catalogue_title: str = Field(default="", max_length=90)
     about_intro: str = Field(default="", max_length=200)
     visit_intro: str = Field(default="", max_length=200)
 
@@ -126,7 +127,13 @@ def owner_corpus(bp: BusinessBlueprint) -> str:
     parts = [fact.value for fact in facts.values()]
     parts += [fact.value for fact in bp.identity.values()]
     parts += [message.text for message in bp.messages if message.role == "user"]
-    return " ".join(parts)
+    said = " ".join(parts)
+    # "Chicken" is the owner's word when they typed "chiken": the same words
+    # with their slips put right are theirs too (interview.spelling).
+    from platform_core.interview.spelling import fix_words
+
+    fixed = fix_words(said)
+    return said if fixed == said else f"{said} {fixed}"
 
 
 def _clean(text: str) -> str:
@@ -172,7 +179,7 @@ def govern_copy(copy: WebsiteCopy, bp: BusinessBlueprint) -> WebsiteCopy:
         "headline", "subheadline", "about_title", "about_body", "offerings_title",
         "offerings_subtitle", "steps_title", "closing_headline", "closing_body", "contact_title",
         "categories_title", "products_title", "statement", "pillars_title", "catalogue_intro",
-        "about_intro", "visit_intro",
+        "about_intro", "visit_intro", "catalogue_title",
     ):
         text = _clean(getattr(copy, field))
         if text and _grounded(text, corpus):
@@ -247,8 +254,10 @@ COPY_PROMPT = (
     "- offerings_title, steps_title, closing_headline, closing_body, contact_title: short and "
     "specific.\n"
     "- products_title / categories_title: the heading over what can be bought or chosen, in the "
-    "voice of this kind of site ('Shop by category', 'Our menu', 'Featured projects') — never "
-    "'What we do' for things people buy.\n"
+    "voice of THIS business, naming what makes its range worth choosing — avoid interface labels "
+    "such as 'Shop by category', 'What we do', 'Our services' and 'Featured projects'. "
+    "catalogue_title: a distinct 3-7 word opening for the full range page, grounded in the owner's "
+    "actual offerings; it must work as a title, not a navigation instruction.\n"
     "- statement: ONE sentence (10-28 words) that says what this business is about, in the "
     "owner's spirit and from their words — the line a visitor remembers. statement_highlight: "
     "2-4 consecutive words from it to set apart.\n"

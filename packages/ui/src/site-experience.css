@@ -188,9 +188,6 @@ html.lenis.lenis-smooth {
     background-color 300ms ease,
     box-shadow 300ms ease;
 }
-[data-fx='on'][data-nav-away] .ls-nav {
-  transform: translate3d(0, -110%, 0);
-}
 [data-fx='on'][data-scrolled] .ls-nav {
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.35);
 }
@@ -1058,6 +1055,117 @@ html.lenis.lenis-smooth {
 }
 
 /* aurora — a living gradient in the brand's colours. */
+/* A photo-free opening uses the owner's actual range as its visual material.
+   Concept and content decide the hierarchy; no stock placeholders or claims. */
+[data-locah-site] .fx-typecover {
+  padding: clamp(2rem, 5vw, 5rem) clamp(1.25rem, 4vw, 4rem);
+  background: var(--site-bg);
+  color: var(--site-ink);
+}
+.fx-typecover__inner {
+  max-width: 1240px;
+  margin-inline: auto;
+  display: grid;
+  align-items: center;
+  gap: clamp(2rem, 6vw, 7rem);
+}
+[data-locah-site] .fx-typecover .ls-hero__headline {
+  font-size: calc(clamp(2.6rem, 5.2vw, 6.2rem) * var(--site-display-scale, 1));
+  line-height: var(--site-display-leading, 0.98);
+  letter-spacing: var(--site-display-tracking, -0.035em);
+  max-width: 17ch;
+  text-wrap: balance;
+}
+.fx-typecover__range {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.fx-typecover__range li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 1rem;
+  border-top: 1px solid var(--site-border);
+  padding-block: clamp(1rem, 2vw, 1.75rem);
+  font-size: clamp(1.25rem, 2.3vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.fx-typecover__number {
+  font-family: var(--site-font);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--site-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fx-typecover[data-type-layout='letter'] .fx-typecover__range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--site-border);
+}
+.fx-typecover[data-type-layout='letter'] .fx-typecover__range li {
+  border: 0;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.5rem;
+  font-family: var(--site-display-font);
+  font-size: clamp(1.15rem, 2vw, 1.8rem);
+  padding-block: 0;
+}
+.fx-typecover[data-type-layout='poster'] .fx-typecover__range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.fx-typecover[data-type-layout='poster'] .fx-typecover__range li {
+  display: block;
+  border: 1px solid var(--site-border);
+  padding: 0.75rem 1.25rem;
+  font-size: clamp(1rem, 1.7vw, 1.4rem);
+}
+.fx-typecover[data-type-layout='poster'] .fx-typecover__number { display: none; }
+@media (min-width: 900px) {
+  .fx-typecover__inner {
+    min-height: min(680px, calc(90svh - var(--fx-nav-h)));
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  }
+  .fx-typecover[data-type-layout='poster'] .fx-typecover__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__inner {
+    min-height: min(640px, calc(85svh - var(--fx-nav-h)));
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: clamp(2.5rem, 5vw, 5rem);
+  }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.7fr);
+    column-gap: clamp(2rem, 6vw, 6rem);
+    align-items: end;
+  }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__copy > .ls-hero__eyebrow,
+  .fx-typecover[data-type-layout='letter'] .ls-hero__headline { grid-column: 1; }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__copy > .ls-hero__eyebrow { align-self: start; }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__copy > div {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .fx-typecover[data-type-layout='letter'] .ls-hero__sub { margin-top: 0; }
+  .fx-typecover[data-type-layout='letter'] .fx-typecover__range {
+    grid-template-columns: repeat(var(--type-range-count, 3), minmax(0, 1fr));
+    gap: clamp(1rem, 3vw, 3rem);
+  }
+  [data-locah-site] .fx-typecover[data-type-layout='poster'] .ls-hero__headline {
+    max-width: 22ch;
+    font-size: calc(clamp(3rem, 6.3vw, 7.5rem) * var(--site-display-scale, 1));
+  }
+}
 .fx-aurora {
   --p: 0.5;
   display: grid;
@@ -1766,24 +1874,36 @@ html.lenis.lenis-smooth {
   padding: 0;
   display: grid;
   gap: clamp(12px, 1.4vw, 20px);
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 600px) {
+  .fx-bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fx-bento[data-count='3'] > :last-child {
+    grid-column: 1 / -1;
+  }
+  .fx-bento[data-count='3'] > :last-child .fx-bento__media {
+    aspect-ratio: 2 / 1;
+  }
 }
 @media (min-width: 900px) {
-  .fx-bento {
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: clamp(180px, 17vw, 250px);
-  }
-  .fx-bento > :first-child {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-  .fx-bento > :nth-child(4) {
-    grid-column: span 2;
-  }
+  .fx-bento { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fx-bento[data-count='2'], .fx-bento[data-count='4'], .fx-bento[data-count='10'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fx-bento[data-count='3'] > :last-child { grid-column: auto; }
+  .fx-bento[data-count='3'] > :last-child .fx-bento__media { aspect-ratio: 4 / 3; }
+  .fx-bento[data-count='5'] > :first-child,
+  .fx-bento[data-count='8'] > :first-child { grid-column: span 2; }
+  .fx-bento[data-count='5'] > :first-child .fx-bento__media,
+  .fx-bento[data-count='8'] > :first-child .fx-bento__media { aspect-ratio: 2 / 1; }
+  .fx-bento[data-count='7'] > :last-child { grid-column: span 3; }
+  .fx-bento[data-count='7'] > :last-child .fx-bento__media { aspect-ratio: 3 / 1; }
 }
+.fx-bento[data-count='1'] { grid-template-columns: minmax(0, 1fr); }
 .fx-bento__cell {
   position: relative;
-  min-height: 200px;
+  min-width: 0;
   border-radius: calc(var(--site-radius) + 2px);
   overflow: hidden;
   background: var(--site-bg-alt);
@@ -1791,7 +1911,7 @@ html.lenis.lenis-smooth {
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 /* No photograph anywhere in the bento (a design chosen before the photo
    search came back empty): compact text cells, never tall empty boxes. */
@@ -1814,13 +1934,18 @@ html.lenis.lenis-smooth {
     grid-row: auto;
   }
 }
-.fx-bento__cell img {
+.fx-bento__media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.fx-bento__media img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  z-index: -2;
   transition: transform 1.1s var(--fx-ease);
 }
 .fx-bento__cell:hover img {
@@ -1830,51 +1955,53 @@ html.lenis.lenis-smooth {
 .fx-bento__cell--pic {
   border: 0;
 }
-/* An eased scrim under the words, and a soft vignette that sits a bright
-   white-plate shot into the page instead of a hard black ramp. */
+/* Catalogue information needs its own readable surface. Photography remains
+   unpainted by copy; the brand's palette carries the caption and action. */
 .fx-bento__cell--pic::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(140% 100% at 50% 30%, transparent 50%, rgb(0 0 0 / 0.28)),
-    linear-gradient(
-      to top,
-      rgb(0 0 0 / 0.74) 0%,
-      rgb(0 0 0 / 0.5) 20%,
-      rgb(0 0 0 / 0.2) 42%,
-      transparent 64%
-    );
+  content: none;
 }
 .fx-bento__copy {
   padding: clamp(1rem, 0.8rem + 1vw, 1.6rem);
-  display: grid;
-  gap: 0.35rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.65rem;
+  color: var(--site-ink);
+  background: var(--site-bg);
 }
 .fx-bento__cell--pic .fx-bento__copy {
-  color: #fff;
+  color: var(--site-ink);
 }
 .fx-bento__copy h3 {
-  font-size: clamp(1.1rem, 0.9rem + 0.9vw, 1.7rem);
+  margin: 0;
+  font-size: clamp(1.5rem, 1.1rem + 1vw, 2.1rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 .fx-bento > :first-child .fx-bento__copy h3 {
-  font-size: clamp(1.6rem, 1.1rem + 2vw, 3rem);
+  font-size: clamp(1.5rem, 1.1rem + 1vw, 2.1rem);
 }
 .fx-bento__copy p {
   margin: 0;
   font-size: 0.9rem;
-  opacity: 0.86;
+  line-height: 1.55;
+  color: var(--site-muted);
 }
 .fx-bento__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-top: 0.35rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  margin-top: auto;
+  border-top: 1px solid var(--site-border);
+}
+.fx-bento__foot .ls-order {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 [data-locah-site] .fx-bento__cell--pic .ls-price small {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--site-muted);
 }
 
 /* spotlight — one signature thing per row, large, alternating. */

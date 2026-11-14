@@ -2,16 +2,17 @@ import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
 import { GateNotice, PageHeader } from '@/components/ModuleState'
-import { saveThemeNav } from './actions'
+import { ThemeEditor } from './ThemeEditor'
 
 export const dynamic = 'force-dynamic'
 
 type WebsiteResponse = {
   data: {
     draft: {
-      theme: Record<string, unknown>
-      navigation: { label: string; path: string }[]
-    }
+      theme: Record<string, unknown> | null
+      navigation: { label: string; path: string }[] | null
+      pages?: { title: string; slug: string }[]
+    } | null
   }
 }
 
@@ -26,49 +27,27 @@ export default async function WebsiteThemePage({
   if (!res.ok) {
     return (
       <div>
-        <PageHeader title="Theme, Navigation & Branding" />
+        <PageHeader title="Look & menu" />
         <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Website" />
       </div>
     )
   }
-  const theme = res.data.data.draft.theme || {}
-  const navigation = res.data.data.draft.navigation || []
-
+  const draft = res.data.data.draft
   return (
     <div>
-      <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Theme, Navigation & Branding</h1>
-      <p style={{ marginBottom: '1rem' }}>
-        Set your colours and choose which pages appear in your website navigation.
+      <PageHeader
+        title="Look & menu"
+        subtitle="Your site’s colours and lettering, and the links in its header. Changes save to your draft; your live site changes when you publish."
+      />
+      <ThemeEditor
+        businessId={params.businessId}
+        theme={draft?.theme || {}}
+        navigation={draft?.navigation || []}
+        pages={(draft?.pages || []).map((p) => ({ title: p.title, slug: p.slug }))}
+      />
+      <p style={{ marginTop: '1.5rem' }}>
+        <a href={`/b/${params.businessId}/website/preview`}>Open the website editor →</a>
       </p>
-      <form action={saveThemeNav} style={{ maxWidth: '36rem', display: 'grid', gap: '0.75rem' }}>
-        <input type="hidden" name="businessId" value={params.businessId} />
-        <label>
-          Primary color
-          <input
-            name="primary_color"
-            defaultValue={String(theme.primary_color || '#0F766E')}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.4rem' }}
-          />
-        </label>
-        <label>
-          Accent color
-          <input
-            name="accent_color"
-            defaultValue={String(theme.accent_color || '#F59E0B')}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.4rem' }}
-          />
-        </label>
-        <label>
-          Navigation JSON
-          <textarea
-            name="navigation_json"
-            defaultValue={JSON.stringify(navigation, null, 2)}
-            rows={8}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.4rem' }}
-          />
-        </label>
-        <button type="submit">Save theme & navigation</button>
-      </form>
     </div>
   )
 }

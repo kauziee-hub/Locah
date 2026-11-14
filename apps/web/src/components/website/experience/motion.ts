@@ -21,7 +21,7 @@
  *   data-rail        --track: how far a pinned horizontal rail travels
  *
  * and, on the site root, --scroll (page progress) and --mv (scroll velocity,
- * for marquees), plus data-scrolled / data-nav-away for the header.
+ * for marquees), plus data-scrolled for the header.
  *
  * The design DNA's signature moments (data-signature / data-flourish) that are
  * scroll and pointer choreography run here too; site-dna.css draws them:
@@ -390,17 +390,7 @@ export function start(root: HTMLElement): MotionHandle {
     if (!frame && !stopped) frame = window.requestAnimationFrame(update)
   }
 
-  /* -------------------------------------------- header: away on the way down */
-  let navY = window.scrollY
-  function navWatch() {
-    const y = window.scrollY
-    if (Math.abs(y - navY) < 8) return
-    root.toggleAttribute('data-nav-away', y > navY && y > vh * 0.6)
-    navY = y
-  }
-
   const onScroll = () => {
-    navWatch()
     schedule()
   }
   const onResize = () => {

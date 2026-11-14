@@ -15,7 +15,8 @@
     "./site-families.css": "./src/site-families.css",
     "./site-experience.css": "./src/site-experience.css",
     "./site-covers.css": "./src/site-covers.css",
-    "./site-dna.css": "./src/site-dna.css"
+    "./site-dna.css": "./src/site-dna.css",
+    "./site-owner.css": "./src/site-owner.css"
   },
   "files": [
     "dist",

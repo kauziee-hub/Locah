@@ -168,7 +168,8 @@ REFERENCE_PROFILES: dict[str, ReferenceProfile] = {
         ink="#10201e", muted="#5b6b69", cards="soft", nav="standard",
         category_variant="image_cards", product_variant="service_cards",
         story_variant="story_split", motion="subtle",
-        image_style="bright, calm, clean interior with soft natural light and plants, no people",
+        image_style="calm, precise editorial photography of the business's work and offerings, "
+                    "soft natural light, no people",
     ),
     "technical_b2b": ReferenceProfile(
         id="technical_b2b",
@@ -327,6 +328,14 @@ class ExperienceChoices(BaseModel):
     story: str = Field(default="", max_length=24)
 
 
+class CompositionChoices(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    opening: str = Field(default="", max_length=24)
+    chapters: str = Field(default="", max_length=24)
+    range_layout: str = Field(default="", max_length=24)
+    rationale: str = Field(default="", max_length=600)
+
+
 class CreativeChoices(BaseModel):
     """What the model may decide about the look, inside the allowed set."""
 
@@ -342,6 +351,7 @@ class CreativeChoices(BaseModel):
     experience: ExperienceChoices = Field(default_factory=ExperienceChoices)
     # v6: the art direction (design_dna concept), from `art_directions`.
     concept: str = Field(default="", max_length=30)
+    composition: CompositionChoices = Field(default_factory=CompositionChoices)
 
 
 class CreativeDirection(BaseModel):
@@ -768,6 +778,7 @@ async def generate_creative_plan(
     import time
 
     from platform_core.interview.website_brief import build_brief
+    from platform_core.interview.composition import vocabulary
     from platform_core.interview.website_copy import COPY_PROMPT, WebsiteCopy, govern_copy
     from platform_core.website.ai_provider import get_ai_provider
 
@@ -785,6 +796,7 @@ async def generate_creative_plan(
         "experiences": _experience_context(bp, business_type, archetype, media_expected),
         # The art directions that suit this business: one coherent idea for the whole site.
         "art_directions": _concept_context(bp, business_type, media_expected),
+        "composition_grammar": vocabulary(),
         "facts": {k: v.value[:400] for k, v in facts.items()},
         "owner_said": [m.text[:600] for m in bp.messages if m.role == "user"][-10:],
         "brief": build_brief(bp, business_type).model_dump(exclude_defaults=True),
@@ -799,8 +811,8 @@ async def generate_creative_plan(
             "`creative`: choose reference_profile (a design family id) from reference_profiles — the "
             "design language for THIS business, judged from how its owner describes it and how "
             "customers buy. Read each family's `fits`, `summary` and `principles`: they describe the "
-            "best websites LOCAH has made. The first is the default; choose another only when it "
-            "suits this business better. You "
+            "available visual languages, not templates to imitate. Compare the fitting families "
+            "against this owner's distinctive facts; list position is not a preference. You "
             "may set primary_color and accent_color (six-digit hex) to suit the business — keep "
             "the profile's ground (light/dark) in mind so buttons stay readable; leave them empty "
             "to keep the profile's colours. page_order: order the page's optional parts from "
@@ -811,7 +823,10 @@ async def generate_creative_plan(
             "float; a gym may snap); leave any empty to let LOCAH decide. concept: choose ONE id from "
             "`art_directions` — the single art direction the whole site follows (two shops of one "
             "trade should not look alike; pick what fits THIS owner's words); leave empty to let "
-            "LOCAH decide.\n\n"
+            "LOCAH decide. composition: use `composition_grammar` to choose the inner-page opening, "
+            "category treatment and full-range layout as independent decisions. Ground the rationale "
+            "in specific owner facts and explain the tradeoff. Design a coherent identity, not an "
+            "industry stereotype; never invent business facts to justify a visual idea.\n\n"
             + COPY_PROMPT
             + "\nOutput only schema-valid JSON."
         ),
@@ -827,6 +842,12 @@ async def generate_creative_plan(
         timeout_seconds=45,
     )
     raw = raw if isinstance(raw, dict) else {}
+    creative_raw = raw.get("creative")
+    if raw.get("copy") is None and isinstance(creative_raw, dict) and isinstance(creative_raw.get("copy"), dict):
+        # Seen live: the model wrote `copy` inside `creative`. The words are the
+        # same words; put them where the plan keeps them rather than lose them.
+        raw = {**raw, "copy": creative_raw["copy"],
+               "creative": {k: v for k, v in creative_raw.items() if k != "copy"}}
     choices, repaired = validate_repairing(CreativeChoices, raw.get("creative"), "creative")
     words, repaired_copy = validate_repairing(WebsiteCopy, raw.get("copy"), "copy")
     copy = govern_copy(words, bp)

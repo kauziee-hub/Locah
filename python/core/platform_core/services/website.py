@@ -264,6 +264,8 @@ class WebsiteVersionService:
         actor_id: uuid.UUID,
         navigation: list[Any] | None = None,
         theme: dict[str, Any] | None = None,
+        drop: tuple[str, ...] = (),
+        restore_owner_style: dict[str, Any] | None = None,
     ) -> WebsiteVersion:
         from platform_core.validation.website import assert_no_unsafe_content
 
@@ -280,7 +282,18 @@ class WebsiteVersionService:
             flag_modified(draft, "navigation")
         if theme is not None:
             assert_no_unsafe_content(theme, path="theme")
-            draft.theme = theme
+            # Laid over the stored theme, never in place of it: an owner's
+            # colour change must not cost the site its design (owner_style).
+            from platform_core.website.owner_style import merge_theme
+
+            merged = merge_theme(draft.theme, theme)
+            # Platform callers only (never the request body): keys an undo takes
+            # back out, and the owner's style exactly as it was before.
+            for key in drop:
+                merged.pop(key, None)
+            if restore_owner_style:
+                merged = merge_theme(merged, {"owner_style": restore_owner_style})
+            draft.theme = merged
             flag_modified(draft, "theme")
         await session.flush()
         # Bump the live draft so an in-flight generation job will not clobber

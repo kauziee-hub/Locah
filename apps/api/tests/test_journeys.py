@@ -376,3 +376,38 @@ def test_menu_words_and_intents_are_deterministic() -> None:
     rows = listing("x", "Menu", [(str(i), "Row title that is far too long", "d" * 100) for i in range(12)])
     r = rows["action"]["sections"][0]["rows"]
     assert len(r) == 10 and len(r[0]["title"]) <= 24 and len(r[0]["description"]) <= 72
+
+
+# ---------------------------------------------------------------- what a customer actually types
+@DB
+def test_a_typed_price_question_is_answered_from_the_catalogue(monkeypatch: Any) -> None:
+    """Found on a sandbox run (2026-11-14): "menu enna iruku? biriyani rate?" got
+    "someone will reply here soon" from a shop whose catalogue held the answer."""
+    owner, bid, _ = _shop(monkeypatch)
+    _product(owner, bid, "Chicken Biriyani", 280)
+    _product(owner, bid, "Mutton Biriyani", 360)
+    _product(owner, bid, "Appam", 50)
+    phone = Phone(owner, bid)
+
+    phone.say("menu enna iruku? biriyani rate?")
+    said = phone.last()[0]
+    assert "Chicken Biriyani — ₹280.00" in said and "Mutton Biriyani — ₹360.00" in said and "Appam" not in said
+    assert {"m:order", "menu", "talk_to_person"} <= set(phone.options())
+
+    # Their spelling, not the owner's; one word is enough.
+    phone.say("chiken briyani evlo")
+    assert "Chicken Biriyani — ₹280.00" in phone.last()[0] and "Mutton" not in phone.last()[0]
+    phone.say("appam?")
+    assert "Appam — ₹50.00" in phone.last()[0]
+
+    # A wish typed as a sentence is the journey, not a wait for a person.
+    phone.say("i want to order")
+    assert "o:" in " ".join(phone.options()) or "m:order" in phone.options() or phone.options()
+    assert "reply here soon" not in phone.last()[0]
+
+    # Someone unhappy, or simply talking, gets a person — never a price list.
+    before = len(phone.last(50))
+    phone.say("the chicken biriyani yesterday was cold and late, i want a refund")
+    after = phone.last(50)
+    assert all("₹280" not in line for line in after[before:])
+    assert blocked_calls() == []

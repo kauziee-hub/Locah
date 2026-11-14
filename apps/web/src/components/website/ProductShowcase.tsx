@@ -26,7 +26,7 @@ import { useGlRibbon } from './experience/gl/GlRibbon'
  *   menu_book        a real menu: chapters by category, a rail that follows,
  *                    diet marks, spice, the owner's tags, prices
  *   rail             a horizontal run of large cards, pinned while it travels
- *   bento            an asymmetric grid, the first thing largest
+ *   bento            a responsive photographic grid with separate captions
  *   spotlight        one signature thing per row, large, alternating
  *   stack            cards that stick and stack (plans, services, projects)
  *   category_boards  each category a board with its items
@@ -618,23 +618,24 @@ export function ProductShowcase({
   }
 
   if (variant === 'bento') {
-    // The largest cell is always a picture when there is one to give it.
+    // Photographed items lead; the grid adapts to the actual item count.
     const ordered = [...shown.filter((item) => item.image), ...shown.filter((item) => !item.image)]
     return (
       <section ref={ribbonRef} id={anchor} className={`ls-section ${ground}`}>
         <div className="ls-inner">
           {head}
           {chips}
-          <ul className="fx-bento" data-reveal-group="">
+          <ul className="fx-bento" data-count={Math.min(ordered.length, 10)} data-reveal-group="">
             {ordered.slice(0, 10).map((item) => (
               <li
                 key={`${item.category}-${item.name}`}
                 className={`fx-bento__cell ${item.image ? 'fx-bento__cell--pic' : ''}`}
-                data-tilt=""
               >
                 {item.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
+                  <div className="fx-bento__media">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.image.url} srcSet={srcSetFor(item.image.url)} alt={item.image.alt_text || item.name} loading="lazy" />
+                  </div>
                 ) : null}
                 <div className="fx-bento__copy">
                   {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
@@ -829,10 +830,13 @@ export function ProductShowcase({
                       <li key={item.name} className="ls-pricelist__row">
                         <span className="ls-pricelist__name">
                           {item.name} <Diet value={item.diet} t={t} />
+                          <Spice value={item.spice} t={t} />
+                          {item.tag ? <span className="fx-tag">{item.tag}</span> : null}
                         </span>
                         <span className="ls-pricelist__dots" aria-hidden="true" />
                         <Price item={item} />
                         {item.description ? <small className="ls-pricelist__desc">{item.description}</small> : null}
+                        <div className="ls-pricelist__action">{action(item)}</div>
                       </li>
                     ))}
                 </ul>

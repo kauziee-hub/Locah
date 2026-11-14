@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
@@ -186,6 +187,32 @@ def _fit(value: Any, schema: Any) -> Any:
         closed = schema.get("additionalProperties") is False
         return {k: _fit(v, props.get(k)) for k, v in value.items() if not closed or k in props}
     return value
+
+
+def _rehome(value: Any, schema: Any) -> Any:
+    """Put a top-level part back where the schema keeps it.
+
+    Seen live on a long answer: the model closed one bracket too few, so the
+    second top-level object (`copy`) arrived INSIDE the first (`creative`). A
+    declared top-level property that is missing, and sits one level down inside
+    a sibling that does not declare it, is the same part in the wrong place —
+    moving it loses nothing and invents nothing.
+    """
+    if not isinstance(value, dict) or not isinstance(schema, dict):
+        return value
+    props = schema.get("properties") or {}
+    missing = [name for name in props if name not in value]
+    if not missing:
+        return value
+    out = dict(value)
+    for name in missing:
+        for holder, inner in value.items():
+            holder_props = (props.get(holder) or {}).get("properties") or {}
+            if isinstance(inner, dict) and name in inner and name not in holder_props:
+                out[name] = inner[name]
+                out[holder] = {k: v for k, v in inner.items() if k != name}
+                break
+    return out
 
 
 def _acceptable(item: Any, schema: Any) -> bool:
@@ -497,11 +524,80 @@ def deepseek_model_id(configured: str) -> str:
     return _DEEPSEEK_MODEL_IDS.get(configured.strip().casefold(), configured.strip())
 
 # Routine extraction and picture judging answer while someone waits, so they skip
-# the reasoning pass (DeepSeek's `thinking` switch). Website strategy and copy
-# keep the model's default deliberation, as Gemini's "medium" level did.
+# the reasoning pass (DeepSeek's `thinking` switch).
+#
+# The creative plan (`website.personalization`) skips it too. Measured on a real
+# owner build (2026-11-13): with thinking on, the model spent the call's whole
+# 6000-token allowance reasoning and returned NO answer (finish `length`), so
+# the site silently fell back to the deterministic direction — the "sometimes a
+# designed site, sometimes a template" owners saw. Without thinking the same
+# call answers in ~8 s with every choice and all the copy. Name a purpose in
+# DEEPSEEK_THINKING_PURPOSES (comma-separated) to give it the reasoning pass back.
 _DEEPSEEK_NO_THINKING = frozenset({
     "business.interview", "document.extract", "image.query", "image.judge",
+    "website.personalization", "website.assistant", "image.reference",
 })
+# `max_tokens` counts the reasoning as well as the answer. A purpose that does
+# think gets this much room on top of what its answer needs, and thinks at low
+# effort, so deliberation can never starve the answer.
+_DEEPSEEK_THINKING_HEADROOM = 8000
+
+
+def _deepseek_thinks(purpose: str) -> bool:
+    allowed = {p.strip() for p in os.getenv("DEEPSEEK_THINKING_PURPOSES", "").split(",") if p.strip()}
+    return purpose in allowed or purpose not in _DEEPSEEK_NO_THINKING
+
+
+def loads_lenient(text: str) -> tuple[Any, bool]:
+    """(value, repaired) from a model's JSON, forgiving the two slips models make
+    on long structured answers: a code fence around it, and closing brackets
+    left off the end (or a comma before one). Words are never touched — an
+    answer cut off inside a string is not repaired, because half a sentence
+    must not reach a website. Raises ``json.JSONDecodeError`` when it cannot
+    be read."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if "{" in cleaned:
+            cleaned = cleaned[cleaned.index("{"):]
+    try:
+        return json.loads(cleaned), False
+    except json.JSONDecodeError as first:
+        start = cleaned.find("{")
+        if start < 0:
+            raise
+        body = cleaned[start:]
+        stack: list[str] = []
+        in_string = escaped = False
+        end = len(body)
+        for i, ch in enumerate(body):
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]":
+                if not stack or stack[-1] != ch:
+                    raise first
+                stack.pop()
+                if not stack:  # the object closed: anything after it is chatter
+                    end = i + 1
+                    break
+        if in_string:
+            raise first
+        body = body[:end].rstrip()
+        if stack:
+            body = body.rstrip(",").rstrip()
+            body += "".join(reversed(stack))
+        body = re.sub(r",(\s*[}\]])", r"\1", body)
+        return json.loads(body), True
 
 _IMAGE_MIME_PREFIX = "image/"
 
@@ -586,7 +682,10 @@ class DeepSeekProvider:
         }
         if "temperature" in model_config:
             body["temperature"] = float(model_config["temperature"])
-        if purpose in _DEEPSEEK_NO_THINKING:
+        if _deepseek_thinks(purpose):
+            body["reasoning_effort"] = "low"
+            body["max_tokens"] = int(body["max_tokens"]) + _DEEPSEEK_THINKING_HEADROOM
+        else:
             body["thinking"] = {"type": "disabled"}
         return body
 
@@ -629,8 +728,24 @@ class DeepSeekProvider:
         body = self.build_body(prompt, schema, model_config, images)
         started = time.monotonic()
         data = await self._post(body, purpose, float(timeout_seconds))
-        parsed = self._parse(data, str(body["model"]), purpose, started)
-        clipped = _fit(parsed, _inline_schema(schema))
+        try:
+            parsed = self._parse(data, str(body["model"]), purpose, started)
+        except RuntimeError as exc:
+            if (body.get("thinking") or {}).get("type") == "disabled":
+                raise
+            # The reasoning pass used the allowance, or the answer came back
+            # unreadable: ask once more for the answer alone. One retry, same
+            # model, same prompt — never another vendor.
+            _log.warning("ai.deepseek.retry_without_thinking", model=body.get("model"), purpose=purpose,
+                         reason=str(exc)[:120])
+            body = {k: v for k, v in body.items() if k != "reasoning_effort"}
+            body["thinking"] = {"type": "disabled"}
+            body["max_tokens"] = int(model_config.get("max_output_tokens", 8192))
+            started = time.monotonic()
+            data = await self._post(body, purpose, float(timeout_seconds))
+            parsed = self._parse(data, str(body["model"]), purpose, started)
+        inlined = _inline_schema(schema)
+        clipped = _fit(_rehome(parsed, inlined), inlined)
         return clipped if isinstance(clipped, dict) else parsed
 
     async def _post(self, body: dict[str, Any], purpose: Any, timeout: float) -> dict[str, Any]:
@@ -682,13 +797,12 @@ class DeepSeekProvider:
                   prompt_units=usage.get("prompt_tokens"), output_units=usage.get("completion_tokens"),
                   thinking_units=reasoning)
         text = self.extract_text(data)
-        if text.startswith("```"):
-            text = text.strip("`")
-            text = text[text.index("{"):] if "{" in text else text
         try:
-            parsed = json.loads(text)
+            parsed, repaired = loads_lenient(text)
         except json.JSONDecodeError as exc:
             raise RuntimeError("DeepSeek returned non-JSON output") from exc
+        if repaired:
+            _log.warning("ai.deepseek.json_repaired", model=model, purpose=purpose)
         if not isinstance(parsed, dict):
             raise RuntimeError("DeepSeek returned a non-object JSON value")
         return parsed

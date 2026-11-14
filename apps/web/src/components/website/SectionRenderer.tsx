@@ -40,6 +40,8 @@ type Asset = { url: string; alt_text?: string | null }
 export type CoverFacts = {
   place?: CoverContext['place']
   signatures?: CoverContext['signatures']
+  offeringNames?: string[]
+  concept?: string
   more?: { label: string; path: string }
 }
 
@@ -525,7 +527,17 @@ export function SectionRenderer({
         return <Cover variant={scene} parts={parts} image={image} pictures={pictures} ctx={coverCtx} t={t} />
       }
       if (scene) {
-        return <HeroScene variant={scene} parts={parts} image={image} pictures={pictures} longest={longest} />
+        return (
+          <HeroScene
+            variant={scene}
+            parts={parts}
+            image={image}
+            pictures={pictures}
+            longest={longest}
+            offeringNames={cover?.offeringNames}
+            concept={cover?.concept}
+          />
+        )
       }
       if (variant === 'page') {
         // An inner page's opening: its title as large as the home page's,

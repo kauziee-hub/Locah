@@ -20,6 +20,8 @@ import '@platform/ui/site-experience.css'
 import '@platform/ui/site-covers.css'
 // The design DNA (type, texture, edges, header, cards) and premium sections.
 import '@platform/ui/site-dna.css'
+// The owner's own style choices (sizes, corners) — last, so they win.
+import '@platform/ui/site-owner.css'
 import '@/components/website/reviews.css'
 
 const sans = Plus_Jakarta_Sans({

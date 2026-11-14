@@ -146,7 +146,7 @@ type Card = {
 
 const SELECTORS: Record<RibbonKind, { card: string; img: string; host: string | null }> = {
   rail: { card: '.fx-rail__card', img: '.fx-rail__media > img', host: '.fx-rail__stage' },
-  bento: { card: '.fx-bento__cell--pic', img: ':scope > img', host: null },
+  bento: { card: '.fx-bento__cell--pic', img: '.fx-bento__media > img', host: null },
 }
 
 function grid(gl: GL, n: number) {
@@ -185,7 +185,7 @@ export async function startRibbon(section: HTMLElement, kind: RibbonKind, root: 
     if (!img) continue
     cards.push({
       el,
-      frame: kind === 'rail' ? (img.parentElement as HTMLElement) : el,
+      frame: img.parentElement as HTMLElement,
       img,
       style: getComputedStyle(el),
       tex: null,

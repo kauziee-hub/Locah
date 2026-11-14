@@ -1,0 +1,90 @@
+/* ==========================================================================
+   An owner's own style choices, on top of the design their site was built with
+   (theme.owner_style — platform_core/website/owner_style.py is the registry).
+
+   Loaded LAST, after site-dna.css: an owner's choice wins over the design's,
+   and taking the choice away gives the design back untouched.
+
+   Faces are not here: the owner's pairing replaces the DNA's display/body
+   values before render (experience.ts::siteDna), so every face keeps its own
+   metrics. Sizes use `zoom`, which re-flows the words inside the same column
+   instead of scaling a painted box — a larger headline wraps, it never spills.
+
+   Same hard rules as every site sheet: no LOCAH colour, nothing hidden by CSS.
+   The editor outline at the end is drawn only inside the Workspace's preview.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ headings */
+[data-locah-site][data-owner-heading='small'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text) {
+  zoom: 0.88;
+}
+[data-locah-site][data-owner-heading='large'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text) {
+  zoom: 1.12;
+}
+[data-locah-site][data-owner-heading='xlarge'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text) {
+  zoom: 1.24;
+}
+
+/* -------------------------------------------------------------- reading text */
+/* The outermost of each: a paragraph inside a list item is enlarged once. */
+[data-locah-site][data-owner-text] main :is(p, li, dd, dt, blockquote, figcaption, address, label, .ls-sub):not(
+    :is(p, li, dd, dt, blockquote, figcaption, address, label) *) {
+  zoom: var(--owner-text-zoom, 1);
+}
+[data-locah-site][data-owner-text='small'] {
+  --owner-text-zoom: 0.92;
+}
+[data-locah-site][data-owner-text='large'] {
+  --owner-text-zoom: 1.12;
+}
+[data-locah-site][data-owner-text='xlarge'] {
+  --owner-text-zoom: 1.24;
+}
+
+/* A phone has less room to give: the same choice, a smaller step. */
+@media (max-width: 640px) {
+  [data-locah-site][data-owner-heading='large'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text) {
+    zoom: 1.06;
+  }
+  [data-locah-site][data-owner-heading='xlarge'] :is(h1, h2, h3, .ls-hero__headline, .fx-statement__text) {
+    zoom: 1.12;
+  }
+  [data-locah-site][data-owner-text='large'] {
+    --owner-text-zoom: 1.08;
+  }
+  [data-locah-site][data-owner-text='xlarge'] {
+    --owner-text-zoom: 1.16;
+  }
+}
+
+/* -------------------------------------------------------------------- corners */
+[data-locah-site][data-owner-corners='sharp'] {
+  --site-radius: 2px;
+  --site-btn-radius: 2px;
+}
+[data-locah-site][data-owner-corners='soft'] {
+  --site-radius: 14px;
+  --site-btn-radius: 12px;
+}
+[data-locah-site][data-owner-corners='round'] {
+  --site-radius: 22px;
+  --site-btn-radius: 999px;
+}
+[data-locah-site][data-owner-corners] :is(.ls-btn, .ls-nav__cta) {
+  border-radius: var(--site-btn-radius);
+}
+
+/* --------------------------------------------------- the Workspace's preview */
+/* Only when the editor is listening (the bridge sets data-editing): a section
+   shows it can be chosen, and the chosen one is marked. */
+[data-locah-site][data-editing] [data-section-id] > * {
+  cursor: pointer;
+}
+[data-locah-site][data-editing] [data-section-id]:hover > * {
+  outline: 2px dashed color-mix(in srgb, var(--site-primary) 55%, transparent);
+  outline-offset: -2px;
+}
+[data-locah-site][data-editing] [data-section-id][data-selected] > * {
+  outline: 3px solid var(--site-primary);
+  outline-offset: -3px;
+}

@@ -203,7 +203,95 @@ async def handle(session: AsyncSession, conv: MessagingConversation, kind: str, 
     for key, words in INTENTS.items():
         if any(said == w or said.startswith(w + " ") or (len(w) > 5 and w in said) for w in words):
             return await _dispatch(ctx, key)
+    # A customer rarely types the one word a bot waits for. "menu enna iruku?
+    # biriyani rate?" asks two plain things the catalogue can answer; "i want to
+    # order" is an order. Read short messages for what they ask before handing
+    # them to a person (who may be asleep).
+    # Where the owner has switched on the AI receptionist, free text is its
+    # job (it answers prices, hours and more, on its own limits and record).
+    from platform_core.ai_employees.runtime import AIRuntime
+
+    if await AIRuntime.active(session, conv.business_id, "receptionist") is not None:
+        return False
+    if await _answer_prices(ctx, body):
+        return True
+    # A wish, said as a sentence: "i want to order", "can i book for tomorrow",
+    # "menu please". A question about something already under way ("is my
+    # order coming?") is not a wish to start one — that waits for a person.
+    count = len(said.split())
+    if count <= 8 and not _UPSET.search(said) and (count <= 3 or _WISH.search(said)):
+        if any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", said) for w in MENU_WORDS if len(w) > 3):
+            return await menu(ctx)
+        for key, words in INTENTS.items():
+            if any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", said) for w in words if w.isascii()):
+                return await _dispatch(ctx, key)
     return False
+
+
+_WISH = re.compile(r"\b(?:want|wanna|need|like to|can i|could i|may i|please|pls|plz|kindly|send|show|give|venum|vendum|venam|kudunga|anuppunga|chahiye|karna hai|dijiye|bhejo)\b", re.I)
+
+
+_PRICE_ASK = re.compile(
+    r"\b(?:rates?|prices?|cost|costs|how much|evlo|evvalavu|evalavu|vilai|kitna|kitne|kitni|daam|charges?|"
+    r"amount|fees?)\b|விலை|எவ்வளவு|कितना|कितने|दाम", re.I)
+# Someone unhappy wants a person, not a price list.
+_UPSET = re.compile(r"\b(?:refund|complain\w*|worst|bad|cold|late|wrong|missing|not good|cheat\w*|spoil\w*|"
+                    r"stale|rude|waiting)\b", re.I)
+_PLAIN_WORDS = frozenset({"the", "and", "with", "for", "per", "special", "full", "half", "plate", "combo", "pack",
+                          "small", "large", "medium", "regular", "new", "fresh", "our", "your"})
+
+
+def _same_word(word: str) -> str:
+    """A word as customers and owners both spell it: "biriyani" / "biryani" /
+    "briyani", "chiken" / "chicken", a plural or a doubled letter."""
+    from platform_core.interview.spelling import fix_word
+
+    word = fix_word(word).casefold()
+    word = re.sub(r"(.)\1+", r"\1", word)
+    word = word.replace("iy", "y").replace("ee", "i").replace("oo", "u")
+    word = re.sub(r"^bri?yani$|^biriani$", "biryani", word)
+    return word[:-1] if len(word) > 4 and word.endswith("s") else word
+
+
+async def _answer_prices(ctx: Ctx, body: str) -> bool:
+    """Answer "biriyani rate?" or "haircut evlo?" from the live catalogue.
+
+    Only what LOCAH holds is said: the item's own name and today's price. Runs
+    for a short message that names something on sale, or asks a price; never
+    for a long message or an unhappy one — those are a person's to answer.
+    """
+    said = " ".join(body.split())
+    if not said or len(said.split()) > 14 or _UPSET.search(said):
+        return False
+    asked = bool(_PRICE_ASK.search(said))
+    words = {_same_word(w) for w in re.findall(r"[A-Za-z]{3,}", said)} - _PLAIN_WORDS
+    orderable = await _orderable(ctx.session, ctx.business.id) if "orders" in ctx.live else []
+    bookable = await _bookable(ctx.session, ctx.business.id) if "bookings" in ctx.live else []
+    pool: dict[uuid.UUID, Offering] = {o.id: o for o in [*orderable, *bookable]}
+    scored: list[tuple[int, str, Offering]] = []
+    for offering in pool.values():
+        name = {_same_word(w) for w in re.findall(r"[A-Za-z]{3,}", offering.title or "")} - _PLAIN_WORDS
+        hit = len(name & words)
+        if hit:
+            scored.append((hit, offering.title, offering))
+    if not scored:
+        if asked and len(said.split()) <= 6 and (orderable or bookable):
+            # "rate enna?", "price list please": the whole list, with its prices.
+            return await _dispatch(ctx, "m:order" if orderable else "m:book")
+        return False
+    if not asked and len(said.split()) > 4:
+        return False  # it names a dish but is not asking about it ("the biriyani was nice")
+    best = max(hit for hit, _, _ in scored)
+    chosen = [o for hit, _, o in sorted(scored, key=lambda row: (-row[0], row[1])) if hit == best][:6]
+    lines = [f"• {o.title} — {_price_words(ctx, o)}" for o in chosen]
+    actions: list[tuple[str, str]] = []
+    if any(o.id in {x.id for x in orderable} for o in chosen):
+        actions.append(("m:order", ctx.tr("Order")))
+    if any(o.id in {x.id for x in bookable} for o in chosen):
+        actions.append(("m:book", ctx.tr("Book")))
+    actions += [("menu", ctx.tr("Menu")), ("talk_to_person", ctx.tr("Talk to a person"))]
+    await ctx.ask(buttons("\n".join(lines), actions))
+    return True
 
 
 async def _note_language(session: AsyncSession, conv: MessagingConversation, body: str) -> None:

@@ -293,6 +293,18 @@
   text-decoration: none;
   -webkit-text-stroke: 0;
 }
+/* none — one voice: the phrase is set exactly like the words around it. The
+   likeliest draw (design_dna.py), so a coloured or italic phrase is a choice a
+   site makes, not the look of every site. */
+[data-locah-site][data-headline='none'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
+[data-locah-site][data-headline='none'] .fx-mark {
+  color: inherit;
+  font: inherit;
+  font-style: inherit;
+  background: none;
+  text-decoration: none;
+  -webkit-text-stroke: 0;
+}
 /* plain — no voice change, only a quiet second tone of the same ink. */
 [data-locah-site][data-headline='plain'] :is(h1, h2, .ls-hero__headline, .fx-statement__text, .fx-cta__title) .ls-accent,
 [data-locah-site][data-headline='plain'] .fx-mark {
@@ -648,9 +660,9 @@
   [data-locah-site] .ls-nav__menu {
     display: block;
   }
-  [data-locah-site] .ls-nav__cta {
-    display: none;
-  }
+}
+@media (max-width: 760px) {
+  [data-locah-site] .ls-nav__cta { display: none; }
 }
 .ls-nav__burger {
   list-style: none;
@@ -1391,6 +1403,19 @@
   object-fit: cover;
   translate: 0 calc((var(--p) - 0.5) * -14%);
 }
+[data-locah-site] .fx-pagehero:not(.fx-pagehero--pic) {
+  padding-top: calc(var(--fx-nav-h) + clamp(2rem, 4vw, 4rem));
+  padding-bottom: clamp(2rem, 4vw, 4rem);
+}
+[data-locah-site] .fx-pagehero:not(.fx-pagehero--pic) .ls-hero__headline {
+  font-size: clamp(2.75rem, 6.5vw, 6.5rem);
+  max-width: 19ch;
+  text-wrap: balance;
+}
+[data-locah-site] .fx-pagehero--brief .fx-pagehero__foot {
+  border-top: 0;
+  padding-top: 0;
+}
 
 /* hover list — a menu set in large type; pictures follow the pointer. */
 .fx-hlist__group + .fx-hlist__group {
@@ -1675,7 +1700,7 @@
 /* warm craft and calm care — the eyebrow as an italic line in the display
    face (or the italic it borrows), the way an editorial page introduces a
    piece. */
-[data-locah-site]:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow) {
+[data-locah-site][data-headline='italic']:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow) {
   font-family: var(--site-italic-font, var(--site-display-font));
   font-style: italic;
   font-weight: 400;
@@ -1684,7 +1709,19 @@
   text-transform: none;
   color: var(--site-accent);
 }
-[data-locah-site]:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow)::before {
+[data-locah-site][data-headline='italic']:is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow)::before {
+  display: none;
+}
+/* Otherwise their label is a quiet line of small tracked capitals in the ink,
+   not the accent: the colour is kept for what a visitor presses. */
+[data-locah-site]:not([data-headline='italic']):is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow) {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--site-ink) 62%, transparent);
+}
+[data-locah-site]:not([data-headline='italic']):is([data-concept='warm_craft'], [data-concept='calm_care']) :is(.ls-eyebrow, .ls-hero__eyebrow)::before {
   display: none;
 }
 /* Over a photograph a muted brand accent (a teal, a rust) sinks into the
@@ -1942,10 +1979,9 @@
   }
 }
 
-/* A tile's "order" link: the same quiet underlined link, in the tile's own
-   ink (white over a photograph), never a filled pill in every tile. */
+/* A catalogue's secondary channel, in the caption's own ink. */
 [data-locah-site] .fx-bento .fx-bento__cell a.ls-order {
-  min-height: 0;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1987,27 +2023,6 @@
 [data-locah-site] .ls-highlights--counters .ls-highlights__item {
   justify-items: center;
   text-align: center;
-}
-
-/* A bento fills its grid whatever the count: no half-empty rows. */
-@media (min-width: 900px) {
-  .fx-bento:has(> :nth-child(2):last-child) > * {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-  .fx-bento:has(> :nth-child(3):last-child) > :not(:first-child) {
-    grid-column: span 2;
-    grid-row: span 1;
-  }
-  .fx-bento:has(> :nth-child(5):last-child) > :nth-child(4) {
-    grid-column: span 1;
-  }
-  .fx-bento:has(> :nth-child(6):last-child) > :nth-child(4) {
-    grid-column: span 1;
-  }
-  .fx-bento:has(> :nth-child(6):last-child) > :nth-child(6) {
-    grid-column: span 4;
-  }
 }
 
 /* ------------------------------------------------------- the range, as chapters */
@@ -2419,6 +2434,216 @@
 }
 
 /* none — no signature moment drawn. */
+/* Composition grammar. Independent axes shared across a business's pages:
+   opening, category treatment and range layout. Old themes retain their
+   original composition. Every rule is tenant-scoped and has a still state. */
+[data-locah-site][data-page-opening='offset'] .fx-pagehero--pic {
+  display: grid;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 6rem);
+}
+[data-locah-site][data-page-opening='offset'] .fx-pagehero--pic .fx-pagehero__inner {
+  width: 100%;
+  min-width: 0;
+}
+[data-locah-site][data-page-opening='offset'] .fx-pagehero--pic .fx-pagehero__media {
+  width: 100%;
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: 0;
+}
+[data-locah-site][data-page-opening='offset'] .fx-pagehero--pic .fx-pagehero__foot {
+  display: grid;
+  align-items: start;
+  gap: 1.75rem;
+}
+/* A range page is a place to choose. Keep its introduction shorter than the
+   homepage so the real catalogue begins within reach of the first screen. */
+[data-locah-site][data-page-purpose='range'] .fx-pagehero {
+  padding-top: calc(var(--fx-nav-h) + 1.5rem);
+  padding-bottom: 2rem;
+}
+[data-locah-site][data-page-purpose='range'][data-page-opening='offset'] .fx-pagehero--pic {
+  min-height: 0;
+}
+[data-locah-site][data-page-purpose='range'] .fx-pagehero .ls-hero__headline,
+[data-locah-site][data-page-purpose='range'][data-page-opening='offset'] .fx-pagehero--pic .ls-hero__headline {
+  font-size: clamp(2.75rem, 4.8vw, 5rem);
+  max-width: 18ch;
+}
+[data-locah-site][data-page-purpose='range'] .fx-pagehero__media {
+  aspect-ratio: 21 / 9;
+  max-height: 420px;
+}
+@media (min-width: 960px) {
+  [data-locah-site][data-page-purpose='range'][data-page-opening='offset'] .fx-pagehero__media {
+    height: clamp(280px, 30vw, 420px);
+    aspect-ratio: auto;
+  }
+}
+@media (max-width: 599px) {
+  [data-locah-site][data-page-purpose='range'][data-page-opening='offset'] .fx-pagehero--pic .fx-pagehero__media {
+    aspect-ratio: 21 / 9;
+  }
+}
+[data-locah-site][data-page-opening='poster'] .fx-pagehero .ls-hero__headline {
+  font-size: clamp(3.5rem, 10vw, 11rem);
+  max-width: 16ch;
+  text-wrap: balance;
+}
+[data-locah-site][data-page-opening='poster'] .fx-pagehero__media {
+  aspect-ratio: 3 / 1;
+  border-radius: 0;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter {
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1.5rem, 3vw, 3rem);
+  align-items: start;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter__media {
+  order: 0;
+  aspect-ratio: 2 / 1;
+  border-radius: 0;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter__title {
+  font-size: clamp(2.75rem, 6vw, 6.5rem);
+  line-height: 1;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter__meta {
+  justify-self: start;
+}
+[data-locah-site] .ls-pricelist__action {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+[data-locah-site] .ls-pricelist__action:empty {
+  display: none;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__cols {
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(3rem, 6vw, 6rem);
+  counter-reset: catalogue;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__group {
+  counter-increment: catalogue;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__title {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  font-family: var(--site-display-font, var(--site-font));
+  font-size: clamp(2.25rem, 4.5vw, 4.75rem);
+  line-height: 1.1;
+  color: var(--site-ink);
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__title::before {
+  content: counter(catalogue, decimal-leading-zero);
+  font-family: var(--site-font);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: var(--site-muted);
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-top: 1px solid var(--site-border);
+  padding-block: 1.25rem;
+  column-gap: 1.25rem;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__name {
+  font-weight: 500;
+  font-size: clamp(1.125rem, 1.5vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__dots {
+  display: none;
+}
+[data-locah-site][data-range-layout='compact_list'] .ls-pricelist__desc {
+  max-width: 65ch;
+  line-height: 1.65;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter__dots,
+[data-locah-site][data-chapter-layout='index'] .fx-chapter__dots {
+  border: 0;
+}
+[data-locah-site][data-chapter-layout='gallery'] .fx-chapter__item,
+[data-locah-site][data-chapter-layout='index'] .fx-chapter__item {
+  border-top: 1px solid var(--site-border);
+  padding-block: 1rem;
+}
+[data-locah-site][data-chapter-layout='index'] .fx-chapter {
+  align-items: start;
+}
+[data-locah-site][data-chapter-layout='index'] .fx-chapter__media {
+  order: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: 0;
+}
+[data-locah-site][data-chapter-layout='index'] .fx-chapter__num {
+  display: block;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--site-border);
+  margin-bottom: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+/* Dense catalogues stay useful on narrow screens: long names and prices wrap
+   independently rather than force the viewport wider. */
+[data-locah-site][data-chapter-layout] .fx-chapter__body,
+[data-locah-site][data-chapter-layout] .fx-chapter__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-locah-site][data-chapter-layout] .fx-chapter__line {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+@media (min-width: 960px) {
+  [data-locah-site][data-page-opening='offset'] .fx-pagehero--pic {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    padding-inline: max(3rem, calc((100vw - 1280px) / 2));
+    min-height: min(850px, 90svh);
+  }
+  [data-locah-site][data-page-opening='offset'] .fx-pagehero--pic .ls-hero__headline {
+    font-size: clamp(3.75rem, 6.8vw, 7rem);
+    max-width: 11ch;
+    text-wrap: balance;
+  }
+  [data-locah-site][data-chapter-layout='gallery'] .fx-chapter__body {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    column-gap: clamp(2rem, 5vw, 5rem);
+    align-items: start;
+  }
+  [data-locah-site][data-chapter-layout='gallery'] .fx-chapter__body > :not(.fx-chapter__items) {
+    grid-column: 1;
+  }
+  [data-locah-site][data-chapter-layout='gallery'] .fx-chapter__items {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    margin-top: 0;
+  }
+  [data-locah-site][data-chapter-layout='gallery'] .fx-chapter__act {
+    margin-top: 1.5rem;
+  }
+  [data-locah-site][data-chapter-layout='index'] .fx-chapter {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.4fr);
+  }
+  [data-locah-site][data-chapter-layout='index'] .fx-chapter__media {
+    width: 100%;
+    max-width: 360px;
+  }
+}
+@media (max-width: 599px) {
+  [data-locah-site][data-page-opening='offset'] .fx-pagehero--pic .fx-pagehero__media {
+    aspect-ratio: 5 / 4;
+  }
+  [data-locah-site][data-chapter-layout='gallery'] .fx-chapter__media {
+    aspect-ratio: 4 / 3;
+  }
+  [data-locah-site][data-chapter-layout='index'] .fx-chapter__media {
+    aspect-ratio: 3 / 2;
+  }
+}
+
 [data-locah-site][data-signature='none'] {
   --fx-signature: none;
 }

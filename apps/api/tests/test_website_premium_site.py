@@ -175,7 +175,7 @@ def test_a_clinic_gets_a_quiet_direction_and_no_show() -> None:
                          seed=f"c{i}")
         assert dna.budget == "restrained"
         assert dna.cursor == "none" and dna.invert == "calm"
-        assert dna.headline in {"plain", "italic"}
+        assert dna.headline in {"none", "plain"}  # a quiet brand speaks in one voice
         assert BY_KEY[dna.concept].budget in {"restrained", "gentle"}
 
 
@@ -580,3 +580,20 @@ def test_the_numbers_band_holds_only_facts() -> None:
     # Two facts are not a band: the counter and nothing else stays off the page.
     bp.messages = [Message(role="user", text="We sell mutton. Open 6 am to 1 pm.")]
     assert numbers_for(bp, archetype="product_commerce", items=items, ordering=[]) == []
+
+
+def test_a_coloured_italic_phrase_is_the_exception_not_the_look_of_every_site() -> None:
+    """Founder, 2026-11-14: "the AI slop design of italics text and colouring".
+    Nearly every concept used to set its headline accent in a coloured italic."""
+    from collections import Counter
+
+    from platform_core.interview.design_dna import CONCEPTS, choose_dna
+
+    drawn: Counter[str] = Counter()
+    for concept in CONCEPTS:
+        family = max(concept.families, key=lambda k: concept.families[k])
+        for i in range(120):
+            drawn[choose_dna({}, family=family, archetype="x", motion="silk", seed=f"shop-{i}").headline] += 1
+    total = sum(drawn.values())
+    assert drawn["none"] / total > 0.5, drawn
+    assert (drawn["italic"] + drawn["serif"] + drawn["script"]) / total < 0.15, drawn

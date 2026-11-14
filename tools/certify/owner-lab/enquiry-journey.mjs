@@ -159,9 +159,12 @@ export function enquiryJourney(ctx) {
       }
       s.check('the owner can mark it contacted', await move('Mark as contacted'))
       if (persona.modules.includes('quotes') && origin.purpose === 'quote_request') {
-        const quotes = (await api('GET', `${base}/quotes`)).data || []
-        const draft = (Array.isArray(quotes) ? quotes : quotes.items || []).find((q) => (q.customer_name || q.customer?.name || '').includes(visitor.name.split(' ')[0]))
-        s.check('a "Get a quote" request is a draft quote to price (API)', Boolean(draft), JSON.stringify(quotes).slice(0, 200))
+        const quotes = (await api('GET', `${base}/quotes`)).data || {}
+        const rows = Array.isArray(quotes) ? quotes : quotes.quotes || quotes.items || []
+        const draft = rows.find((q) => q.source_ref === id || (q.notes || '').includes(visitor.message.slice(0, 30)))
+        journal.draft_quote = draft ? { number: draft.quote_number, status: draft.status, notes: draft.notes } : null
+        s.check('a "Get a quote" request is a draft quote to price, with their words (API)', draft?.status === 'draft',
+          JSON.stringify(journal.draft_quote || rows.map((q) => q.quote_number)).slice(0, 200))
       }
       s.check('the owner can mark it won', await move('Mark as won'))
       const won = await lead(id)

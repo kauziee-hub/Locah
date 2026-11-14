@@ -20,6 +20,7 @@ a person runs on purpose, never part of the test suite.
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import io
 import json
 import os
@@ -30,7 +31,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from platform_core.interview.site_vision_critic import Review, Shot, critique, revise, to_findings
+from platform_core.interview.site_vision_critic import Review, Shot, critique, prefer_review, revise, to_findings
 
 LAB = Path(os.getenv("LOCAH_SITE_LAB_DIR") or ".site-lab")
 BASE = os.getenv("LOCAH_SITE_LAB_URL", "http://localhost:3005")
@@ -116,10 +117,11 @@ def shots_for(key: str, payload: dict[str, Any]) -> list[Shot]:
         for i in range(limit):
             shots.append(Shot(shoot(f"{path}?from={i}&to={i}", "desktop"), slug, "desktop",
                               ((i, str(sections[i]["section_type_id"])),)))
-        if slug == "home":
-            for i in range(min(3, len(sections))):
-                shots.append(Shot(shoot(f"{path}?from={i}&to={i}", "phone"), slug, "phone",
-                                  ((i, str(sections[i]["section_type_id"])),)))
+        # A good desktop home must not conceal unfinished inner pages on a
+        # phone. Include their opening and first substantive section too.
+        for i in range(min(3 if slug == "home" else 2, len(sections))):
+            shots.append(Shot(shoot(f"{path}?from={i}&to={i}", "phone"), slug, "phone",
+                              ((i, str(sections[i]["section_type_id"])),)))
     return shots
 
 
@@ -159,6 +161,9 @@ def sheet(shots: list[Shot], out: Path) -> None:
 
 
 async def run(keys: list[str], rounds: int, dry_run: bool) -> dict[str, Any]:
+    # Initial review + at most three proposed repairs, each re-rendered and
+    # reviewed. The last saved change is always one that was actually judged.
+    rounds = min(3, max(0, rounds))
     if dry_run:
         provider: Any = CannedCritic()
     else:
@@ -175,14 +180,38 @@ async def run(keys: list[str], rounds: int, dry_run: bool) -> dict[str, Any]:
         history = []
         shots: list[Shot] = []
         tried: set[tuple[str, int, str]] = set()
-        for round_no in range(1, rounds + 1):
-            shots = shots_for(key, state["payload"])
-            review: Review = await critique(provider, shots, state["payload"])
-            done = revise(state["payload"], review.findings, tried)
-            history.append({"round": round_no, "scores": review.scores, "shots": len(shots),
-                            "findings": [f.as_dict() for f in review.findings], "revised": done})
-            print(f"{key} round {round_no}: scores={review.scores} findings={len(review.findings)} revised={done}")
+        best = deepcopy(state)
+        best_review: Review | None = None
+        for round_no in range(rounds + 1):
+            try:
+                shots = shots_for(key, state["payload"])
+                review: Review = await critique(provider, shots, state["payload"])
+            except Exception:
+                # A timed-out critic or failed render must never leave the
+                # unreviewed proposal as the saved site.
+                state = deepcopy(best)
+                save(state, files)
+                raise
+            kept = best_review is None or prefer_review(review, best_review)
+            if kept:
+                best, best_review = deepcopy(state), review
+            else:
+                state = deepcopy(best)
+                save(state, files)
+            entry = {"round": round_no, "scores": review.scores, "shots": len(shots), "kept": kept,
+                     "findings": [f.as_dict() for f in review.findings], "revised": []}
+            history.append(entry)
+            print(f"{key} round {round_no}: scores={review.scores} kept={kept}")
+            if round_no == rounds or best_review is None or not all(k in best_review.scores for k in (
+                    "hierarchy", "imagery", "rhythm", "distinctness", "mobile")):
+                if not kept:
+                    shots = shots_for(key, state["payload"])
+                break
+            done = revise(state["payload"], best_review.findings, tried)
+            entry["revised"] = done
             if not done:
+                if not kept:
+                    shots = shots_for(key, state["payload"])
                 break
             save(state, files)
         sheet(shots, out_dir / f"{key}.jpg")

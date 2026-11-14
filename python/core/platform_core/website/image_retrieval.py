@@ -504,6 +504,7 @@ class Verdict(BaseModel):
     # The named product, but not this one: another variety, species, cut or
     # flavour (chocolate-chip cookies for "coconut cookies", a T-bone for "mutton").
     wrong_variety: bool = False
+    decor_only: bool = False
     cliche_stock: bool = False
     looks_ai_generated: bool = False
     too_busy: bool = False
@@ -568,6 +569,8 @@ def why_not(verdict: Verdict, brief: PhotoBrief) -> str:
     # business truth wins over a beautiful picture of something else.
     if verdict.wrong_variety and brief.section_role in {"item", "range", "detail"}:
         return "wrong_variety"
+    if verdict.decor_only and brief.section_role == "hero":
+        return "decor_only: hero does not identify what the business does"
     if verdict.business_relevance is not None and verdict.business_relevance < 6:
         return f"business_relevance {verdict.business_relevance} < 6"
     if verdict.photo_quality is not None and verdict.photo_quality < 6:
@@ -640,6 +643,10 @@ class SiteMemory:
 
     used: set[str] = field(default_factory=set)
     chosen: list[dict[str, str]] = field(default_factory=list)
+    # Photographs other businesses' sites already show ("provider:photo_id").
+    # Two kitchens in one city must not open on the same biriyani: these are
+    # never offered to the judge. Loaded by the build (business_interview).
+    elsewhere: set[str] = field(default_factory=set)
 
     def remember(self, found: FoundImage, role: str) -> None:
         self.used.add(found.key)
@@ -839,7 +846,10 @@ _JUDGE_SYSTEM = (
     "face or hand), shows_unoffered_subject (the main subject is a product or dish NOT in business_offers_only — "
     "a beautiful picture of something the business does not sell is wrong), wrong_variety (the slot's subject names "
     "one product and the picture shows another variety, species, cut or flavour of it — chocolate-chip cookies for "
-    "'coconut cookies', a beef T-bone for 'mutton', chicken for 'fish', a croissant for 'egg puff'), cliche_stock, "
+    "'coconut cookies', a beef T-bone for 'mutton', chicken for 'fish', a croissant for 'egg puff'), "
+    "decor_only (the main subject is generic decor instead of the business's work or offerings: "
+    "a potted plant for a clinic, a lamp for a hotel, a coffee cup for a lawyer. Objects actually sold "
+    "by this business are not decor_only. A hero must identify the business, not merely suit its palette), cliche_stock, "
     "looks_ai_generated, "
     "too_busy, similar_to_site (too close to a picture in `already_on_site`). Set decision to `accepted` only if "
     "you would place the picture in this slot as it is; `rejected` if wrong; `retry_required` if close but "
@@ -923,6 +933,16 @@ def fallback_queries(brief: PhotoBrief) -> list[str]:
         if len(q.split()) >= 2 and q.casefold() not in {s.casefold() for s in seen}:
             seen.append(q)
     return seen
+
+
+def plain_subject_query(brief: PhotoBrief) -> str:
+    """The thing itself, in two or three words: "appam", "chicken stew",
+    "keratin treatment". Only for a slot that pictures one named item."""
+    if not brief.key.startswith(("item:", "category:")):
+        return ""
+    subject = re.split(r"[,;()—–:]| with | and | on | in ", brief.subject.casefold())[0]
+    words = [w for w in re.findall(r"[a-z]+", subject) if len(w) > 2][:3]
+    return " ".join(words) if words else ""
 
 
 async def write_queries(
@@ -1190,9 +1210,17 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
         if not queries:
             outcome.reason = "query_failed:empty"
             return outcome
+        plain = plain_subject_query(brief)
+        if plain and plain.casefold() not in {q.casefold() for q in queries}:
+            # The editorial searches describe a photograph ("appam in a clay
+            # bowl on banana leaf, warm window light"); a photo library answers
+            # the plain name better. Always asked as well: an owner run found
+            # no appam at all across three styled searches (2026-11-13).
+            queries = [*queries, plain]
         errors: list[dict[str, Any]] = []
         try:
-            pool, hits = await gather_pool(search, brief, queries, skip=site.used | rejected, pages=pages,
+            pool, hits = await gather_pool(search, brief, queries, skip=site.used | rejected | site.elsewhere,
+                                           pages=pages,
                                            fresh=fresh and round_number == 0, log=errors,
                                            round_number=round_number, tags=tags)
         except ImageSearchError as exc:
@@ -1283,7 +1311,7 @@ def _audit(candidate: ImageCandidate, verdict: Verdict | None, brief: PhotoBrief
         row["verdict"] = "not judged"
         return row
     flags = [name for name in ("has_text_or_watermark", "has_people", "shows_unoffered_subject", "wrong_variety",
-                               "cliche_stock",
+                               "decor_only", "cliche_stock",
                                "looks_ai_generated", "too_busy", "similar_to_site") if getattr(verdict, name)]
     row.update(decision=verdict.decision, score=verdict.score, weighted=weighted_score(verdict, brief),
                qualifies=qualifies(verdict, brief), why_not=why_not(verdict, brief), flags=flags,

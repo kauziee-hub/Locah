@@ -60,7 +60,7 @@ const DNA_VALUES: Record<string, readonly string[]> = {
     'instrumentserif', 'intertight', 'instrumentsans',
   ],
   body: ['dm', 'manrope', 'outfit', 'plex', 'spacegrotesk', 'bricolage', 'instrumentsans', 'intertight'],
-  headline: ['plain', 'italic', 'outline', 'marker', 'gradient', 'caps', 'script', 'serif', 'tone'],
+  headline: ['none', 'plain', 'italic', 'outline', 'marker', 'gradient', 'caps', 'script', 'serif', 'tone'],
   texture: ['none', 'grain', 'paper', 'dots', 'grid', 'pattern'],
   pattern: ['kolam', 'waves', 'rays', 'checks', 'arcs'],
   divider: ['none', 'curve', 'slant', 'wave', 'ticket'],
@@ -117,7 +117,45 @@ export function siteDna(theme: Record<string, unknown>): SiteDna {
     const value = String(raw[key] ?? '')
     if (allowed.includes(value)) out[key as keyof typeof DNA_VALUES] = value
   }
+  // The owner's own lettering (theme.owner_style) replaces the design's faces
+  // and nothing else of it: every face keeps its own metrics (site-dna.css).
+  const style = ownerStyle(theme)
+  if (style.font_display && DNA_VALUES.display.includes(style.font_display)) out.display = style.font_display
+  if (style.font_body && DNA_VALUES.body.includes(style.font_body)) out.body = style.font_body
   return out
+}
+
+const OWNER_SIZES = ['small', 'regular', 'large', 'xlarge']
+const OWNER_CORNERS = ['sharp', 'soft', 'round']
+
+export type OwnerStyle = {
+  font_display?: string
+  font_body?: string
+  heading_size?: string
+  text_size?: string
+  corners?: string
+}
+
+/** What the owner chose for their site's look, held to what the sheets draw
+ *  (platform_core/website/owner_style.py is the registry; site-owner.css). */
+export function ownerStyle(theme: Record<string, unknown>): OwnerStyle {
+  const raw =
+    theme.owner_style && typeof theme.owner_style === 'object'
+      ? (theme.owner_style as Record<string, unknown>)
+      : {}
+  const pick = (key: string, allowed: readonly string[]) => {
+    const value = String(raw[key] ?? '')
+    return allowed.includes(value) ? value : undefined
+  }
+  const heading = pick('heading_size', OWNER_SIZES)
+  const text = pick('text_size', OWNER_SIZES)
+  return {
+    font_display: pick('font_display', DNA_VALUES.display),
+    font_body: pick('font_body', DNA_VALUES.body),
+    heading_size: heading === 'regular' ? undefined : heading,
+    text_size: text === 'regular' ? undefined : text,
+    corners: pick('corners', OWNER_CORNERS),
+  }
 }
 
 export function siteExperience(theme: Record<string, unknown>): SiteExperience {

@@ -91,7 +91,7 @@ _HERO_MOOD = {
     "membership_fitness": "a strength-training gym interior — barbells, racks and plates, no people",
     "b2b_rfq": "a clean, orderly industrial workshop with precise machined parts in the foreground",
     "project_portfolio": "the tools and materials of the craft arranged on a wide studio table",
-    "service_appointment": "a calm, bright, welcoming interior with soft natural light and plants",
+    "service_appointment": "the trade's work setting and equipment, showing what the service involves",
     "local_service": "the trade's tools and materials, neatly arranged in warm light",
 }
 # Trades whose catalogue IS the evidence: their project/work cards are never drawn.
@@ -193,6 +193,11 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
     evidence = evidence_led(bp, direction)
     if arche in {"product_commerce", "menu_commerce"} and names:
         hero_subject = ", ".join(names[:4])
+    elif arche == "service_appointment" and names:
+        # An appointment model spans clinics, stays, salons and consulting.
+        # Shared operational mechanics must not prescribe a shared plant photo.
+        hero_subject = (f"a work setting visibly equipped for {', '.join(names[:4])}; "
+                        "show the service or its tools rather than generic decorative furnishings")
     else:
         hero_subject = _HERO_MOOD.get(arche, "")
     slots = [Slot("hero", hero_subject, aspect_for_hero(direction.hero), "hero", "Draft visual · cover",
@@ -222,6 +227,8 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
                               truth_class="factual" if evidence else "representative",
                               section="product_showcase"))
     story = _STORY.get(arche)
+    if story and arche == "service_appointment" and names:
+        story = f"{story} — the work and tools for {', '.join(names[:3])}"
     if story and direction.story_variant == "story_split":
         slots.append(Slot("story", story, "4:5", "gallery", "Draft visual · where it is made",
                           purpose="story", truth_class="mood", section="about"))
@@ -400,6 +407,7 @@ async def retrieve_missing(
     *,
     concurrency: int = 3,
     retriever: Callable[..., Awaitable[list[tuple[Any, Any]]]] | None = None,
+    used_elsewhere: set[str] | None = None,
 ) -> list[tuple[Slot, Any]]:
     """Find a verified real photograph for every slot that has none, a few at a time.
 
@@ -416,7 +424,13 @@ async def retrieve_missing(
     concept = site_concept(bp, direction)
     briefs = [brief_for_slot(s, direction, trade, bp=bp, concept=concept) for s in todo]
     by_key = {s.key: s for s in todo}
-    results = await (retriever or retrieve_many)(briefs, concurrency=concurrency)
+    if retriever is None and used_elsewhere:
+        # Photographs already on other businesses' sites are out of the running.
+        from platform_core.website.image_retrieval import SiteMemory
+
+        results = await retrieve_many(briefs, concurrency=concurrency, site=SiteMemory(elsewhere=set(used_elsewhere)))
+    else:
+        results = await (retriever or retrieve_many)(briefs, concurrency=concurrency)
     return [(by_key[brief.key], outcome) for brief, outcome in results]
 
 

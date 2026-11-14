@@ -324,7 +324,7 @@ export function MediaText({
     </div>
   ) : null
   const ground = alt ? 'ls-section--alt' : ''
-  if (variant === 'sticky') {
+  if (variant === 'sticky' && rows.some((r) => r.image)) {
     // The pictures hold still and change as each passage is read beside them.
     const pictured = rows.filter((r) => r.image)
     return (
@@ -413,7 +413,7 @@ export function PageHero({
   image?: Pic
 }) {
   return (
-    <section className={`ls-hero fx-pagehero ${image ? 'fx-pagehero--pic' : ''}`} data-progress="">
+    <section className={`ls-hero fx-pagehero ${image ? 'fx-pagehero--pic' : ''} ${sub ? '' : 'fx-pagehero--brief'}`} data-progress="">
       <div className="fx-pagehero__inner">
         {eyebrow}
         {title}

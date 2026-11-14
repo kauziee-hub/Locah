@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from platform_core.interview.spelling import fix_words
 from platform_core.interview.models import BusinessBlueprint, CatalogueGroup, CatalogueItem
 
 # Trades whose website is its catalogue, by the playbook's offer kind.
@@ -190,7 +191,8 @@ _DURATION = re.compile(r"\(?\s*(\d{1,3})\s*(?:-|to|–)?\s*(\d{1,3})?\s*(minutes
 _PRICE_TAIL = re.compile(
     r"(?:[-–—:=]|\.{2,}|…)?\s*(?:₹|rs\.?|inr)?\s*(?P<amount>\d{1,3}(?:,\d{2,3})+|\d{1,6})(?:\.\d{1,2})?\s*(?:/-)?"
     r"\s*(?P<unit>(?:/|per\s+|a\s+|for\s+)\s*(?:\d+\s*)?(?:kg|kilo|g|gm|grams?|piece|pc|pcs|plate|litre|ltr|l|ml|"
-    r"month|monthly|year|yearly|night|day|session|class|person|head|box|pack|jar|dozen|hour|hr)\b\.?)?\s*$",
+    r"month|monthly|year|yearly|night|day|session|class|person|head|box|pack|jar|dozen|hour|hr)\b\.?"
+    r"|for\s+\d{1,2}(?:\s*(?:pcs?|pieces?|nos?|plates?|persons?|people))?)?\s*$",
     re.I)
 _HEADING = re.compile(r"^(?P<head>[A-Za-z][A-Za-z &'/-]{1,30}?)\s*:\s*(?P<rest>.*)$")
 _BULLET = re.compile(r"^\s*(?:[-*•·▪►]|\d{1,2}[.)])\s+")
@@ -204,9 +206,12 @@ _DIET_MARK = re.compile(
     r"\(\s*(?P<m>veg|v|nv|non[- ]?veg|egg|vegan|jain)\s*\)|"
     r"(?:^|\s)(?P<m2>non[- ]?veg|nonveg|vegan|jain)(?=\s*$)", re.I)
 _MEAT = re.compile(
-    r"\b(?:chicken|mutton|lamb|goat|beef|pork|fish|prawns?|shrimps?|crab|squid|lobster|seer|pomfret|"
+    r"\b(?:chicken|mutton|lamb|goat|beef|pork|duck|quail|fish|prawns?|shrimps?|crab|squid|lobster|seer|pomfret|"
     r"sardine|mackerel|keema|kheema|kebab|kabab|tikka|seafood|nattu kozhi|kozhi|meen|eral|nandu|"
     r"liver|brain|bone|boneless|curry cut|wings?|drumsticks?|meat)\b", re.I)
+# "Paneer tikka", "Gobi 65", "Veg kebab": the word that names the meat dish, on a
+# dish that has none.
+_VEG_BASE = re.compile(r"\b(?:paneer|gobi|mushroom|aloo|veg|vegetable|soya|baby ?corn|dal|chana)\b", re.I)
 _EGG = re.compile(r"\b(?:egg|eggs|omelette|omelet|anda|muttai)\b", re.I)
 _SPICY_MARK = re.compile(r"(?:🌶+|\(\s*(?:spicy|hot|extra hot)\s*\))", re.I)
 _STARTING = re.compile(r"\s+(?:from|starting(?:\s+(?:at|from))?|starts?\s+(?:at|from)|onwards|upwards|@|at)$",
@@ -273,21 +278,110 @@ def _entry(raw: str) -> ReadItem | None:
     if not amount.isdigit() or int(amount) == 0:
         return None
     unit = (p.group("unit") or "").strip(" .")
+    for_count = re.fullmatch(r"for\s+(\d{1,2})(?:\s*(pcs?|pieces?|nos?|plates?|persons?|people))?", unit, re.I)
     unit = re.sub(r"^(?:per|a|for)\s+", "", unit, flags=re.I).strip("/ ")
     unit_text = f"per {unit}" if unit and not re.match(r"\d", unit) else unit
+    if for_count:
+        unit_text = f"for {for_count.group(1)}" + (f" {for_count.group(2).lower()}" if for_count.group(2) else "")
     if starting and not unit_text:
         unit_text = "onwards"
     if duration:
         unit_text = duration if not unit_text else f"{unit_text} · {duration}"
-    if not diet and _MEAT.search(name):
+    name = fix_words(name)
+    if not diet and _MEAT.search(name) and not _VEG_BASE.search(name):
         diet = "non_veg"  # a dish named for its meat or fish says so itself
     elif not diet and _EGG.search(name):
         diet = "egg"
-    return ReadItem(name=name[:80], price=p.group("amount").replace(" ", "")[:40], unit=unit_text[:40],
-                    diet=diet, spice=spice)
+    elif not diet and re.search(r"\bveg\b", name, re.I):
+        diet = "veg"
+    return ReadItem(name=name[:80], price=p.group("amount").replace(" ", "")[:40],
+                    unit=unit_text[:40], diet=diet, spice=spice)
 
 
-def read_priced_list(text: str) -> list[ReadGroup]:
+# A number that measures rather than prices: "30 min", "500 g", "2 pcs".
+_MEASURE_AFTER = re.compile(r"^(?:g|gm|gms|kg|kgs|ml|l|ltr|pcs?|pieces?|nos?|min|mins|minutes?|hr|hrs|hours?|km|"
+                            r"bhk|sqft|days?|months?|years?|seats?|rooms?|members?|persons?|people|%)$", re.I)
+_UNIT_WORD = re.compile(r"^(?:kg|kilo|g|gm|grams?|piece|pc|pcs|plate|litre|ltr|l|ml|month|monthly|year|yearly|"
+                        r"night|day|session|class|person|head|box|pack|jar|dozen|hour|hr)$", re.I)
+_PRICE_TOKEN = re.compile(r"^(?:₹|rs\.?)?(\d{2,6})(?:/-|/[a-z]{1,6})?$", re.I)
+
+
+def _run_on(chunk: str) -> list[str]:
+    """"chiken biriyani 280 mutton 360 appam 50 for 2" as its three entries.
+
+    Owners type a price list in one breath, without commas. A chunk that
+    holds two or more "words then a price" is cut after each price (and the
+    "for 2" / "per plate" that belongs to it); words left over with no price
+    ("…rest I will tell later") are not an item. A chunk with one price, or
+    none, is returned as it is.
+    """
+    tokens = [t.strip(".…") if re.search(r"\d", t) else t for t in chunk.split()]
+    tokens = [t for t in tokens if t]
+    out: list[str] = []
+    name: list[str] = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
+        priced = _PRICE_TOKEN.match(token)
+        if (priced and name and any(re.search(r"[A-Za-z]", w) for w in name)
+                and not _MEASURE_AFTER.match(nxt.strip(".,")) and not _PRICE_TOKEN.match(nxt)):
+            entry = [*name, token]
+            j = i + 1
+            if nxt.casefold() in {"per", "a", "for"} and j + 1 < len(tokens):
+                after = tokens[j + 1].strip(".,")
+                if nxt.casefold() == "for" and after.isdigit():
+                    entry += [nxt, after]
+                    j += 2
+                    if j < len(tokens) and re.fullmatch(r"pcs?|pieces?|nos?|plates?|persons?|people", tokens[j], re.I):
+                        entry.append(tokens[j])
+                        j += 1
+                elif _UNIT_WORD.match(after):
+                    entry += [nxt, after]
+                    j += 2
+            elif nxt.startswith("/") and len(nxt) > 1:
+                entry.append(nxt)
+                j += 1
+            out.append(" ".join(entry))
+            name = []
+            i = j
+            continue
+        name.append(token)
+        i += 1
+    if len(out) < 2:
+        return [chunk]
+    return out
+
+
+# A word that says which kind of the dish before it: "chiken biriyani 280
+# mutton 360" is two biriyanis, "stew chiken 240 veg 180" two stews.
+_VARIANT = frozenset({
+    "veg", "nonveg", "chicken", "mutton", "egg", "fish", "prawn", "prawns", "paneer", "beef", "pork", "lamb",
+    "mushroom", "gobi", "plain", "kids", "ladies", "gents", "men", "women", "boys", "girls",
+})
+
+
+def _variant_of(word: str, previous: str, known: tuple[str, ...]) -> str:
+    """The item a lone word names: one the owner already listed ("duck" is
+    their "Duck roast"), or the same dish as the entry before it."""
+    low = word.casefold()
+    named = [k for k in known if len(k.split()) > 1 and low in {w.casefold() for w in k.split()}]
+    if len(named) == 1:
+        return named[0]
+    if low not in _VARIANT or not previous or len(previous.split()) > 3:
+        return word
+    words = previous.split()
+    swapped = [(word if i == 0 else word.lower()) if w.casefold() in _VARIANT else w for i, w in enumerate(words)]
+    if swapped != words:
+        text = " ".join(swapped)
+    elif len(words) <= 2:
+        text = f"{word} {previous[:1].lower()}{previous[1:]}"
+    else:
+        return word
+    return text[:1].upper() + text[1:]
+
+
+def read_priced_list(text: str, known: tuple[str, ...] = ()) -> list[ReadGroup]:
     """A typed menu or price list as groups of priced items.
 
     Reads one entry per line, or comma/semicolon-separated entries; a line
@@ -329,21 +423,29 @@ def read_priced_list(text: str) -> list[ReadGroup]:
                         groups.append(current)
                     current = ReadGroup(name=head)
                     chunk = inline.group("rest")
-            entry = _entry(chunk)
-            if entry is None:
-                continue
-            size = re.match(r"^(?P<base>.+?)\s+(?P<size>half|full|quarter|small|medium|large|regular|"
-                            r"\d+\s*(?:g|gm|kg|ml|l|ltr|pcs?))$", entry.name, re.I)
-            if _SIZE.match(entry.name) and current.items:
-                # "full 400" after "Mutton biryani half 220": the same dish, another size.
-                last = current.items[-1]
-                last.price = f"{last.price} / {entry.price}"[:40]
-                last.unit = f"{last.unit or ''} / {entry.name.lower()}".strip(" /")[:40]
-                continue
-            if size:
-                entry.name = _clean_name(size.group("base"))
-                entry.unit = size.group("size").lower() if not entry.unit else entry.unit
-            current.items.append(entry)
+            # One breath, no commas: "chiken biriyani 280 mutton 360 appam 50 for 2".
+            pieces = _run_on(chunk)
+            previous = ""
+            for piece in pieces:
+                entry = _entry(piece)
+                if entry is None:
+                    continue
+                if len(pieces) > 1 and len(entry.name.split()) == 1 and not _SIZE.match(entry.name):
+                    entry.name = _variant_of(entry.name, previous, known)
+                elif len(entry.name.split()) > 1:
+                    previous = entry.name
+                size = re.match(r"^(?P<base>.+?)\s+(?P<size>half|full|quarter|small|medium|large|regular|"
+                                r"\d+\s*(?:g|gm|kg|ml|l|ltr|pcs?))$", entry.name, re.I)
+                if _SIZE.match(entry.name) and current.items:
+                    # "full 400" after "Mutton biryani half 220": the same dish, another size.
+                    last = current.items[-1]
+                    last.price = f"{last.price} / {entry.price}"[:40]
+                    last.unit = f"{last.unit or ''} / {entry.name.lower()}".strip(" /")[:40]
+                    continue
+                if size:
+                    entry.name = _clean_name(size.group("base"))
+                    entry.unit = size.group("size").lower() if not entry.unit else entry.unit
+                current.items.append(entry)
     if current.items or current.name:
         groups.append(current)
     return [g for g in groups if g.items][:12]
@@ -615,7 +717,8 @@ def read_traits(bp: BusinessBlueprint, text: str) -> int:
 
 def capture(bp: BusinessBlueprint, text: str, answering: tuple[str, ...] = ()) -> int:
     """Read a turn for the catalogue: priced lines, then traits. Returns what changed."""
-    groups = read_priced_list(text)
+    known = tuple(fix_words(item.name) for group in bp.taxonomy.groups for item in group.items)
+    groups = read_priced_list(text, known)
     count = priced_count(groups)
     changed = 0
     # A list in passing needs two priced lines to be a list; an answer to
@@ -626,6 +729,46 @@ def capture(bp: BusinessBlueprint, text: str, answering: tuple[str, ...] = ()) -
         if changed:
             _offer_answered_by_list(bp, text)
     changed += read_traits(bp, text)
+    changed += respell(bp)
+    return changed
+
+
+def respell(bp: BusinessBlueprint) -> int:
+    """Every name in the catalogue with the owner's slips put right. Two
+    entries that become the same item are one item (the priced one wins)."""
+    changed = 0
+    for group in bp.taxonomy.groups:
+        fixed = fix_words(group.name)
+        if fixed != group.name:
+            group.name, changed = fixed, changed + 1
+        kept: list[CatalogueItem] = []
+        for item in group.items:
+            name = fix_words(item.name)
+            if name != item.name and item.source != "owner_edited":
+                item.name, changed = name, changed + 1
+            twin = next((k for k in kept if k.name.casefold() == item.name.casefold()), None)
+            if twin is None:
+                kept.append(item)
+                continue
+            twin.price = twin.price or item.price
+            twin.unit = twin.unit or item.unit
+            twin.diet = twin.diet or item.diet
+            twin.description = twin.description or item.description
+            changed += 1
+        group.items = kept
+    # "Biriyani" said in passing, then "Chicken biriyani 280, Mutton biriyani
+    # 360": the bare word is the shelf those two sit on, not a third dish with
+    # no price (it was imported as one, and an owner made it live at ₹0).
+    priced = [set(re.findall(r"[a-z]{3,}", item.name.casefold()))
+              for group in bp.taxonomy.groups for item in group.items if item.price and len(item.name.split()) > 1]
+    for group in bp.taxonomy.groups:
+        before = len(group.items)
+        group.items = [
+            item for item in group.items
+            if item.price or len(item.name.split()) != 1 or item.source == "owner_edited"
+            or sum(1 for words in priced if item.name.casefold() in words) < 2
+        ]
+        changed += before - len(group.items)
     return changed
 
 

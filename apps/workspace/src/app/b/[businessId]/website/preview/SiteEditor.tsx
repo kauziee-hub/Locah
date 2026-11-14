@@ -10,11 +10,30 @@
  *
  * Every save is the existing section content-update endpoint, so the structured
  * Website model stays authoritative and the owner can only change the things
- * their SectionType actually allows. They cannot break the layout, because
- * layout is not theirs to edit here.
+ * their SectionType actually allows.
+ *
+ * Three ways to change the site, all on the same governed API:
+ *   Sections   reword, re-picture, drag to reorder, hide, copy, remove, add
+ *   Design     colours, lettering, sizes, corners — laid over the designed theme
+ *   Ask LOCAH  any of the above, asked for in words
+ * Clicking a part of the page in the preview opens it here (EditorBridge in
+ * apps/web). An owner personalises; the composition and motion the site was
+ * designed with are not theirs to break.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { AssistantPanel } from './AssistantPanel'
+import { DesignPanel } from './DesignPanel'
+import {
+  addSection,
+  duplicateSection,
+  listSectionTypes,
+  removeSection,
+  reorderSections,
+  setSectionVisible,
+  type SectionType,
+} from './structure-actions'
 import {
   approveDraftImage,
   completeImageUpload,
@@ -43,6 +62,9 @@ export type EditorSection = {
    *  "draw": generate, regenerate, upload, remove. "real_photo": upload only. */
   image_policy?: { self?: PicturePolicy; items?: PicturePolicy }
   is_visible: boolean
+  sort_order?: number
+  /** Set when the section shows a tool's live records (menu, rooms, plans). */
+  module_binding?: unknown
 }
 
 export type EditorPage = {
@@ -197,6 +219,12 @@ const SECTION_NAMES: Record<string, string> = {
   product_showcase: 'What you sell',
   category_showcase: 'Categories',
   fulfilment_strip: 'How ordering works',
+  statement: 'Big statement',
+  pillars: 'What you stand for',
+  faq: 'Questions & answers',
+  media_text: 'Story with a picture',
+  marquee: 'Moving band of words',
+  reviews_section: 'Customer reviews',
 }
 
 function sectionName(s: EditorSection): string {
@@ -570,33 +598,140 @@ function GalleryPictures({
   )
 }
 
+type Tab = 'sections' | 'design' | 'ask'
+
+const DESKTOP_WIDTH = 1280
+const PHONE_WIDTH = 390
+
+function bySort(sections: EditorSection[]): EditorSection[] {
+  return [...sections].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+}
+
+/** Adding a section: what this business may add, and why it may not add the rest. */
+function AddSection({
+  businessId,
+  onAdd,
+  busy,
+}: {
+  businessId: string
+  onAdd: (type: SectionType) => void
+  busy: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [types, setTypes] = useState<SectionType[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open || types) return
+    let gone = false
+    void listSectionTypes(businessId).then((res) => {
+      if (gone) return
+      if (res.ok) setTypes(res.data.section_types || [])
+      else setError(res.error)
+    })
+    return () => {
+      gone = true
+    }
+  }, [open, types, businessId])
+  const offered = (types || []).filter((t) => t.can_start && t.id !== 'hero')
+  return (
+    <div className="ed-add">
+      <button
+        type="button"
+        className="btn btn-ghost ed-add__open"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? 'Close' : '+ Add a section'}
+      </button>
+      {open ? (
+        <div className="ed-add__list">
+          {error ? <p className="ed-error">{error}</p> : null}
+          {!types && !error ? <p className="ed-help">Loading what you can add…</p> : null}
+          {offered.map((type) => (
+            <button
+              key={type.id}
+              type="button"
+              className="ed-add__item"
+              disabled={busy || !type.available}
+              onClick={() => {
+                onAdd(type)
+                setOpen(false)
+              }}
+            >
+              <strong>{SECTION_NAMES[type.id] || type.label}</strong>
+              <span>
+                {type.available
+                  ? type.description || 'Add it to the end of this page.'
+                  : `Turn on ${String(type.requires_module || 'its tool').replace(/-/g, ' ')} first.`}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function SiteEditor({
   businessId,
   pages,
+  theme,
   previewPath,
   webUrl,
   publishHref,
 }: {
   businessId: string
   pages: EditorPage[]
+  theme: Record<string, unknown>
   previewPath: string | null
   webUrl: string
   publishHref: string
 }) {
+  const router = useRouter()
   const [pageIdx, setPageIdx] = useState(0)
-  const [openSection, setOpenSection] = useState<string | null>(
-    pages[0]?.sections[0]?.id ?? null
-  )
-  const [content, setContent] = useState<Record<string, Record<string, unknown>>>(() =>
-    Object.fromEntries(pages.flatMap((p) => p.sections.map((s) => [s.id, { ...s.content }])))
-  )
+  const [tab, setTab] = useState<Tab>('sections')
+  const [openSection, setOpenSection] = useState<string | null>(pages[0]?.sections[0]?.id ?? null)
+  // Only what the owner has typed since the page loaded; everything else is
+  // the server's own content, so a refresh never shows stale words.
+  const [content, setContent] = useState<Record<string, Record<string, unknown>>>({})
   const [status, setStatus] = useState<{ msg: string; error: boolean } | null>(null)
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [nonce, setNonce] = useState(0)
   const [path, setPath] = useState(previewPath)
+  const [working, setWorking] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  /** How far down the preview the owner has scrolled (told by EditorBridge). */
+  const scrollAt = useRef(0)
+  // "Desktop" means a desktop: the page is laid out at a real desktop width
+  // and scaled down to fit this pane, so an owner judges the layout visitors
+  // on a laptop get — not the tablet layout a 700px frame would trigger.
+  const frameRef = useRef<HTMLDivElement>(null)
+  const [pane, setPane] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const measure = () => setPane({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const roomW = Math.max(0, pane.w - 24)
+  const roomH = Math.max(0, pane.h - 24)
+  const layoutW = device === 'desktop' ? Math.max(DESKTOP_WIDTH, roomW) : PHONE_WIDTH
+  const scale = roomW ? Math.min(1, roomW / layoutW) : 1
 
-  const page = pages[pageIdx]
+  const page = pages[Math.min(pageIdx, pages.length - 1)]
+  const [order, setOrder] = useState<EditorSection[]>(() => bySort(page?.sections || []))
+  // The server's sections are the truth: adopt them whenever they arrive
+  // (first load, another page, or after a change was saved and re-read).
+  useEffect(() => {
+    setOrder(bySort(page?.sections || []))
+  }, [page])
 
   useEffect(() => {
     const id = setInterval(async () => {
@@ -612,6 +747,7 @@ export function SiteEditor({
   // The preview reloads after a save so the owner sees the change land on the
   // real page rather than in a mock of it.
   const reloadPreview = useCallback(() => setNonce((n) => n + 1), [])
+  const say = useCallback((msg: string, error = false) => setStatus({ msg, error }), [])
 
   const previewSrc = (() => {
     if (!path) return null
@@ -621,23 +757,101 @@ export function SiteEditor({
   })()
 
   useEffect(() => {
-    setOpenSection(page?.sections[0]?.id ?? null)
-  }, [pageIdx, page])
+    scrollAt.current = 0
+    setOpenSection(pages[pageIdx]?.sections[0]?.id ?? null)
+    // Only when the owner switches page — not on every re-read of the same one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIdx])
+
+  // Pointing at the real page: a click on a section in the preview opens it
+  // here, and opening one here brings it into view there (EditorBridge).
+  const focusInPreview = useCallback((sectionId: string | null) => {
+    iframeRef.current?.contentWindow?.postMessage({ type: 'locah-editor:focus', sectionId }, '*')
+  }, [])
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      const data = event.data as { type?: string; sectionId?: string; y?: number } | null
+      if (data?.type === 'locah-editor:scroll' && typeof data.y === 'number') scrollAt.current = data.y
+      if (data?.type === 'locah-editor:select' && typeof data.sectionId === 'string') {
+        setTab('sections')
+        setOpenSection(data.sectionId)
+        document.getElementById(`ed-sec-${data.sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+      if (data?.type === 'locah-editor:ready') {
+        // A reload after a save: back to where the owner was looking, not the top.
+        if (scrollAt.current > 0) {
+          iframeRef.current?.contentWindow?.postMessage({ type: 'locah-editor:restore', y: scrollAt.current }, '*')
+        }
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  const open = (sectionId: string | null) => {
+    setOpenSection(sectionId)
+    setMenuFor(null)
+    focusInPreview(sectionId)
+  }
 
   const commit = async (section: EditorSection, key: string, next: unknown) => {
-    const merged = { ...(content[section.id] || {}), [key]: next }
+    const merged = { ...(content[section.id] ?? section.content), [key]: next }
     setContent((prev) => ({ ...prev, [section.id]: merged }))
-    setStatus({ msg: 'Saving…', error: false })
+    say('Saving…')
     const res = await saveSectionContent(businessId, section.id, merged)
     if (res.ok) {
       // Stays put rather than fading. "Did that save?" is the question an owner
       // asks, and a message that disappears after two seconds does not answer it.
-      setStatus({ msg: 'All changes saved to your draft', error: false })
+      say('All changes saved to your draft')
       reloadPreview()
     } else {
-      setStatus({ msg: res.error || 'Could not save', error: true })
+      say(res.error || 'Could not save', true)
     }
   }
+
+  /** One structural change: do it, say so, then read the page again. */
+  const change = async (
+    run: () => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>,
+    said: string,
+    undo?: () => void
+  ) => {
+    setWorking(true)
+    say('Saving…')
+    const res = await run()
+    setWorking(false)
+    if (!res.ok) {
+      undo?.()
+      say(res.error, true)
+      return false
+    }
+    say(said)
+    reloadPreview()
+    router.refresh()
+    return true
+  }
+
+  const moveTo = (sectionId: string, toIndex: number) => {
+    const from = order.findIndex((s) => s.id === sectionId)
+    if (from < 0 || !page) return
+    const next = [...order]
+    const [moved] = next.splice(from, 1)
+    next.splice(Math.max(0, Math.min(next.length, toIndex)), 0, moved)
+    if (next.every((s, i) => s.id === order[i]?.id)) return
+    const before = order
+    setOrder(next)
+    void change(
+      () => reorderSections(businessId, page.id, next.map((s) => s.id)),
+      'New order saved to your draft',
+      () => setOrder(before)
+    )
+  }
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'sections', label: 'Sections' },
+    { id: 'design', label: 'Design' },
+    { id: 'ask', label: 'Ask LOCAH' },
+  ]
 
   return (
     <div className="ed">
@@ -658,130 +872,336 @@ export function SiteEditor({
               </option>
             ))}
           </select>
-          <p className="ed-help">
-            Changes save to your draft as you make them. Your live site only changes when you
-            publish.
-          </p>
+          <div className="ed-tabs" role="tablist" aria-label="What to change">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`ed-tab-${t.id}`}
+                aria-selected={tab === t.id}
+                aria-controls={`ed-panel-${t.id}`}
+                className="ed-tabs__tab"
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="ed__sections">
-          {(page?.sections || []).map((section) => {
-            const isOpen = openSection === section.id
-            const fields = FIELDS[section.section_type_id] || []
-            const list = LISTS[section.section_type_id]
-            const current = content[section.id] || {}
-            const bound = Boolean(
-              (section as unknown as { module_binding?: unknown }).module_binding
-            )
-            return (
-              <div className="ed-sec" key={section.id} data-open={isOpen}>
-                <button
-                  type="button"
-                  className="ed-sec__head"
-                  onClick={() => setOpenSection(isOpen ? null : section.id)}
-                  aria-expanded={isOpen}
-                >
-                  <span>{sectionName(section)}</span>
-                  <span aria-hidden="true">{isOpen ? '−' : '+'}</span>
-                </button>
+        <div
+          className="ed__sections"
+          role="tabpanel"
+          id={`ed-panel-${tab}`}
+          aria-labelledby={`ed-tab-${tab}`}
+        >
+          {tab === 'design' ? (
+            <DesignPanel businessId={businessId} theme={theme} onChanged={() => { reloadPreview(); router.refresh() }} onStatus={say} />
+          ) : null}
 
-                {isOpen ? (
-                  <div className="ed-sec__body">
-                    {fields.length === 0 && !section.image_policy?.self && !section.image_policy?.items ? (
-                      <p className="ed-help">
-                        This section arranges itself from your business details. There is nothing
-                        to type here.
-                      </p>
-                    ) : null}
+          {tab === 'ask' ? (
+            <AssistantPanel
+              businessId={businessId}
+              pageId={page?.id}
+              pageTitle={page?.title}
+              onChanged={() => {
+                setContent({})
+                say('LOCAH changed your draft')
+                reloadPreview()
+                router.refresh()
+              }}
+            />
+          ) : null}
 
-                    {fields.map((f) => (
-                      <div className="ed-field" key={f.key}>
-                        <label className="ed-label" htmlFor={`${section.id}-${f.key}`}>
-                          {f.label}
-                        </label>
-                        {f.multiline ? (
-                          <textarea
-                            id={`${section.id}-${f.key}`}
-                            className="ed-input ed-input--area"
-                            defaultValue={String(current[f.key] ?? '')}
-                            onBlur={(e) => {
-                              if (e.target.value !== String(current[f.key] ?? '')) {
-                                void commit(section, f.key, e.target.value)
-                              }
-                            }}
-                          />
-                        ) : (
-                          <input
-                            id={`${section.id}-${f.key}`}
-                            className="ed-input"
-                            defaultValue={String(current[f.key] ?? '')}
-                            onBlur={(e) => {
-                              if (e.target.value !== String(current[f.key] ?? '')) {
-                                void commit(section, f.key, e.target.value)
-                              }
-                            }}
-                          />
-                        )}
-                        {f.help ? <p className="ed-help">{f.help}</p> : null}
+          {tab === 'sections' ? (
+            <>
+              <p className="ed-help ed-sections__hint">
+                Click a part of your page on the right to open it here. Drag <span aria-hidden="true">⠿</span> to
+                move a section.
+              </p>
+              {order.map((section, index) => {
+                const isOpen = openSection === section.id
+                const fields = FIELDS[section.section_type_id] || []
+                const list = LISTS[section.section_type_id]
+                const current = content[section.id] ?? section.content ?? {}
+                const bound = Boolean(section.module_binding)
+                const hidden = section.is_visible === false
+                const isHero = section.section_type_id === 'hero'
+                return (
+                  <div
+                    className="ed-sec"
+                    key={section.id}
+                    id={`ed-sec-${section.id}`}
+                    data-open={isOpen}
+                    data-hidden={hidden || undefined}
+                    data-dragging={dragId === section.id || undefined}
+                    data-over={overId === section.id && dragId !== section.id ? 'true' : undefined}
+                    onDragOver={(e) => {
+                      if (!dragId) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      if (overId !== section.id) setOverId(section.id)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const moved = dragId
+                      setDragId(null)
+                      setOverId(null)
+                      if (moved && moved !== section.id) moveTo(moved, index)
+                    }}
+                  >
+                    <div className="ed-sec__bar">
+                      <span
+                        className="ed-sec__grip"
+                        draggable={!working}
+                        role="img"
+                        aria-label={`Drag to move ${sectionName(section)}`}
+                        title="Drag to move"
+                        onDragStart={(e) => {
+                          setDragId(section.id)
+                          e.dataTransfer.effectAllowed = 'move'
+                          e.dataTransfer.setData('text/plain', section.id)
+                        }}
+                        onDragEnd={() => {
+                          setDragId(null)
+                          setOverId(null)
+                        }}
+                      >
+                        ⠿
+                      </span>
+                      <button
+                        type="button"
+                        className="ed-sec__head"
+                        onClick={() => open(isOpen ? null : section.id)}
+                        aria-expanded={isOpen}
+                      >
+                        <span>
+                          {sectionName(section)}
+                          {hidden ? <em className="ed-sec__tag">Hidden</em> : null}
+                        </span>
+                      </button>
+                      <div className="ed-sec__tools">
+                        <button
+                          type="button"
+                          className="ed-icon"
+                          aria-label={`Move ${sectionName(section)} up`}
+                          title="Move up"
+                          disabled={working || index === 0}
+                          onClick={() => moveTo(section.id, index - 1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="ed-icon"
+                          aria-label={`Move ${sectionName(section)} down`}
+                          title="Move down"
+                          disabled={working || index === order.length - 1}
+                          onClick={() => moveTo(section.id, index + 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="ed-icon"
+                          aria-label={`More for ${sectionName(section)}`}
+                          aria-expanded={menuFor === section.id}
+                          title="More"
+                          onClick={() => {
+                            setMenuFor(menuFor === section.id ? null : section.id)
+                            setConfirmRemove(null)
+                          }}
+                        >
+                          ⋯
+                        </button>
                       </div>
-                    ))}
+                    </div>
 
-                    {list ? (
-                      <ListEditor
-                        field={list}
-                        sectionId={section.id}
-                        value={current[list.key]}
-                        onCommit={(rows) => void commit(section, list.key, rows)}
-                      />
+                    {menuFor === section.id ? (
+                      <div className="ed-sec__menu">
+                        {!isHero ? (
+                          <button
+                            type="button"
+                            className="ed-sec__menuitem"
+                            disabled={working}
+                            onClick={() => {
+                              setMenuFor(null)
+                              const before = order
+                              setOrder(order.map((s) => (s.id === section.id ? { ...s, is_visible: hidden } : s)))
+                              void change(
+                                () => setSectionVisible(businessId, section.id, hidden),
+                                hidden ? 'Shown again on your draft' : 'Hidden on your draft — nothing is deleted',
+                                () => setOrder(before)
+                              )
+                            }}
+                          >
+                            {hidden ? 'Show on the page' : 'Hide from the page'}
+                          </button>
+                        ) : null}
+                        {!bound ? (
+                          <button
+                            type="button"
+                            className="ed-sec__menuitem"
+                            disabled={working}
+                            onClick={() => {
+                              setMenuFor(null)
+                              void change(() => duplicateSection(businessId, section.id), 'A copy was added below it')
+                            }}
+                          >
+                            Make a copy
+                          </button>
+                        ) : null}
+                        {!isHero && !bound ? (
+                          confirmRemove === section.id ? (
+                            <div className="ed-sec__confirm">
+                              <span>Remove this section and its words?</span>
+                              <button
+                                type="button"
+                                className="ed-sec__menuitem is-danger"
+                                disabled={working}
+                                onClick={() => {
+                                  setMenuFor(null)
+                                  setConfirmRemove(null)
+                                  void change(() => removeSection(businessId, section.id), 'Removed from your draft')
+                                }}
+                              >
+                                Yes, remove it
+                              </button>
+                              <button type="button" className="ed-sec__menuitem" onClick={() => setConfirmRemove(null)}>
+                                Keep it
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="ed-sec__menuitem is-danger"
+                              onClick={() => setConfirmRemove(section.id)}
+                            >
+                              Remove…
+                            </button>
+                          )
+                        ) : null}
+                        {isHero ? <p className="ed-help">The top of the page always stays — you can reword it or change its picture.</p> : null}
+                        {bound ? (
+                          <p className="ed-help">
+                            This section belongs to one of your tools, so it can be hidden but not removed.
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
 
-                    {section.image_policy?.self && section.section_type_id !== 'gallery' ? (
-                      <ImageField
-                        businessId={businessId}
-                        sectionId={section.id}
-                        policy={section.image_policy.self}
-                        currentUrl={section.assets?.image_asset_id?.url}
-                        currentAssetId={typeof current.image_asset_id === 'string' ? current.image_asset_id : undefined}
-                        draft={section.assets?.image_asset_id?.draft}
-                        onUploaded={(assetId) => commit(section, 'image_asset_id', assetId)}
-                        onRemove={() => commit(section, 'image_asset_id', null)}
-                      />
-                    ) : null}
+                    {isOpen ? (
+                      <div className="ed-sec__body">
+                        {fields.length === 0 && !section.image_policy?.self && !section.image_policy?.items ? (
+                          <p className="ed-help">
+                            This section arranges itself from your business details. There is nothing
+                            to type here.
+                          </p>
+                        ) : null}
 
-                    {section.section_type_id === 'gallery' && section.image_policy?.self ? (
-                      <GalleryPictures
-                        businessId={businessId}
-                        section={section}
-                        ids={Array.isArray(current.image_asset_ids) ? current.image_asset_ids.map(String) : []}
-                        onChange={(ids) => commit(section, 'image_asset_ids', ids)}
-                      />
-                    ) : null}
+                        {fields.map((f) => (
+                          <div className="ed-field" key={f.key}>
+                            <label className="ed-label" htmlFor={`${section.id}-${f.key}`}>
+                              {f.label}
+                            </label>
+                            {f.multiline ? (
+                              <textarea
+                                id={`${section.id}-${f.key}`}
+                                className="ed-input ed-input--area"
+                                defaultValue={String(current[f.key] ?? '')}
+                                onBlur={(e) => {
+                                  if (e.target.value !== String(current[f.key] ?? '')) {
+                                    void commit(section, f.key, e.target.value)
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <input
+                                id={`${section.id}-${f.key}`}
+                                className="ed-input"
+                                defaultValue={String(current[f.key] ?? '')}
+                                onBlur={(e) => {
+                                  if (e.target.value !== String(current[f.key] ?? '')) {
+                                    void commit(section, f.key, e.target.value)
+                                  }
+                                }}
+                              />
+                            )}
+                            {f.help ? <p className="ed-help">{f.help}</p> : null}
+                          </div>
+                        ))}
 
-                    {section.image_policy?.items
-                      ? (['items', 'categories'] as const).map((listKey) => (
-                          <CardPictures
-                            key={listKey}
+                        {list ? (
+                          <ListEditor
+                            field={list}
+                            sectionId={section.id}
+                            value={current[list.key]}
+                            onCommit={(rows) => void commit(section, list.key, rows)}
+                          />
+                        ) : null}
+
+                        {section.image_policy?.self && section.section_type_id !== 'gallery' ? (
+                          <ImageField
+                            businessId={businessId}
+                            sectionId={section.id}
+                            policy={section.image_policy.self}
+                            currentUrl={section.assets?.image_asset_id?.url}
+                            currentAssetId={typeof current.image_asset_id === 'string' ? current.image_asset_id : undefined}
+                            draft={section.assets?.image_asset_id?.draft}
+                            onUploaded={(assetId) => commit(section, 'image_asset_id', assetId)}
+                            onRemove={() => commit(section, 'image_asset_id', null)}
+                          />
+                        ) : null}
+
+                        {section.section_type_id === 'gallery' && section.image_policy?.self ? (
+                          <GalleryPictures
                             businessId={businessId}
                             section={section}
-                            listKey={listKey}
-                            policy={section.image_policy!.items!}
-                            rows={current[listKey]}
-                            onChange={(rows) => commit(section, listKey, rows)}
+                            ids={Array.isArray(current.image_asset_ids) ? current.image_asset_ids.map(String) : []}
+                            onChange={(ids) => commit(section, 'image_asset_ids', ids)}
                           />
-                        ))
-                      : null}
+                        ) : null}
 
-                    {bound ? (
-                      <p className="ed-help">
-                        The items shown here come from your Offerings, so they stay correct as you
-                        add and remove them.
-                      </p>
+                        {section.image_policy?.items
+                          ? (['items', 'categories'] as const).map((listKey) => (
+                              <CardPictures
+                                key={listKey}
+                                businessId={businessId}
+                                section={section}
+                                listKey={listKey}
+                                policy={section.image_policy!.items!}
+                                rows={current[listKey]}
+                                onChange={(rows) => commit(section, listKey, rows)}
+                              />
+                            ))
+                          : null}
+
+                        {bound ? (
+                          <p className="ed-help">
+                            The items shown here come from your Offerings, so they stay correct as you
+                            add and remove them.
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                ) : null}
-              </div>
-            )
-          })}
+                )
+              })}
+              {page ? (
+                <AddSection
+                  businessId={businessId}
+                  busy={working}
+                  onAdd={(type) =>
+                    void change(
+                      () => addSection(businessId, page.id, type.id),
+                      `${SECTION_NAMES[type.id] || type.label} added at the end of this page — open it to make it yours`
+                    )
+                  }
+                />
+              ) : null}
+            </>
+          ) : null}
         </div>
 
         <div className="ed__railfoot">
@@ -789,7 +1209,9 @@ export function SiteEditor({
             <p className={`ed-status${status.error ? ' is-error' : ''}`} role="status">
               {status.msg}
             </p>
-          ) : null}
+          ) : (
+            <p className="ed-status">Changes save to your draft. Your live site changes only when you publish.</p>
+          )}
           <a className="btn btn-primary ed__publish" href={publishHref}>
             Review &amp; publish
           </a>
@@ -805,6 +1227,11 @@ export function SiteEditor({
             <a href={previewSrc} target="_blank" rel="noreferrer" className="ed__full-preview">
               Open full-size preview ↗
             </a>
+          ) : null}
+          {scale < 0.98 ? (
+            <span className="ed-help" style={{ margin: 0 }}>
+              Shown at {Math.round(scale * 100)}%
+            </span>
           ) : null}
           <div className="ed__devices" role="group" aria-label="Preview size">
             <button
@@ -823,15 +1250,24 @@ export function SiteEditor({
             </button>
           </div>
         </div>
-        <div className="ed__frame" data-device={device}>
+        <div className="ed__frame" ref={frameRef} data-device={device}>
           {previewSrc ? (
-            <iframe
-              ref={iframeRef}
-              key={previewSrc}
-              src={previewSrc}
-              title="Website preview"
-              loading="lazy"
-            />
+            <div
+              className="ed__canvas"
+              style={{ width: Math.round(layoutW * scale), height: roomH || undefined }}
+            >
+              <iframe
+                ref={iframeRef}
+                key={previewSrc}
+                src={previewSrc}
+                title="Website preview"
+                style={{
+                  width: layoutW,
+                  height: roomH ? Math.round(roomH / scale) : 800,
+                  transform: scale < 1 ? `scale(${scale})` : undefined,
+                }}
+              />
+            </div>
           ) : (
             <p className="ed-help" style={{ padding: '2rem' }}>
               The preview could not be opened. Your draft is safe — try reloading this page.

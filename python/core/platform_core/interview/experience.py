@@ -57,7 +57,8 @@ DESCRIBE: dict[str, str] = {
     "plane": "a tilted wall of the business's pictures that straightens toward you as you scroll (needs 8+)",
     "kinetic": "poster-sized type that pulls apart around a growing picture — loud, typographic (poster faces only)",
     "depth": "one photograph with framed pictures floating over it at different depths (homes and project work)",
-    "aurora": "a slowly moving gradient in the brand colours behind large type — for sites without photos",
+    "aurora": "a typographic opening built from the business's own range when photos are absent; "
+              "a soft moving colour field only when there is too little content for an editorial index",
     "arch": "the words beside a tall arched photograph, a small round picture over its edge — warm, crafted",
     "window": "the headline set across the page with the photograph seen through a band between its lines"
               " — editorial, cinematic",
@@ -346,7 +347,9 @@ def choose_experience(
         # carries its words as an outlined line (the composer adds the poster
         # concept, which is chosen after this).
         marquee = "band" if family == "monumental" else "outline"
-    intro = motion in {"silk", "snap"} and str(dims.get("positioning", "")) in {"premium", "heritage", "modern"}
+    # Brand personality is not permission to conceal the useful first screen
+    # behind a timed logo curtain. The scene itself carries the arrival.
+    intro = False
     grain = family in {"editorial_warm", "premium_dark", "portfolio_sketchbook"}
     return Experience(motion=motion, hero=hero, catalogue=catalogue, story=story, cta=cta, marquee=marquee,
                       intro=intro, grain=grain, reasons=tuple(reasons), hero_options=tuple(heroes),

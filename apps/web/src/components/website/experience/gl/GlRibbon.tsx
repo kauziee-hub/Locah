@@ -7,7 +7,7 @@ type Kind = 'rail' | 'bento'
 
 const PICTURED: Record<Kind, string> = {
   rail: '.fx-rail__card .fx-rail__media > img',
-  bento: '.fx-bento__cell--pic > img',
+  bento: '.fx-bento__media > img',
 }
 
 /**

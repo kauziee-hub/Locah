@@ -19,9 +19,7 @@ type TransitionDocument = Document & { startViewTransition?: (update: () => Prom
  * The runtime itself is fetched after the page is interactive, so it costs
  * nothing on the critical path.
  *
- * Two things here are not motion and run for every visitor: the typesetting,
- * and the desktop action dock (it shows once the cover has scrolled away and
- * steps aside at the closing band and the footer).
+ * Typesetting runs for every visitor, independently of motion preference.
  */
 export function SiteMotion() {
   const router = useRouter()
@@ -42,11 +40,10 @@ export function SiteMotion() {
     // Typography is not motion: every visitor gets units kept with their
     // numbers and headings without a lone last word.
     typeset(root)
-    const stopDock = watchDock(root)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduced || root.dataset.motion === 'none') {
       root.removeAttribute('data-fx')
-      return stopDock
+      return
     }
     // A client-side navigation renders a new page without running the inline
     // boot script, so the attribute is set here as well.
@@ -87,49 +84,10 @@ export function SiteMotion() {
     return () => {
       gone = true
       handle?.stop()
-      stopDock()
       root.removeEventListener('click', onNavigate, true)
     }
   }, [])
   return null
-}
-
-/**
- * The desktop action dock (.fx-dock): the live action and one channel, within
- * a glance once the cover has gone and out of the way at the closing band and
- * the footer, which carry their own. Without JavaScript it stays hidden and the
- * header keeps the action.
- */
-function watchDock(root: HTMLElement): () => void {
-  const dock = root.querySelector<HTMLElement>('.fx-dock')
-  if (!dock || typeof IntersectionObserver === 'undefined') return () => undefined
-  const cover = root.querySelector<HTMLElement>('main .ls-hero') || root.querySelector<HTMLElement>('main section')
-  const ends = Array.from(root.querySelectorAll<HTMLElement>('main .fx-cta, footer.ls-foot'))
-  let pastCover = !cover
-  const near = new Set<Element>()
-  const show = () => dock.toggleAttribute('data-on', pastCover && near.size === 0)
-  const coverIO = new IntersectionObserver((entries) => {
-    for (const entry of entries) pastCover = !entry.isIntersecting && entry.boundingClientRect.bottom <= 0
-    show()
-  })
-  const endIO = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) near.add(entry.target)
-        else near.delete(entry.target)
-      }
-      show()
-    },
-    { rootMargin: '0px 0px -8% 0px' }
-  )
-  if (cover) coverIO.observe(cover)
-  ends.forEach((el) => endIO.observe(el))
-  show()
-  return () => {
-    coverIO.disconnect()
-    endIO.disconnect()
-    dock.removeAttribute('data-on')
-  }
 }
 
 /**
