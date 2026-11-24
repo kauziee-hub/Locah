@@ -254,6 +254,13 @@ export function ProductShowcase({
     })
   }, [canBrowse, live, items, t])
   const liveMode = canBrowse && live.length > 0
+  // A kind named on every card says nothing when every card is that kind
+  // (a hotel's four rooms each under "STAY", owner lab 2026-11-24).
+  const oneKind = useMemo(
+    () => new Set(shownItems.map((i) => (i.category || '').trim()).filter(Boolean)).size <= 1,
+    [shownItems]
+  )
+  const kicker = (item: Item): string => (oneKind ? '' : (item.category || '').trim())
   // A category's "From ₹…" line: the live catalogue's lowest price once there
   // is one — never the price said at build time beside items that now cost
   // something else (owner lab: "From ₹240 per kg" over chicken now ₹260).
@@ -503,7 +510,7 @@ export function ProductShowcase({
                     <span className="fx-rail__index">{String(i + 1).padStart(2, '0')}</span>
                     <Picture image={item.image} name={item.name} className="fx-rail__media" />
                     <div className="fx-rail__body">
-                      {item.category ? <span className="fx-rail__kicker">{item.category}</span> : null}
+                      {kicker(item) ? <span className="fx-rail__kicker">{kicker(item)}</span> : null}
                       <div className="fx-rail__row">
                         <h3>
                           {item.name} <Diet value={item.diet} t={t} />
@@ -688,7 +695,7 @@ export function ProductShowcase({
                   <span className="fx-spot__num" aria-hidden="true">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  {item.category ? <span className="fx-rail__kicker">{item.category}</span> : null}
+                  {kicker(item) ? <span className="fx-rail__kicker">{kicker(item)}</span> : null}
                   <h3>
                     {item.name} <Diet value={item.diet} t={t} />
                   </h3>
@@ -725,7 +732,7 @@ export function ProductShowcase({
                   <div>
                     <span className="fx-stack__kicker">
                       {String(i + 1).padStart(2, '0')}
-                      {item.category ? ` · ${item.category}` : ''}
+                      {kicker(item) ? ` · ${kicker(item)}` : ''}
                     </span>
                     <h3>{item.name}</h3>
                   </div>
@@ -896,7 +903,7 @@ export function ProductShowcase({
                 />
               ) : null}
               <div className="ls-card__body">
-                {item.category && kind !== 'menu' ? <span className="ls-card__kicker">{item.category}</span> : null}
+                {kicker(item) && kind !== 'menu' ? <span className="ls-card__kicker">{kicker(item)}</span> : null}
                 <div className="ls-card__row">
                   <h3 className="ls-card__title">
                     {item.name} <Diet value={item.diet} t={t} />

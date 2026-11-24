@@ -531,13 +531,15 @@ function RoomRows({
   return (
     <div>
       {items.map((r) => (
-        <article key={r.id} className="ls-room">
-          <div className="ls-room__media">
-            {r.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
+        // A room with no picture is a row of words, never an empty grey box
+        // (a hotel's four rooms stood as four blank frames, owner lab 2026-11-24).
+        <article key={r.id} className={r.image_url ? 'ls-room' : 'ls-room ls-room--text'}>
+          {r.image_url ? (
+            <div className="ls-room__media">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={r.image_url} alt="" loading="lazy" />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           <div>
             <h3 className="ls-item__title" style={{ fontSize: '1.3rem' }}>
               {r.title}

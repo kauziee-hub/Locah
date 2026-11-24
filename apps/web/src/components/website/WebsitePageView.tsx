@@ -737,10 +737,12 @@ export function WebsitePageView({
           <LanguageSwitch languages={languages} current={lang} place="foot" />
           {credits.length ? (
             <span className="ls-foot__credits">
-              {t('Photography')}:{' '}
               {credits.map((c, i) => (
+                // In each library's own words: "Photo by Annie Spratt on Unsplash",
+                // "Image by … from Pixabay" — both names linked, as Unsplash asks.
                 <span key={c.line}>
                   {i ? ' · ' : null}
+                  {c.source === 'Pixabay' ? t('Image by') : t('Photo by')}{' '}
                   {c.name && c.name_url ? (
                     <a href={c.name_url} target="_blank" rel="noopener noreferrer nofollow">
                       {c.name}
@@ -750,7 +752,7 @@ export function WebsitePageView({
                   )}
                   {c.source ? (
                     <>
-                      {' / '}
+                      {c.source === 'Pixabay' ? ` ${t('from')} ` : ` ${t('on')} `}
                       {c.source_url ? (
                         <a href={c.source_url} target="_blank" rel="noopener noreferrer nofollow">
                           {c.source}

@@ -43,7 +43,13 @@ const ROHIT = { name: 'Rohit Menon', email: 'rohit.hotel-lab@locah.test', phone:
 const FARAH = { name: 'Farah Khan', email: 'farah.hotel-lab@locah.test', phone: '+919845033445' }
 
 export function stayJourney(ctx) {
-  const { browser, page, api, step, journal, B, WS, API, sleep, pageErrors } = ctx
+  const { browser, page, api, step, journal, B, WS, API, sleep, pageErrors, persona = {} } = ctx
+  // The owner's own check-in time ("Check-in 1 pm, check-out 11 am"), or — when
+  // they left it to LOCAH ("u decide pls") — the usual times LOCAH said back.
+  const SAID_TIMES = Boolean(persona.answers?.hours)
+  const IN = SAID_TIMES ? '13:00' : '14:00'
+  const IN_WORDS = SAID_TIMES ? '1 pm' : '2 pm'
+  const IN_PAGE = SAID_TIMES ? /1:00\s*pm/i : /2:00\s*pm/i
   const VIEW = { viewport: { width: 1440, height: 900 }, timezoneId: TZ, locale: 'en-IN' }
 
   // ---------------------------------------------------------------- reading
@@ -179,7 +185,13 @@ export function stayJourney(ctx) {
       }
       const anyType = items.find((x) => x.offering_type === 'accommodation')
       const said = anyType?.attributes || {}
-      s.check('"Check-in 1 pm, check-out 11 am" came with them', said.check_in === '13:00' && said.check_out === '11:00', JSON.stringify(said))
+      s.check(SAID_TIMES ? '"Check-in 1 pm, check-out 11 am" came with them' : 'the usual times LOCAH said it would use (2 pm in, 11 am out) came with them',
+        said.check_in === IN && said.check_out === '11:00', JSON.stringify(said))
+      if (!SAID_TIMES) {
+        const chat = (journal.steps.find((x) => x.name.startsWith('interview'))?.notes || []).join(' ')
+        s.check('when the owner left check-in to LOCAH, LOCAH said back the times it chose', /check-in from 2 pm, check-out by 11 am/i.test(chat),
+          chat.match(/LOCAH asks \[[a-z]+\]: [^·]*check[^·]*/i)?.[0]?.slice(0, 200) || 'not said')
+      }
       s.check('"2-night minimum on weekends" came with them', Number(said.weekend_min_nights) === 2, JSON.stringify(said))
       for (const t of TYPES) {
         const id = typeId(t.key)
@@ -191,7 +203,7 @@ export function stayJourney(ctx) {
         else s.check(`${t.key}: there is a field for how many it sleeps`, false)
         if (t.key === 'cottage') {
           const inField = label(/^Check-in from/)
-          s.check('the room type shows its check-in time to the owner', (await inField.count()) > 0 && (await inField.first().inputValue()) === '13:00',
+          s.check('the room type shows its check-in time to the owner', (await inField.count()) > 0 && (await inField.first().inputValue()) === IN,
             (await inField.count()) ? await inField.first().inputValue() : 'no Check-in field')
           await s.shot(page, 'room-type-cottage', true)
         }
@@ -233,8 +245,12 @@ export function stayJourney(ctx) {
           await form.locator('input[name=name]').fill(name)
           await form.locator('input[name=size]').fill(String(t.sleeps))
           if (await typeSelect.count()) await typeSelect.selectOption({ label: journal.room_types[t.key]?.title || '' }).catch(() => {})
+          // The answer to THIS room: the last one's "Added." goes while it saves.
+          const msg = form.locator('[role=status], [role=alert]')
+          const earlier = await msg.count()
           await form.getByRole('button', { name: /^add$/i }).click()
-          const said = flat(await form.locator('[role=status], [role=alert]').first().innerText({ timeout: 20000 }).catch(() => ''))
+          if (earlier) await msg.first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {})
+          const said = flat(await msg.first().innerText({ timeout: 20000 }).catch(() => ''))
           s.note(`${name} (${t.key}) → "${said.slice(0, 80)}"`)
           await sleep(800)
         }
@@ -265,7 +281,7 @@ export function stayJourney(ctx) {
       journal.booking_options = (opts.offerings || []).map((o) => `${o.title} [${o.mode}] ₹${o.price_amount} sleeps ${o.max_guests} ${JSON.stringify(o.stay)}`)
       s.note(`booking options (public API): ${journal.booking_options.join(' | ').slice(0, 600)}`)
       s.check('the public booking options carry the room types as stays, with the owner\'s check-in and weekend minimum',
-        cottage && cottage.mode === 'accommodation' && cottage.stay?.check_in === '13:00' && cottage.stay?.weekend_min_nights === 2,
+        cottage && cottage.mode === 'accommodation' && cottage.stay?.check_in === IN && cottage.stay?.weekend_min_nights === 2,
         JSON.stringify(cottage || {}).slice(0, 200))
       s.check('payment is at the property only (no online gateway is connected)',
         (opts.payment_methods || []).every((m) => ['cod', 'pay_at_business', 'pay_later'].includes(m)), (opts.payment_methods || []).join(', '))
@@ -282,7 +298,7 @@ export function stayJourney(ctx) {
       const type = new RegExp(esc(journal.room_types.cottage?.title || 'Valley'), 'i')
       const r = await bookThrough(g, s, { label: 'stay', type, checkIn: mon, checkOut: wed, guests: 2, who: ANANYA })
       s.note(`the page said before booking: rules "${r.asked.rules}"; ${r.asked.ok || r.asked.alert}; summary "${r.asked.summary.slice(0, 200)}"`)
-      s.check('before booking, the page says check-in from 1 pm and check-out by 11 am', /1:00\s*pm/i.test(r.asked.rules) && /11:00\s*am/i.test(r.asked.rules), r.asked.rules)
+      s.check(`before booking, the page says check-in from ${IN_WORDS} and check-out by 11 am`, IN_PAGE.test(r.asked.rules) && /11:00\s*am/i.test(r.asked.rules), r.asked.rules)
       s.check(`the cottage is free for ${mon} → ${wed}`, r.asked.available, r.asked.ok || r.asked.alert)
       s.check('the summary shows the stay\'s total: 2 nights · ₹19,000', /2 nights\s*·\s*₹\s?19,000/.test(r.asked.summary), r.asked.summary.slice(0, 200))
       await s.shot(g, 'stay-done', true)
@@ -295,8 +311,8 @@ export function stayJourney(ctx) {
       if (bk) {
         journal.first.api = { status: bk.status, starts_at: bk.starts_at, ends_at: bk.ends_at, total: bk.total_amount, rooms: bk.resource_names, payment: bk.payment_status, mode: bk.reservation_mode }
         s.note(`booking (API): ${JSON.stringify(journal.first.api)}`)
-        s.check('a stay from 1 pm on the first day to 11 am on the last (API)',
-          bk.reservation_mode === 'accommodation' && istDayOf(bk.starts_at) === mon && clockOf(bk.starts_at) === '13:00' && istDayOf(bk.ends_at) === wed && clockOf(bk.ends_at) === '11:00',
+        s.check(`a stay from ${IN_WORDS} on the first day to 11 am on the last (API)`,
+          bk.reservation_mode === 'accommodation' && istDayOf(bk.starts_at) === mon && clockOf(bk.starts_at) === IN && istDayOf(bk.ends_at) === wed && clockOf(bk.ends_at) === '11:00',
           `${bk.starts_at} – ${bk.ends_at}`)
         s.check('it comes to ₹19,000 (two nights at ₹9,500, API)', Number(bk.total_amount) === 19000, String(bk.total_amount))
         s.check('the guest holds a Valley cottage — never another type\'s room (API)', (bk.resource_names || []).length === 1 && /^Cottage [12]$/.test(bk.resource_names[0]), JSON.stringify(bk.resource_names))
@@ -337,7 +353,7 @@ export function stayJourney(ctx) {
       await s.shot(g2, 'third-refused', true)
       s.check('a third guest for those nights is told there is no cottage free', !third.available && Boolean(third.alert), third.alert || third.ok)
       const sneak = await publicJson('POST', `/v1/public/websites/${journal.slug}/bookings`, {
-        location_id: journal.location_id, offering_id: typeId('cottage'), starts_at: `${mon}T13:00:00+05:30`, ends_at: `${wed}T11:00:00+05:30`,
+        location_id: journal.location_id, offering_id: typeId('cottage'), starts_at: `${mon}T${IN}:00+05:30`, ends_at: `${wed}T11:00:00+05:30`,
         party_size: 2, payment_method: 'pay_at_business', guest: FARAH,
       })
       s.check('booking a third cottage through the API is refused', sneak.status === 409, `${sneak.status} ${JSON.stringify(sneak.error).slice(0, 160)}`)
@@ -347,7 +363,7 @@ export function stayJourney(ctx) {
         JSON.stringify(villa.data || villa.error).slice(0, 200))
       // 4. Back to back: in on the day the others leave.
       const next = await range(typeId('cottage'), wed, thu)
-      s.check(`a cottage is free from ${wed} (check-out 11 am, check-in 1 pm)`, next.data?.available === true, JSON.stringify(next.data || next.error).slice(0, 160))
+      s.check(`a cottage is free from ${wed} (check-out 11 am, check-in ${IN_WORDS})`, next.data?.available === true, JSON.stringify(next.data || next.error).slice(0, 160))
       // 5. The weekend minimum, on the page and through the API.
       await g2.goto(`${journal.public_url}/book`, { waitUntil: 'networkidle' })
       const weekend = await askFor(g2, { type, checkIn: sat, checkOut: sun, guests: 2 })
@@ -356,7 +372,7 @@ export function stayJourney(ctx) {
       const twoNights = await range(typeId('cottage'), sat, mon2)
       s.check('two weekend nights are fine', twoNights.data?.available === true, JSON.stringify(twoNights.data || twoNights.error).slice(0, 160))
       const oneNight = await publicJson('POST', `/v1/public/websites/${journal.slug}/bookings`, {
-        location_id: journal.location_id, offering_id: typeId('cottage'), starts_at: `${sat}T13:00:00+05:30`, ends_at: `${sun}T11:00:00+05:30`,
+        location_id: journal.location_id, offering_id: typeId('cottage'), starts_at: `${sat}T${IN}:00+05:30`, ends_at: `${sun}T11:00:00+05:30`,
         party_size: 2, payment_method: 'pay_at_business', guest: FARAH,
       })
       s.check('one Saturday night through the API is refused', oneNight.status >= 400 && oneNight.status < 500 && !oneNight.data, `${oneNight.status} ${JSON.stringify(oneNight.error).slice(0, 160)}`)
@@ -365,7 +381,7 @@ export function stayJourney(ctx) {
       s.check('four guests in a cottage that sleeps two is refused', crowd.data?.available === false, JSON.stringify(crowd.data || crowd.error).slice(0, 160))
       // 7. Another type's room, asked for by name.
       const wrong = await publicJson('POST', `/v1/public/websites/${journal.slug}/bookings`, {
-        location_id: journal.location_id, offering_id: typeId('villa'), starts_at: `${thu}T13:00:00+05:30`, ends_at: `${addDays(thu, 2)}T11:00:00+05:30`,
+        location_id: journal.location_id, offering_id: typeId('villa'), starts_at: `${thu}T${IN}:00+05:30`, ends_at: `${addDays(thu, 2)}T11:00:00+05:30`,
         party_size: 2, resource_ids: [journal.rooms?.['Bungalow 1']?.id].filter(Boolean), payment_method: 'pay_at_business', guest: FARAH,
       })
       s.check('a pool villa stay in Bungalow 1, asked for through the API, is refused', wrong.status >= 400 && wrong.status < 500 && !wrong.data,

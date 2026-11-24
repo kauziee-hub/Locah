@@ -27,18 +27,37 @@ export function ActionForm({
   resetOnSuccess?: boolean
   'aria-label'?: string
 }) {
-  const [state, formAction] = useFormState(action, null)
+  // What was sent, so a late answer never clears what the owner has typed since
+  // (owner lab, hotel: "Cottage 2" typed while "Cottage 1" was saving was wiped
+  // by Cottage 1's reset, and the stale "Added." said it had been added).
+  const sent = useRef('')
+  const [state, formAction] = useFormState(async (prev: FormResult, formData: FormData) => {
+    sent.current = fields(formData)
+    return action(prev, formData)
+  }, null)
   const ref = useRef<HTMLFormElement>(null)
   useEffect(() => {
-    if (state?.ok && resetOnSuccess) ref.current?.reset()
+    const form = ref.current
+    if (state?.ok && resetOnSuccess && form && fields(new FormData(form)) === sent.current) form.reset()
   }, [state, resetOnSuccess])
   return (
     <form ref={ref} action={formAction} className={className} style={style} aria-label={label}>
       {children}
-      {state && !state.ok ? <p className="bos-error ws-form__msg" role="alert">{state.message}</p> : null}
-      {state?.ok && success ? <p className="bos-status ws-form__msg" role="status">{success}</p> : null}
+      <FormMessage state={state} success={success} />
     </form>
   )
+}
+
+function fields(data: FormData): string {
+  return JSON.stringify([...data.entries()].filter(([, v]) => typeof v === 'string'))
+}
+
+/** The last answer — hidden while the next one is on its way, so it never speaks for it. */
+function FormMessage({ state, success }: { state: FormResult; success?: string }) {
+  const { pending } = useFormStatus()
+  if (pending || !state) return null
+  if (!state.ok) return <p className="bos-error ws-form__msg" role="alert">{state.message}</p>
+  return success ? <p className="bos-status ws-form__msg" role="status">{success}</p> : null
 }
 
 /** A submit button that shows it is working while its form's action runs. */

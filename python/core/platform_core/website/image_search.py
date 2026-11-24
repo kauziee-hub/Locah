@@ -45,8 +45,9 @@ _log = get_logger("website.image_search")
 
 UNSPLASH_SEARCH_URL = "https://api.unsplash.com/search/photos"
 PIXABAY_SEARCH_URL = "https://pixabay.com/api/"
-# Unsplash asks that every link back to it carries these.
-REFERRAL = {"utm_source": "locah", "utm_medium": "referral"}
+# Unsplash asks that every link back to it carries these, utm_source being the
+# registered app's name ("LOCAH Website Builder", registered 2026-11-24).
+REFERRAL = {"utm_source": "locah_website_builder", "utm_medium": "referral"}
 # Hosts a candidate's image URL may point at. The URL comes from a third-party
 # API response and is fetched (HEAD, thumbnail) by the server, so it is checked
 # against an allowlist first: https only, and never an internal address.

@@ -994,6 +994,9 @@
   .ls-room {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
+  .ls-room.ls-room--text {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .ls-room__media {
   aspect-ratio: 16 / 10;

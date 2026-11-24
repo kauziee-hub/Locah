@@ -383,8 +383,8 @@ async def test_an_unsplash_photo_is_hotlinked_and_keeps_its_provenance_and_credi
     assert provenance["photo_id"] == "4" and provenance["stored_copy"] is False
     assert provenance["attribution"] == photo.attribution
     assert provenance["attribution"]["line"] == "Photo by Ada on Unsplash"
-    assert "utm_source=locah" in provenance["attribution"]["name_url"]       # Unsplash's referral links
-    assert "utm_source=locah" in provenance["attribution"]["source_url"]
+    assert "utm_source=locah_website_builder" in provenance["attribution"]["name_url"]       # Unsplash's referral links
+    assert "utm_source=locah_website_builder" in provenance["attribution"]["source_url"]
     assert provenance["selection_reason"] == "the closest fit for the hero"
     assert provenance["brief"] == {"key": "hero", "subject": "chicken"} and provenance["rubric"]["section_fit"] == 8
     # The site credits it: the serialized asset and the renderer's resolver both carry the credit.

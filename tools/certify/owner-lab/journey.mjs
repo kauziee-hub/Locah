@@ -180,7 +180,7 @@ try {
     ? bookingJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
     : null
   const ST = MODEL === 'stay'
-    ? stayJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
+    ? stayJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors, persona })
     : null
   const MB = MODEL === 'membership'
     ? membershipJourney({ browser, page, api, step, journal, B, WS, WEB, API, sleep, pageErrors })
