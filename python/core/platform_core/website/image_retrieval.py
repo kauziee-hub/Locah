@@ -654,6 +654,10 @@ class SiteMemory:
     # Two kitchens in one city must not open on the same biriyani: these are
     # never offered to the judge. Loaded by the build (business_interview).
     elsewhere: set[str] = field(default_factory=set)
+    # Previews the judge saw, by candidate key, and the fingerprints of the
+    # pictures chosen: a near-duplicate of a chosen picture is never chosen.
+    previews: dict[str, bytes] = field(default_factory=dict)
+    fingerprints: list[int] = field(default_factory=list)
 
     def remember(self, found: FoundImage, role: str) -> None:
         self.used.add(found.key)
@@ -1069,6 +1073,10 @@ async def judge(
     if raw is None:
         fetched = await asyncio.gather(*(fetch_preview(c.preview_url) for c in candidates))
         pairs = [(c, f) for c, f in zip(candidates, fetched) if f is not None]
+        if site is not None:
+            for c, f in pairs:
+                if f.data:
+                    site.previews[c.key] = f.data
         if not pairs:
             return Judgement()
         sent = [c for c, _ in pairs]
@@ -1314,12 +1322,22 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
         for verdict, candidate in winners:
             if candidate.key in site.used:
                 continue
+            from platform_core.website.image_fingerprint import fingerprint, near_any
+
+            seen = site.previews.get(candidate.key)
+            fp = fingerprint(seen) if seen else None
+            if near_any(fp, site.fingerprints):
+                rejected.add(candidate.key)
+                reasons.append("a near-duplicate of a picture already on this site")
+                continue
             ok, detail = await verify_image_url(candidate.image_url)
             if not ok:
                 rejected.add(candidate.key)
                 reasons.append(f"url check failed: {detail}")
                 continue
             site.used.add(candidate.key)  # claimed: no other slot may take it
+            if fp is not None:
+                site.fingerprints.append(fp)
             if verdict.index == judgement.best_index and judgement.selection_reason:
                 why = judgement.selection_reason
             else:

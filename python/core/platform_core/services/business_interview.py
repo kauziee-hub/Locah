@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from dataclasses import replace
+import os
 import time
 from typing import Any
 from uuid import UUID
@@ -426,6 +427,14 @@ async def _hours_to_location(
         )
     except ValidationError:
         return  # never hold the website back over hours; the owner can set them in Locations
+
+
+def _build_budget_seconds() -> int:
+    """How long a website build may take before it is flagged (BUILD_TIME_BUDGET_SECONDS, default 180)."""
+    try:
+        return max(30, int(os.getenv("BUILD_TIME_BUDGET_SECONDS", "").strip() or 180))
+    except ValueError:
+        return 180
 
 
 def place_address(said: str) -> dict[str, str]:
@@ -1841,10 +1850,21 @@ class BusinessInterviewService:
                 drawings = await draw_missing(
                     bp, direction, trade,
                     draw=lambda prompt, aspect: draw_fallback(prompt, aspect_ratio=aspect, timeout_seconds=60))
+                from platform_core.website.image_fingerprint import fingerprint, near_any
+
+                drawn_prints: list[int] = []
                 for slot, image, reason in drawings:
                     if image is None:
                         record(bp, slot, None, f"drawing:{reason}")
                         continue
+                    print_ = fingerprint(image.bytes)
+                    if near_any(print_, drawn_prints):
+                        # Two drawings a visitor would see as one picture: the
+                        # later one is left out (2026-11-24: three alike white rooms).
+                        record(bp, slot, None, "drawing:near_duplicate")
+                        continue
+                    if print_ is not None:
+                        drawn_prints.append(print_)
                     asset = await MediaService.persist_generated(
                         session, business_id=job.business_id, actor_id=actor,
                         purpose="website", mime_type=image.mime_type, body=image.bytes,
@@ -2003,12 +2023,21 @@ class BusinessInterviewService:
                 job.result_version_id = generated.id
                 job.status = "completed"
                 job.fallback_reason = fallback
+        build_ms = int((time.monotonic() - started) * 1000)
         job.provider_usage = {
             **(job.provider_usage or {}),
             "owner_edits_kept": kept,
-            "personalization_latency_ms": int((time.monotonic() - started) * 1000),
+            "personalization_latency_ms": build_ms,
             "total_time_to_personalized_preview_ms": int((now() - bp.created_at).total_seconds() * 1000),
         }
+        budget_s = _build_budget_seconds()
+        if build_ms > budget_s * 1000:
+            # Shadow gate (Website Quality Program): logged, not blocked. Recent
+            # builds: median 99 s, p90 116 s, photos about 80% of it (2026-11-25).
+            get_logger("business.interview").warning(
+                "website.build_over_budget", business_id=str(job.business_id), job_id=str(job.id),
+                build_seconds=round(build_ms / 1000), budget_seconds=budget_s,
+                image_seconds=round(int(job.provider_usage.get("image_latency_ms") or 0) / 1000))
         job.completed_at = now()
         await session.flush()
         await OutboxService.publish(

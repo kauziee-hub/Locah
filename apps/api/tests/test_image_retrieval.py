@@ -852,3 +852,59 @@ async def test_a_throttled_preview_is_waited_out_not_lost(monkeypatch: pytest.Mo
     preview = await _REAL_FETCH_PREVIEW("https://images.unsplash.com/photo-1?w=400")
     assert preview is not None and preview.mime_type == "image/jpeg"
     assert len(asked) == 2
+
+
+# ---------------------------------------------------------------- near-duplicates
+def _jpeg(kind: str, size: int = 256, quality: int = 90) -> bytes:
+    import io
+
+    from PIL import Image, ImageDraw
+
+    if kind == "hills":
+        im = Image.linear_gradient("L").resize((size, size)).convert("RGB")
+        ImageDraw.Draw(im).ellipse((size * 0.2, size * 0.5, size * 0.9, size * 1.2), fill=(40, 120, 60))
+    else:  # stripes: an unrelated picture
+        im = Image.new("RGB", (size, size), (230, 230, 230))
+        draw = ImageDraw.Draw(im)
+        for x in range(0, size, max(8, size // 12)):
+            draw.rectangle((x, 0, x + size // 24, size), fill=(20, 20, 80))
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=quality)
+    return out.getvalue()
+
+
+def test_a_resized_or_re_encoded_copy_is_the_same_picture() -> None:
+    from platform_core.website.image_fingerprint import NEAR, distance, fingerprint, near_any
+
+    a, copy, other = fingerprint(_jpeg("hills")), fingerprint(_jpeg("hills", 180, 55)), fingerprint(_jpeg("stripes"))
+    assert a is not None and copy is not None and other is not None
+    assert distance(a, copy) <= NEAR < distance(a, other)
+    assert near_any(copy, [a]) and not near_any(other, [a])
+    assert fingerprint(b"not an image") is None and not near_any(None, [a])
+
+
+@pytest.mark.asyncio
+async def test_a_near_duplicate_of_a_picture_already_on_the_site_is_never_chosen(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Different files, one picture: the same view from two libraries, or a crop of it."""
+    from platform_core.website.image_fingerprint import fingerprint
+
+    previews = {"https://images.unsplash.com/photo-1?w=400": _jpeg("hills", 200, 60),
+                "https://images.unsplash.com/photo-2?w=400": _jpeg("hills", 220, 70),
+                "https://images.unsplash.com/photo-3?w=400": _jpeg("stripes")}
+
+    async def preview(url: str, **kw: Any) -> ImageInput:
+        return ImageInput(data=previews[url], mime_type="image/jpeg")
+
+    monkeypatch.setattr(ir, "fetch_preview", preview)
+    monkeypatch.setenv("IMAGE_VISION_INPUT", "thumbnail")
+    on_site = fingerprint(_jpeg("hills"))
+    assert on_site is not None
+    site = SiteMemory(fingerprints=[on_site])  # the hero already shows these hills
+    search = FakeSearch([candidate(1), candidate(2), candidate(3)])
+    ai = FakeAI([{"verdicts": [good(0, 96), good(1, 94), good(2, 80)], "best_index": 0}])
+    outcome = await retrieve_for_slot(brief(key="story", purpose="story", section="about"), provider=ai,
+                                      search=search, site=site)
+    assert outcome.found is not None and outcome.found.photo_id == "3", outcome.log
+    assert "a near-duplicate of a picture already on this site" in json.dumps(outcome.log)
+    assert len(site.fingerprints) == 2
