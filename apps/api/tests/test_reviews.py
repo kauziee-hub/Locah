@@ -198,9 +198,14 @@ def test_restricted_database_role_cannot_edit_rating_or_delete_review(monkeypatc
     business_id, slug, token, _ = _reviewable_order(monkeypatch)
     url = f"/v1/public/websites/{slug}/review/{token}"
     review_id = client.post(url, json={"rating": 3, "body": "A real review"}).json()["data"]["review"]["id"]
-    api_url = os.environ.get("TEST_API_DATABASE_URL")
-    if not api_url:
-        pytest.skip("TEST_API_DATABASE_URL is required for the restricted-role database guard check")
+    # The RLS-enforcing `platform_api` connection: TEST_API_DATABASE_URL locally (the
+    # database guard copies it to API_DATABASE_URL), API_DATABASE_URL in CI — and
+    # only ever a local database.
+    from platform_testing.database_guard import _is_local
+
+    api_url = os.environ.get("TEST_API_DATABASE_URL") or os.environ.get("API_DATABASE_URL")
+    if not api_url or not _is_local(api_url):
+        pytest.skip("a local API_DATABASE_URL (platform_api role) is required for the restricted-role check")
 
     async def check() -> None:
         engine = create_async_engine(api_url, poolclass=NullPool)
