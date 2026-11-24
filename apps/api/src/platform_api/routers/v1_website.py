@@ -266,6 +266,31 @@ async def website_assistant(
     return {"data": result, "meta": {"correlation_id": actor.request.correlation_id}}
 
 
+class ArrangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # "flip": the same arrangement the other way round; "next": another one.
+    action: str = Field(pattern="^(flip|next)$")
+
+
+@router.post("/{business_id}/website/sections/{section_id}/arrange")
+async def arrange_section(
+    business_id: UUID,
+    section_id: UUID,
+    body: ArrangeRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_EDIT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """A composed section's words and pictures, placed differently."""
+    from platform_core.services.website_assistant import WebsiteArrangeService
+
+    section = await WebsiteArrangeService.arrange(
+        session, business_id=business_id, actor_id=actor.request.identity_id, section_id=section_id,
+        action=body.action)
+    await session.commit()
+    return {"data": section, "meta": {"correlation_id": actor.request.correlation_id}}
+
+
 class ReferenceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

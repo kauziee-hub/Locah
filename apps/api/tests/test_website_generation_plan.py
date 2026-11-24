@@ -60,6 +60,8 @@ _SECTION_MODULES: dict[str, str | None] = {
     "pillars": None,
     "faq": None,
     "media_text": None,
+    # A composed section (layout_engine): the business's own words and pictures; no module.
+    "composition": None,
 }
 
 

@@ -29,10 +29,27 @@ const PALETTES: { name: string; primary: string; accent: string }[] = [
 ]
 
 const GROUNDS: { id: string; label: string; edit: Record<string, string | null> }[] = [
-  { id: 'designed', label: 'As designed', edit: { background_color: null, text_color: null } },
-  { id: 'white', label: 'White', edit: { background_color: '#ffffff', text_color: '#1a1a1a', palette_mode: 'light' } },
-  { id: 'cream', label: 'Cream', edit: { background_color: '#faf5ec', text_color: '#1f1a14', palette_mode: 'light' } },
-  { id: 'dark', label: 'Dark', edit: { background_color: '#151515', text_color: '#f5f1ea', palette_mode: 'dark' } },
+  // A ground comes with its alternate band and muted words, or a dark page keeps light bands.
+  {
+    id: 'designed',
+    label: 'As designed',
+    edit: { background_color: null, text_color: null, surface_alt_color: null, muted_color: null },
+  },
+  {
+    id: 'white',
+    label: 'White',
+    edit: { background_color: '#ffffff', text_color: '#1a1a1a', surface_alt_color: '#f5f5f4', muted_color: '#6b6b6b', palette_mode: 'light' },
+  },
+  {
+    id: 'cream',
+    label: 'Cream',
+    edit: { background_color: '#faf5ec', text_color: '#1f1a14', surface_alt_color: '#f2eadb', muted_color: '#6f665a', palette_mode: 'light' },
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    edit: { background_color: '#151515', text_color: '#f5f1ea', surface_alt_color: '#202020', muted_color: '#a8a39b', palette_mode: 'dark' },
+  },
 ]
 
 const SIZE_LABELS: Record<string, string> = {

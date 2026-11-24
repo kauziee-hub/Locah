@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from platform_core.website.composition_grammar import FRAMES, MAX_ROWS
 from platform_core.website.owner_style import CORNERS, FONT_PAIRS, SIZES
 from platform_core.website.site_assistant import luminance
 
@@ -31,7 +32,11 @@ _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 UNDO_KEY = "reference_undo"
-_COLOUR_KEYS = ("primary_color", "accent_color", "background_color", "text_color", "palette_mode")
+LAYOUT_ROLES = ("story", "statement", "pillars", "numbers", "featured")
+LAYOUT_KINDS = ("picture", "words", "quote", "list", "number", "action", "label")
+TYPE_SIZES = ("s", "m", "l", "xl", "xxl")
+_COLOUR_KEYS = ("primary_color", "accent_color", "background_color", "text_color", "surface_alt_color",
+                "muted_color", "palette_mode")
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -47,6 +52,31 @@ SCHEMA: dict[str, Any] = {
         "heading_size": {"type": "string", "enum": list(SIZES)},
         "mood": {"type": "array", "maxItems": 4, "items": {"type": "string", "maxLength": 24}},
         "why": {"type": "string", "maxLength": 240},
+        "sections": {
+            "type": "array", "maxItems": 4,
+            "description": "how its content sections are arranged, below the opening screen",
+            "items": {
+                "type": "object", "required": ["role", "blocks"],
+                "properties": {
+                    "role": {"type": "string", "enum": list(LAYOUT_ROLES)},
+                    "blocks": {
+                        "type": "array", "maxItems": 8,
+                        "items": {
+                            "type": "object", "required": ["kind", "col", "span", "row", "rows"],
+                            "properties": {
+                                "kind": {"type": "string", "enum": list(LAYOUT_KINDS)},
+                                "col": {"type": "integer"}, "span": {"type": "integer"},
+                                "row": {"type": "integer"}, "rows": {"type": "integer"},
+                                "frame": {"type": "string", "enum": list(FRAMES)},
+                                "size": {"type": "string", "enum": list(TYPE_SIZES)},
+                                "align": {"type": "string", "enum": ["start", "center", "end"]},
+                                "vertical": {"type": "boolean"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
     "required": ["is_design", "background", "text", "primary", "lettering", "corners", "heading_size"],
 }
@@ -60,7 +90,16 @@ SYSTEM = (
     "small, regular, large or xlarge — how large the biggest type runs against the page. mood: up to four "
     "plain words (e.g. cinematic, airy, earthy, minimal). why: one sentence on what gives the reference its "
     "character. If the picture is not a designed layout (a selfie, a document, a blank image), set is_design "
-    "false."
+    "false.\n"
+    "sections: how up to four of its content sections are ARRANGED (not the navigation, the opening screen or "
+    "the footer). For each: role — story (words about the business beside pictures), statement (one sentence "
+    "set large), pillars (a few points the business stands on), numbers (figures), featured (its products or "
+    "dishes shown large); and blocks — each thing in it placed on a 12-column grid: kind (picture, words, "
+    "quote, list, number, action, label), col (1-12), span (columns it covers), row (1-8, top to bottom) and "
+    "rows (how many rows tall), and for a picture its frame (none, rounded, arch, circle, slant, inset, bleed "
+    "= runs to the page edge), for words its size (s, m, l, xl, xxl). Overlapping blocks are allowed — that "
+    "is how words laid over a picture are described. Record only WHERE things sit, never the words inside "
+    "the picture."
 )
 
 
@@ -73,6 +112,9 @@ class ReferenceStyle:
     why: str = ""
     kept: list[str] = field(default_factory=list)  # what was taken from the reference, in plain words
     dropped: list[str] = field(default_factory=list)  # what was not, and why
+    # How its sections are arranged, by role: geometry only, filled later with
+    # the business's own words and pictures (layout_engine.from_geometry).
+    layouts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {"theme": self.theme, "mood": self.mood, "why": self.why, "kept": self.kept, "dropped": self.dropped}
@@ -107,8 +149,9 @@ def govern(raw: Any) -> ReferenceStyle | None:
         dark = luminance(background) < 0.18
         if not text or _contrast(text, background) < 7:
             text = "#f5f1ea" if dark else "#1a1a1a"  # body text must read easily (AAA on its ground)
-        style.theme.update({"background_color": background, "text_color": text,
-                            "palette_mode": "dark" if dark else "light"})
+        from platform_core.website.owner_style import ground_family
+
+        style.theme.update(ground_family(background, text, dark=dark))
         style.kept.append(f"a {'dark' if dark else 'light'} ground ({background})")
     ground = background or "#ffffff"
     if primary and _contrast(primary, ground) >= 2.2:
@@ -136,9 +179,48 @@ def govern(raw: Any) -> ReferenceStyle | None:
         style.theme["owner_style"] = owner_style
     style.mood = [" ".join(str(m).split())[:24] for m in (data.get("mood") or []) if str(m).strip()][:4]
     style.why = " ".join(str(data.get("why") or "").split())[:240]
-    if not style.theme:
+    style.layouts = layouts(data.get("sections"))
+    if not style.theme and not style.layouts:
         return None
     return style
+
+
+def _whole(value: Any, low: int, high: int, default: int) -> int:
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def layouts(raw: Any) -> dict[str, list[dict[str, Any]]]:
+    """The reference's arrangements, by role, held to the grid: geometry and a
+    few named values only — no words, no URLs, nothing the renderer cannot draw."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    for section in raw if isinstance(raw, list) else []:
+        if not isinstance(section, dict) or section.get("role") not in LAYOUT_ROLES or section["role"] in out:
+            continue
+        blocks: list[dict[str, Any]] = []
+        for block in section.get("blocks") or []:
+            if not isinstance(block, dict) or block.get("kind") not in LAYOUT_KINDS:
+                continue
+            span = _whole(block.get("span"), 1, 12, 6)
+            col = min(_whole(block.get("col"), 1, 12, 1), 13 - span)
+            row = _whole(block.get("row"), 1, MAX_ROWS, 1)
+            shaped: dict[str, Any] = {"kind": block["kind"], "col": col, "span": span, "row": row,
+                                      "rows": min(_whole(block.get("rows"), 1, MAX_ROWS, 2), MAX_ROWS - row + 1)}
+            if block.get("frame") in FRAMES:
+                shaped["frame"] = block["frame"]
+            if block.get("size") in TYPE_SIZES:
+                shaped["size"] = block["size"]
+            if block.get("align") in {"start", "center", "end"}:
+                shaped["align"] = block["align"]
+            if block.get("vertical") is True:
+                shaped["vertical"] = True
+            blocks.append(shaped)
+        # An arrangement worth following has something to read in it.
+        if any(b["kind"] in {"words", "quote", "list", "number"} for b in blocks):
+            out[str(section["role"])] = blocks[:8]
+    return out
 
 
 async def read_reference(provider: Any, image: bytes, mime_type: str) -> ReferenceStyle | None:
@@ -147,14 +229,14 @@ async def read_reference(provider: Any, image: bytes, mime_type: str) -> Referen
 
     raw = await provider.generate_structured_with_images(
         "Read this reference's design language.", [ImageInput(data=image, mime_type=mime_type)], SCHEMA,
-        {"purpose": "image.reference", "system_prompt": SYSTEM, "max_output_tokens": 600, "temperature": 0.1},
+        {"purpose": "image.reference", "system_prompt": SYSTEM, "max_output_tokens": 1800, "temperature": 0.1},
         timeout_seconds=40)
     return govern(raw)
 
 
 def snapshot(theme: dict[str, Any]) -> dict[str, Any]:
     """What a match will overwrite, kept so "undo" can put it back exactly."""
-    dna = theme.get("dna") if isinstance(theme.get("dna"), dict) else {}
+    dna: dict[str, Any] = dict(theme["dna"]) if isinstance(theme.get("dna"), dict) else {}
     return {**{k: theme.get(k) for k in _COLOUR_KEYS}, "owner_style": dict(theme.get("owner_style") or {}),
             "headline": dna.get("headline")}
 

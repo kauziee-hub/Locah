@@ -262,7 +262,9 @@ def test_a_reference_is_read_into_the_sites_own_vocabulary_and_nothing_else() ->
     assert style.theme["primary_color"] == "#d4ff3a"
     assert style.theme["owner_style"] == {"font": "poster", "corners": "sharp", "heading_size": "xlarge"}
     assert set(style.theme) <= {"background_color", "text_color", "palette_mode", "primary_color",
-                                "accent_color", "owner_style"}
+                                "accent_color", "owner_style", "surface_alt_color", "muted_color"}
+    # A dark ground brings a dark alternate band with it, never a light one.
+    assert style.theme["surface_alt_color"] != "#ffffff" and style.theme["surface_alt_color"] < "#40"
     merged = merge_theme(DESIGNED, style.theme)
     assert merged["dna"] == DESIGNED["dna"] and merged["experience"] == DESIGNED["experience"]
 

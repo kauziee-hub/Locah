@@ -27,6 +27,7 @@ import { AssistantPanel } from './AssistantPanel'
 import { DesignPanel } from './DesignPanel'
 import {
   addSection,
+  arrangeSection,
   duplicateSection,
   listSectionTypes,
   removeSection,
@@ -227,7 +228,19 @@ const SECTION_NAMES: Record<string, string> = {
   reviews_section: 'Customer reviews',
 }
 
+const COMPOSED_NAMES: Record<string, string> = {
+  story: 'Your story (composed)',
+  statement: 'Statement (composed)',
+  pillars: 'What you stand for (composed)',
+  numbers: 'Numbers (composed)',
+  featured: 'Signature range (composed)',
+}
+
 function sectionName(s: EditorSection): string {
+  if (s.section_type_id === 'composition') {
+    const role = String((s.content as { role?: unknown })?.role || '')
+    return COMPOSED_NAMES[role] || 'Composed section'
+  }
   return SECTION_NAMES[s.section_type_id] || s.section_type_id.replace(/_/g, ' ')
 }
 
@@ -594,6 +607,163 @@ function GalleryPictures({
           onRemove={() => undefined}
         />
       ) : null}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------- compositions */
+
+type CompBlock = Record<string, unknown> & { kind?: string }
+
+const BLOCK_NAMES: Record<string, string> = {
+  words: 'Words',
+  picture: 'Picture',
+  quote: 'Big sentence',
+  number: 'Number',
+  list: 'List',
+  action: 'Button',
+  label: 'Small label',
+}
+
+/** The words each kind of block shows, in the order an owner reads them. */
+const BLOCK_FIELDS: Record<string, { key: string; label: string; multiline?: boolean }[]> = {
+  words: [
+    { key: 'eyebrow', label: 'Small line above' },
+    { key: 'title', label: 'Heading' },
+    { key: 'price', label: 'Price' },
+    { key: 'body', label: 'Text', multiline: true },
+    { key: 'cta_label', label: 'Link text' },
+  ],
+  quote: [{ key: 'title', label: 'Sentence', multiline: true }],
+  number: [
+    { key: 'value', label: 'Number' },
+    { key: 'label', label: 'What it counts' },
+  ],
+  action: [{ key: 'cta_label', label: 'Button text' }],
+  label: [{ key: 'label', label: 'Label' }],
+  picture: [{ key: 'caption', label: 'Caption (optional)' }],
+}
+
+/**
+ * A composed section's own panel: each block's words and pictures in reading
+ * order, and the arrangement itself — the other way round, or another one.
+ * Only words and pictures are edited here; where each block sits is the
+ * arrangement's (the grammar on the server holds it whatever is saved).
+ */
+function CompositionEditor({
+  businessId,
+  section,
+  items,
+  policy,
+  working,
+  onSave,
+  onArrange,
+}: {
+  businessId: string
+  section: EditorSection
+  items: unknown
+  policy?: PicturePolicy
+  working: boolean
+  onSave: (items: CompBlock[]) => void | Promise<void>
+  onArrange: (action: 'flip' | 'next') => void
+}) {
+  const blocks: CompBlock[] = Array.isArray(items)
+    ? (items as unknown[]).filter((b): b is CompBlock => Boolean(b) && typeof b === 'object')
+    : []
+  const order = blocks
+    .map((block, index) => ({ block, index }))
+    .sort((a, b) => Number(a.block.m_order || 0) - Number(b.block.m_order || 0))
+  const setField = (index: number, key: string, value: unknown) =>
+    onSave(blocks.map((b, i) => (i === index ? { ...b, [key]: value } : b)))
+  const setPoint = (index: number, at: number, key: string, value: string) => {
+    const points = Array.isArray(blocks[index].points) ? [...(blocks[index].points as Record<string, string>[])] : []
+    points[at] = { ...points[at], [key]: value }
+    return setField(index, 'points', points)
+  }
+  return (
+    <div className="ed-comp">
+      <div className="ed-comp__arrange" role="group" aria-label="Arrangement">
+        <button type="button" className="btn btn-ghost" disabled={working} onClick={() => onArrange('flip')}>
+          Flip sides
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={working} onClick={() => onArrange('next')}>
+          Another arrangement
+        </button>
+      </div>
+      <p className="ed-help">
+        LOCAH arranged this section for your business. Change the words and pictures here, or ask for
+        another arrangement — the same words and pictures, placed differently.
+      </p>
+      {order.map(({ block, index }) => {
+        const kind = String(block.kind || '')
+        const fields = (BLOCK_FIELDS[kind] || []).filter(
+          (f) => kind !== 'words' || f.key !== 'price' || typeof block.price === 'string'
+        )
+        return (
+          <fieldset className="ed-comp__block" key={`${kind}-${index}`}>
+            <legend className="ed-sublabel">{BLOCK_NAMES[kind] || kind}</legend>
+            {kind === 'picture' && policy ? (
+              <ImageField
+                businessId={businessId}
+                sectionId={section.id}
+                policy={policy}
+                label="Picture"
+                target={{ list_key: 'items', index }}
+                currentUrl={section.assets?.[`items.${index}`]?.url}
+                currentAssetId={typeof block.image_asset_id === 'string' ? block.image_asset_id : undefined}
+                draft={section.assets?.[`items.${index}`]?.draft}
+                onUploaded={(assetId) => setField(index, 'image_asset_id', assetId)}
+                onRemove={() => setField(index, 'image_asset_id', '')}
+              />
+            ) : null}
+            {fields.map((f) => {
+              const id = `${section.id}-b${index}-${f.key}`
+              const value = String(block[f.key] ?? '')
+              const common = {
+                id,
+                className: `ed-input${f.multiline ? ' ed-input--area ed-input--short' : ''}`,
+                defaultValue: value,
+                onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+                  if (e.target.value !== value) void setField(index, f.key, e.target.value)
+                },
+              }
+              return (
+                <div key={f.key}>
+                  <label className="ed-sublabel" htmlFor={id}>
+                    {f.label}
+                  </label>
+                  {f.multiline ? <textarea {...common} /> : <input {...common} />}
+                </div>
+              )
+            })}
+            {kind === 'list'
+              ? ((Array.isArray(block.points) ? block.points : []) as Record<string, string>[]).map((point, at) => (
+                  <div className="ed-comp__point" key={at}>
+                    <label className="ed-sublabel" htmlFor={`${section.id}-b${index}-p${at}`}>
+                      {`Point ${at + 1}`}
+                    </label>
+                    <input
+                      id={`${section.id}-b${index}-p${at}`}
+                      className="ed-input"
+                      defaultValue={point.title || ''}
+                      onBlur={(e) => {
+                        if (e.target.value !== (point.title || '')) void setPoint(index, at, 'title', e.target.value)
+                      }}
+                    />
+                    <textarea
+                      aria-label={`Point ${at + 1} text`}
+                      className="ed-input ed-input--area ed-input--short"
+                      defaultValue={point.body || ''}
+                      onBlur={(e) => {
+                        if (e.target.value !== (point.body || '')) void setPoint(index, at, 'body', e.target.value)
+                      }}
+                    />
+                  </div>
+                ))
+              : null}
+          </fieldset>
+        )
+      })}
     </div>
   )
 }
@@ -1093,7 +1263,8 @@ export function SiteEditor({
 
                     {isOpen ? (
                       <div className="ed-sec__body">
-                        {fields.length === 0 && !section.image_policy?.self && !section.image_policy?.items ? (
+                        {fields.length === 0 && !section.image_policy?.self && !section.image_policy?.items &&
+                        section.section_type_id !== 'composition' ? (
                           <p className="ed-help">
                             This section arranges itself from your business details. There is nothing
                             to type here.
@@ -1163,7 +1334,26 @@ export function SiteEditor({
                           />
                         ) : null}
 
-                        {section.image_policy?.items
+                        {section.section_type_id === 'composition' ? (
+                          <CompositionEditor
+                            businessId={businessId}
+                            section={section}
+                            items={current.items}
+                            policy={section.image_policy?.items}
+                            working={working}
+                            onSave={(items) => commit(section, 'items', items)}
+                            onArrange={(action) =>
+                              void change(
+                                () => arrangeSection(businessId, section.id, action),
+                                action === 'flip'
+                                  ? 'Flipped on your draft'
+                                  : 'Another arrangement on your draft — the same words and pictures'
+                              )
+                            }
+                          />
+                        ) : null}
+
+                        {section.image_policy?.items && section.section_type_id !== 'composition'
                           ? (['items', 'categories'] as const).map((listKey) => (
                               <CardPictures
                                 key={listKey}

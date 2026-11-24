@@ -1530,3 +1530,36 @@ a .ws-card {
 
 /* SafeForm: a fieldset that only disables while saving — it adds no box of its own. */
 fieldset.ws-safeform { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }
+
+/* --- Composed sections in the editor: blocks in reading order, the arrangement on top. */
+.ed-comp {
+  display: grid;
+  gap: 0.75rem;
+}
+.ed-comp__arrange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.ed-comp__arrange .btn {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.ed-comp__block {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.7rem 0.75rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.ed-comp__block legend {
+  padding-inline: 0.3rem;
+}
+.ed-comp__point {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--color-border);
+}

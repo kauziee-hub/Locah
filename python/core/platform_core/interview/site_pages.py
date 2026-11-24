@@ -428,6 +428,9 @@ def _role(section: dict[str, Any]) -> str:
     content = section.get("content") or {}
     if kind in {"product_showcase", "category_showcase"}:
         return "range" if content.get("anchor") in {"shop", None, ""} else "range+"
+    if kind == "composition":
+        return {"story": "story", "statement": "statement", "pillars": "pillars", "numbers": "numbers",
+                "featured": "range+"}.get(str(content.get("role") or ""), "")
     return {"statement": "statement", "pillars": "pillars", "highlights": "numbers", "fulfilment_strip": "steps",
             "about": "story", "media_text": "story", "faq": "faq",
             "feature_grid": "steps" if section.get("layout_variant") == "steps" else "pillars"}.get(kind, "")
@@ -522,8 +525,15 @@ def build(
     range_layout: str = "",
     keep_order: bool = False,
     lead: str = "",
+    shape: str = "rect",
+    budget: str = "gentle",
 ) -> Site:
     """Home and inner pages from the composed home sections and the owner's facts."""
+    from platform_core.interview.layout_engine import Composer, Material
+
+    # Sections arranged for this business (layout_engine): its seed picks the
+    # arrangement, its DNA the frame, scale and motion; never one twice.
+    composer = Composer(str(dna_seed), concept=concept, shape=shape, budget=budget)
     def first_of(kind: str) -> dict[str, Any] | None:
         return next((s for s in home if s["section_type_id"] == kind), None)
 
@@ -564,6 +574,12 @@ def build(
         if variant != "giant":
             content["image_asset_id"] = picture
         statement_section = _section("statement", variant, content)
+        if picture and (concept in {"noir_editorial", "kinetic_sport", "quiet_luxury"} or dna_seed % 2 == 0):
+            # The sentence set against a picture's edge, or as a poster beside
+            # it — composed, in one voice (no coloured phrase).
+            composed = composer.compose("statement", Material(quote=statement["text"], pictures=[picture]),
+                                        moment=True)
+            statement_section = composed or statement_section
     pillars_section = None
     if pillars:
         bodies = sum(1 for p in pillars if p["body"])
@@ -587,6 +603,17 @@ def build(
         elif variant != "strip":
             pillars_content["title"] = "What we stand on"
         pillars_section = _section("pillars", variant, pillars_content)
+        if not about_page:
+            # No About page to compose them on (below): composed on the home,
+            # so a site without many pictures still has an arranged moment —
+            # a hotel's home was hero, giant line, cards, strip, text (owner
+            # lab, 2026-11-23).
+            points = [{"title": str(p.get("title") or ""), "body": str(p.get("body") or "")}
+                      for p in pillars if p.get("title")]
+            spare = pictures.get("detail") or pictures.get("process")
+            composed_home = composer.compose("pillars", Material(
+                title=str(pillars_content.get("title") or ""), points=points, pictures=[spare] if spare else []))
+            pillars_section = composed_home or pillars_section
     rows_section = _section("media_text", "alternating", {"items": rows}) if rows else None
 
     def faq_section(questions: list[dict[str, str]], variant: str, title: str = "Good to know") -> dict[str, Any] | None:
@@ -607,6 +634,13 @@ def build(
         # Only when it has something the page has not said yet.
         story_teaser = _section("media_text", "alternating", {
             "items": [{k: v for k, v in row.items() if v}], "more_label": "Our story", "more_path": "/about"})
+        if row.get("image_asset_id"):
+            # The start of the story, composed: the picture, the words over its
+            # edge or beside it, a way on to the story's own page.
+            composed = composer.compose("story", Material(
+                eyebrow=str(row.get("eyebrow") or ""), title=str(row["title"]), body=str(row["body"]),
+                pictures=[str(row["image_asset_id"])], action=("Our story", "/about")), moment=True)
+            story_teaser = composed or story_teaser
     if showcase and showcase["section_type_id"] == "product_showcase":
         showcase["content"]["eyebrow"] = trade_label[:40]
 
@@ -719,6 +753,20 @@ def build(
         range_sections = [_page_hero(trade_label, str(full["content"].get("title") or trade_label),
                                      copy.catalogue_intro or str(full["content"].get("subtitle") or ""), first), full]
         range_sections[0]["content"].update(cta_label=trade_label, cta_url="#shop")
+        # The range's signature first: its tagged favourites, then its pictured
+        # things, large, with their words and prices — before the full list.
+        # A menu that opens on a price list reads as a data dump.
+        signature = [i for i in sorted(items, key=lambda i: 0 if i.get("tag") else 1)
+                     if i.get("image_asset_id") and i.get("name")][:3]
+        if len(signature) >= 2:
+            featured = composer.compose("featured", Material(
+                title=str(copy.products_title or copy.offerings_title or ""),
+                items=[{"name": str(i["name"]), "description": str(i.get("description") or ""),
+                        "price": str(i.get("price") or ""), "image_asset_id": str(i["image_asset_id"])}
+                       for i in signature],
+                action=(_MORE_BY_SLUG.get(slug) or _MORE_LABEL.get(archetype, "See all"), "#shop")))
+            if featured:
+                range_sections.insert(1, featured)
         # How it is made or sourced, and how it reaches you: the owner's words,
         # beside pictures, between the range and the ordering details.
         made = [r for r in rows if r.get("eyebrow") != trade_label]
@@ -782,9 +830,18 @@ def build(
             shown = on_home | {story_picture, about_hero_picture}
             fresh_rows = [{k: v for k, v in r.items() if not (k == "image_asset_id" and v in shown)}
                           for r in rows]
+            lead_row = next((r for r in fresh_rows if r.get("image_asset_id") and r.get("title")), None)
+            composed_row = composer.compose("story", Material(
+                eyebrow=str(lead_row.get("eyebrow") or ""), title=str(lead_row["title"]),
+                body=str(lead_row.get("body") or ""), pictures=[str(lead_row["image_asset_id"])])) if lead_row else None
+            if composed_row:
+                # The first passage composed; the rest keep their rhythm beside it.
+                about_sections.append(composed_row)
+                fresh_rows = [r for r in fresh_rows if r is not lead_row]
             pictured_rows = sum(1 for r in fresh_rows if r.get("image_asset_id"))
-            about_sections.append(_section("media_text", "sticky" if pictured_rows >= 2 else "alternating",
-                                           {"items": fresh_rows}))
+            if fresh_rows:
+                about_sections.append(_section("media_text", "sticky" if pictured_rows >= 2 else "alternating",
+                                               {"items": fresh_rows}))
         if pillars_section:
             # What the business stands on lives here, once — numbered beside a
             # picture or as a ruled strip, never a grid of icon cards.
@@ -792,7 +849,14 @@ def build(
             if stands_on["layout_variant"] == "cards":
                 stands_on["layout_variant"] = "numbered" if all(
                     p.get("body") for p in stands_on["content"].get("items") or []) else "strip"
-            about_sections.append(stands_on)
+            used = _pictures_in(about_sections) | on_home
+            spare = next((p for p in (pictures.get("detail"), pictures.get("process")) if p and p not in used), None)
+            points = [{"title": str(p.get("title") or ""), "body": str(p.get("body") or "")}
+                      for p in stands_on["content"].get("items") or [] if p.get("title")]
+            composed_pillars = composer.compose("pillars", Material(
+                title=str(stands_on["content"].get("title") or ""), points=points,
+                pictures=[spare] if spare else []))
+            about_sections.append(composed_pillars or stands_on)
         for kind in ("feature_grid", "highlights"):
             about_sections += [s for s in home if s["section_type_id"] == kind and s not in home_out]
         if numbers_section and numbers_section not in home_out:

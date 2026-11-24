@@ -196,6 +196,12 @@ def validate_section_content(
     schema = content_schema or CORE_SECTION_SCHEMAS.get(section_type_id) or {"type": "object"}
     cleaned = _validate_against_schema(content, schema, field="content", lenient=lenient)
     assert_no_unsafe_content(cleaned)
+    if section_type_id == "composition":
+        # Geometry, layers, plates and the phone arrangement are the grammar's,
+        # whoever proposed them: always the normalized form is stored.
+        from platform_core.website.composition_grammar import normalize
+
+        return normalize(cleaned)
     return cleaned if lenient else content
 
 

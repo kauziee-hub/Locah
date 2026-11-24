@@ -423,6 +423,8 @@ def plan(bp, template=None):
         "pillars": ["cards", "numbered", "strip"],
         "faq": ["accordion", "split"],
         "media_text": ["alternating", "sticky"],
+        # Mirrors 20261122120000_website_composition_section.sql.
+        "composition": ["free"],
     }
     rows = [
         {"id": sid, "available": True, "allowed_variants": variants[sid],

@@ -37,6 +37,8 @@ VARIANTS = {
     # The premium site (site_pages): words and pictures only, no module.
     "statement": ["giant", "split", "image"], "pillars": ["cards", "numbered", "strip"],
     "faq": ["accordion", "split"], "media_text": ["alternating", "sticky"],
+    # A composed section (layout_engine): one free variant, the blocks are the layout.
+    "composition": ["free"],
 }
 
 

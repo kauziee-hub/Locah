@@ -1,0 +1,406 @@
+/* ==========================================================================
+   Composed sections — blocks arranged on a grid by the layout engine
+   (platform_core/interview/layout_engine.py), held to
+   platform_core/website/composition_grammar.py, drawn by
+   apps/web/src/components/website/experience/Composition.tsx.
+
+   Loaded after site-dna.css (the design DNA's faces and edges apply here) and
+   before site-owner.css (an owner's own sizes and corners still win).
+
+   Same hard rules as every site sheet: only --site-* tokens, never a LOCAH
+   colour; the still state is the design (nothing hidden without data-fx);
+   no headline set straight onto a photograph — words over a picture sit on a
+   plate of the section's own ground.
+   ========================================================================== */
+
+.fx-comp {
+  --pad: clamp(1.25rem, 0.5rem + 3vw, 3rem);
+  --wide: 1240px;
+  /* How far a full-bleed picture reaches past the grid to the page's edge. */
+  --out: calc(max(0px, (100vw - var(--wide) - 2 * var(--pad)) / 2) + var(--pad));
+  --unit: clamp(3.4rem, 1.6rem + 4.4vw, 7.25rem);
+  --gap: clamp(1rem, 0.35rem + 1.8vw, 2.25rem);
+  --comp-ground: var(--site-bg);
+  position: relative;
+  overflow-x: clip;
+  padding-inline: var(--pad);
+}
+.fx-comp.ls-section--alt {
+  --comp-ground: var(--site-bg-alt);
+}
+.fx-comp--ink {
+  --comp-ground: var(--site-ink);
+  background: var(--site-ink);
+  color: var(--site-bg);
+}
+.fx-comp--tint {
+  --comp-ground: color-mix(in srgb, var(--site-accent) 11%, var(--site-bg));
+  background: var(--comp-ground);
+}
+
+.fx-comp__grid {
+  max-width: var(--wide);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 3), minmax(var(--unit), auto));
+  column-gap: var(--gap);
+  row-gap: var(--gap);
+}
+.fx-comp[data-height='tall'] .fx-comp__grid {
+  min-height: 78svh;
+}
+.fx-comp[data-height='screen'] .fx-comp__grid {
+  min-height: 92svh;
+}
+
+.fx-comp__b {
+  grid-column: var(--c) / span var(--s);
+  grid-row: var(--r) / span var(--rs);
+  z-index: var(--z, 0);
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.fx-comp__b[data-valign='center'] {
+  justify-content: center;
+}
+.fx-comp__b[data-valign='end'] {
+  justify-content: flex-end;
+}
+.fx-comp__b[data-align='center'] {
+  text-align: center;
+  align-items: center;
+}
+.fx-comp__b[data-align='end'] {
+  text-align: end;
+  align-items: flex-end;
+}
+.fx-comp__b[data-tone='muted'] {
+  color: color-mix(in srgb, currentColor 64%, transparent);
+}
+.fx-comp__b[data-tone='accent'] {
+  color: var(--site-primary);
+}
+
+/* ---------------------------------------------------------------- pictures */
+.fx-comp__pic {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.fx-comp__frame {
+  position: relative;
+  flex: 1;
+  min-height: calc(var(--rs, 3) * var(--unit));
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.fx-comp__frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fx-comp__frame[data-parallax] img {
+  inset: -8% 0;
+  height: 116%;
+}
+.fx-comp__b[data-frame='rounded'] .fx-comp__frame {
+  border-radius: max(var(--site-radius, 14px), 14px);
+}
+.fx-comp__b[data-frame='arch'] .fx-comp__frame {
+  border-radius: 999px 999px max(var(--site-radius, 0px), 4px) max(var(--site-radius, 0px), 4px);
+}
+.fx-comp__b[data-frame='circle'] .fx-comp__frame {
+  flex: none;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  margin-block: auto;
+}
+.fx-comp__b[data-frame='slant'] .fx-comp__frame {
+  clip-path: polygon(0 0, 100% 0, 100% 88%, 0 100%);
+}
+.fx-comp__b[data-frame='inset'] .fx-comp__pic {
+  padding: clamp(0.6rem, 0.3rem + 0.8vw, 1rem);
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+.fx-comp__b[data-frame='bleed'][data-edge='start'] {
+  margin-inline-start: calc(-1 * var(--out));
+}
+.fx-comp__b[data-frame='bleed'][data-edge='end'] {
+  margin-inline-end: calc(-1 * var(--out));
+}
+.fx-comp__b[data-frame='bleed'][data-edge='both'] {
+  margin-inline: calc(-1 * var(--out));
+}
+.fx-comp__caption {
+  margin-top: 0.7rem;
+  font-size: 0.86rem;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+/* ------------------------------------------------------------------- words */
+.fx-comp__words,
+.fx-comp__quote,
+.fx-comp__number {
+  max-width: 100%;
+}
+.fx-comp__b[data-plate] > :first-child {
+  background: var(--comp-ground);
+  padding: clamp(1.25rem, 0.5rem + 2.2vw, 2.75rem);
+  border-radius: var(--site-radius, 0);
+  box-shadow: 0 30px 60px -40px color-mix(in srgb, var(--site-ink) 45%, transparent);
+}
+.fx-comp__eyebrow {
+  margin: 0 0 0.9rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 62%, transparent);
+}
+.fx-comp__title,
+.fx-comp__quote p,
+.fx-comp__value {
+  font-family: var(--site-display-font);
+  font-weight: var(--site-heading-weight, 600);
+  line-height: var(--site-display-leading, 1);
+  letter-spacing: var(--site-display-tracking, -0.02em);
+  text-wrap: balance;
+  margin: 0;
+}
+/* Each size is a target (--t); the type is then capped so the block's longest
+   word fits its own width (--longest is that word's length, set by the
+   renderer; 0.6em is a wide face's average letter). A poster heading in a
+   narrow column steps down instead of running over its neighbour. */
+.fx-comp__b {
+  container-type: inline-size;
+  --t: calc(clamp(1.75rem, 1.2rem + 1.8vw, 2.8rem) * var(--site-display-scale, 1));
+}
+.fx-comp__b[data-size='xs'] {
+  --t: 1.15rem;
+}
+.fx-comp__b[data-size='s'] {
+  --t: calc(clamp(1.35rem, 1.1rem + 0.8vw, 1.75rem) * var(--site-display-scale, 1));
+}
+.fx-comp__b[data-size='l'] {
+  --t: calc(clamp(2.2rem, 1.2rem + 3.2vw, 4.3rem) * var(--site-display-scale, 1));
+}
+.fx-comp__b[data-size='xl'] {
+  --t: calc(clamp(2.6rem, 0.9rem + 5.4vw, 6.6rem) * var(--site-display-scale, 1));
+}
+.fx-comp__b[data-size='xxl'] {
+  --t: calc(clamp(3rem, 0.6rem + 8vw, 10rem) * var(--site-display-scale, 1));
+}
+.fx-comp__title,
+.fx-comp__quote p {
+  font-size: min(var(--t), calc(100cqi / (var(--longest, 8) * var(--wf, 0.64))));
+}
+/* The site's display voice (width, case) on every composed display line, and
+   how wide its letters run for the fit above — measured, not guessed: Archivo
+   in capitals takes about 0.91em a letter, Big Shoulders and Anton about 0.6. */
+.fx-comp :is(.fx-comp__title, .fx-comp__quote p, .fx-comp__value) {
+  font-stretch: var(--site-display-stretch, 100%);
+  text-transform: var(--site-display-case, none);
+}
+[data-locah-site][data-headline='caps'] .fx-comp {
+  --wf: 0.82;
+}
+[data-locah-site]:is([data-concept='noir_editorial'], [data-concept='kinetic_sport'])[data-display='archivo'] .fx-comp {
+  --wf: 0.8;
+}
+[data-locah-site]:is([data-display='bigshoulders'], [data-display='anton']) .fx-comp {
+  --wf: 0.66;
+}
+.fx-comp__b:is([data-size='xs'], [data-size='s']) :is(.fx-comp__title, .fx-comp__quote p) {
+  line-height: 1.18;
+}
+.fx-comp__b[data-size='m'] :is(.fx-comp__title, .fx-comp__quote p) {
+  line-height: 1.06;
+}
+.fx-comp__price {
+  margin: clamp(0.6rem, 0.4rem + 0.6vw, 1rem) 0 0;
+  font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.3rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.fx-comp__price + .fx-comp__body,
+.fx-comp__title + .fx-comp__body,
+.fx-comp__eyebrow + .fx-comp__body {
+  margin-top: clamp(1rem, 0.6rem + 1vw, 1.6rem);
+}
+.fx-comp__body {
+  max-width: 46ch;
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  line-height: 1.6;
+  color: color-mix(in srgb, currentColor 80%, transparent);
+}
+.fx-comp__b[data-align='center'] .fx-comp__body {
+  margin-inline: auto;
+}
+.fx-comp__quote {
+  margin: 0;
+}
+.fx-comp__more {
+  margin-top: clamp(1.2rem, 0.8rem + 1vw, 1.8rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: flex-start;
+  font-weight: 600;
+  text-decoration: none;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid currentColor;
+}
+.fx-comp__more svg {
+  transition: transform 300ms var(--fx-ease, ease);
+}
+.fx-comp__more:hover svg,
+.fx-comp__more:focus-visible svg {
+  transform: translateX(4px);
+}
+
+/* ------------------------------------------------------------ numbers, list */
+.fx-comp__number {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fx-comp__value {
+  --tv: calc(clamp(2.6rem, 1rem + 5vw, 6rem) * var(--site-display-scale, 1));
+  font-size: min(var(--tv), calc(100cqi / (var(--longest, 4) * 0.62)));
+  line-height: 0.9;
+}
+.fx-comp__b[data-size='xxl'] .fx-comp__value {
+  --tv: calc(clamp(4rem, 1rem + 10vw, 12rem) * var(--site-display-scale, 1));
+}
+.fx-comp__label-text {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  max-width: 24ch;
+}
+.fx-comp__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fx-comp__b[data-wide] .fx-comp__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--gap);
+}
+.fx-comp__list li {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding-block: clamp(0.95rem, 0.6rem + 0.8vw, 1.4rem);
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+.fx-comp__index {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.fx-comp__point {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.fx-comp__point strong {
+  font-family: var(--site-display-font);
+  font-weight: var(--site-heading-weight, 600);
+  font-size: clamp(1.15rem, 1rem + 0.5vw, 1.4rem);
+  line-height: 1.2;
+}
+.fx-comp__point-body {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+.fx-comp__meta {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------- label, action */
+.fx-comp__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.fx-comp__b[data-vertical] {
+  align-items: center;
+}
+.fx-comp__b[data-vertical] .fx-comp__label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+.fx-comp__b--action {
+  justify-content: center;
+}
+.fx-comp__btn {
+  align-self: flex-start;
+}
+
+/* ------------------------------------------------------------------- phone */
+@media (max-width: 760px) {
+  .fx-comp__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    row-gap: clamp(1rem, 4vw, 1.5rem);
+  }
+  .fx-comp[data-height] .fx-comp__grid {
+    min-height: 0;
+  }
+  .fx-comp__b {
+    grid-column: var(--mc, 1) / span var(--ms, 6);
+    grid-row: auto;
+    order: var(--mo, 0);
+    margin-inline: 0;
+  }
+  .fx-comp__b[data-frame='bleed'][data-edge] {
+    margin-inline: calc(-1 * var(--pad));
+  }
+  .fx-comp__frame {
+    flex: none;
+    min-height: 0;
+    aspect-ratio: var(--mr, 4 / 5);
+  }
+  .fx-comp__b[data-frame='circle'] .fx-comp__frame {
+    aspect-ratio: 1;
+  }
+  /* Words laid over a picture on a desktop rest on its lower edge here. */
+  .fx-comp__b[data-lift] {
+    margin-top: calc(-1 * clamp(3.5rem, 20vw, 6rem));
+    margin-inline: 0.75rem;
+  }
+  .fx-comp__b[data-vertical] {
+    align-items: flex-start;
+  }
+  .fx-comp__b[data-vertical] .fx-comp__label {
+    writing-mode: horizontal-tb;
+    transform: none;
+  }
+  .fx-comp__b[data-wide] .fx-comp__list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fx-comp__b[data-align='end'] {
+    text-align: start;
+    align-items: flex-start;
+  }
+}

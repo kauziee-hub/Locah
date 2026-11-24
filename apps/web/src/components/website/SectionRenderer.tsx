@@ -13,6 +13,7 @@ import { COVERS, Cover, coverFor, type CoverContext } from './experience/Covers'
 import { HeldPicture, StorySection } from './experience/Story'
 import { CategoryScene, CtaGiant, Marquee } from './experience/Bands'
 import { FaqSection, MediaText, PageHero, Pillars, Statement } from './experience/Sections'
+import { Composition, type CompositionBlock } from './experience/Composition'
 
 /** Hero layouts that are scenes (see experience/HeroScenes); covers are in
  *  experience/Covers. */
@@ -1290,6 +1291,23 @@ export function SectionRenderer({
                 }
               : undefined
           }
+        />
+      )
+
+    /* ----------------------------------------------------- composition */
+    case 'composition':
+      return (
+        <Composition
+          ground={str(c.ground)}
+          height={str(c.height)}
+          rows={Number(c.rows) || 0}
+          anchor={str(c.anchor) || undefined}
+          alt={alt}
+          href={(path) => withPreviewToken(pathHref(businessSlug, path), previewToken)}
+          blocks={listOf(c.items).map((row, i) => {
+            const block = row as unknown as CompositionBlock
+            return { ...block, image: block.kind === 'picture' ? assets[`items.${i}`] : undefined }
+          })}
         />
       )
 

@@ -155,6 +155,8 @@ class Change:
     colour       target primary | accent | background, value hex
     style        key heading_size | text_size | corners | font, value, or step (+1 / -1 …)
     move         section (words), where top | bottom | up | down | before | after, anchor (words)
+    flip         section (words) — a composed section the other way round
+    relayout     section (words) — a composed section in another arrangement
     visibility   section (words), show bool
     remove       section (words)
     duplicate    section (words)
@@ -247,6 +249,11 @@ _FIELD = {"headline": "headline", "heading": "headline", "main line": "headline"
           "button label": "cta_label", "description": "body", "text": "body"}
 _RESET = re.compile(r"\b(?:reset|undo|revert|go back|back to)\b.{0,30}\b(?:design|style|original|default|"
                     r"how it was|before|look)\b|\boriginal (?:design|look|style|font|colou?rs?)\b", re.I)
+_FLIP = re.compile(r"\b(?:flip|mirror|swap (?:the )?sides?|switch (?:the )?sides?|other way round|"
+                   r"(?:picture|photo|image)s? (?:on|to) the (?:other side|left|right))\b", re.I)
+_RELAYOUT = re.compile(r"\b(?:(?:another|different|new|other|fresh|better) (?:layout|arrangement|design|look|style)|"
+                       r"re-?arrange|re-?layout|lay (?:it|this|that) out differently|"
+                       r"change (?:the )?(?:layout|arrangement))\b", re.I)
 _FILLER = re.compile(r"^(?:please|kindly|can you|could you|i want to|i want you to|i want|i need to|we want to|"
                      r"just|hey|hi|locah|ok|okay|also|and|then)\s+", re.I)
 
@@ -302,7 +309,15 @@ def _read_clause(sentence: str, plan: Plan) -> None:
                 field_name = "title" if field_name == "headline" else "body"
             plan.changes.append(Change(kind="text", section=section, field_name=field_name, value=value[:200]))
             return
-    # 2. structure
+    # 2. arrangement: the same section placed differently.
+    if _FLIP.search(sentence) or _RELAYOUT.search(sentence):
+        what = re.sub(_FLIP.pattern + "|" + _RELAYOUT.pattern, " ", sentence, flags=re.I)
+        what = _clean_what(re.sub(r"\b(?:for|of|on|in|the|our|my|please|try|give|me|a|an|make|do|can|you)\b",
+                                  " ", what, flags=re.I))
+        plan.changes.append(Change(kind="flip" if _FLIP.search(sentence) else "relayout",
+                                   section=what if section_kinds(what) else ""))
+        return
+    # 3. structure
     for pattern, kind in ((_DUPLICATE, "duplicate"), (_REMOVE, "remove"), (_HIDE, "visibility")):
         m = pattern.search(sentence)
         if m and section_kinds(_clean_what(m.group("what"))):
@@ -420,7 +435,8 @@ MODEL_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "kind": {"type": "string", "enum": ["colour", "style", "move", "visibility", "remove",
-                                                         "duplicate", "add", "text", "rewrite", "undo_style"]},
+                                                         "duplicate", "add", "text", "rewrite", "undo_style",
+                                                         "flip", "relayout"]},
                     "target": {"type": "string", "maxLength": 40},
                     "value": {"type": "string", "maxLength": 200},
                     "step": {"type": "integer"},
@@ -453,6 +469,8 @@ MODEL_SYSTEM = (
     "- text: section (empty = the top of the page), field_name headline|subheadline|cta_label|title|body, "
     "value = EXACTLY the words the owner gave. Never write words of your own.\n"
     "- rewrite: section — only when the owner asks LOCAH to write it again.\n"
+    "- flip: section — the same arrangement the other way round (pictures to the other side).\n"
+    "- relayout: section — the same words and pictures in another arrangement.\n"
     "- undo_style: back to the original design.\n"
     "If the request needs anything else (new pages, animations, custom code, prices, facts about the business), "
     "return no change for that part and say what in `cannot`, in one short plain sentence."
@@ -493,6 +511,8 @@ def from_model(raw: Any) -> Plan:
                     continue
             else:
                 continue
+        elif kind in {"flip", "relayout"}:
+            pass  # any (or no) section: the service finds a composed one
         elif kind in {"move", "visibility", "remove", "duplicate"}:
             if not section_kinds(change.section):
                 continue

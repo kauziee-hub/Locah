@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from platform_core.website.composition_grammar import SCHEMA as COMPOSITION_SCHEMA
+
 # Minimal in-process schemas used when DB seed is unavailable (tests / bootstrap).
 CORE_SECTION_SCHEMAS: dict[str, dict[str, Any]] = {
     "hero": {
@@ -363,6 +365,10 @@ CORE_SECTION_SCHEMAS: dict[str, dict[str, Any]] = {
             "subtitle": {"type": "string", "maxLength": 300},
         },
     },
+    # A section arranged freely on a grid (website.composition_grammar): the
+    # layout engine and the reference reader place its blocks; the renderer
+    # draws them. Composed by the platform, never written by the model.
+    "composition": COMPOSITION_SCHEMA,
 }
 
 ALLOWED_SECTION_TYPE_IDS = frozenset(CORE_SECTION_SCHEMAS.keys())

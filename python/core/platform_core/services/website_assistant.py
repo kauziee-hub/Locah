@@ -33,19 +33,41 @@ _NAMES = {
     "offerings_list": "what you offer",
 }
 _SIZE_WORDS = {"small": "smaller", "regular": "standard size", "large": "larger", "xlarge": "largest"}
-CAN_DO = ("I can change colours, fonts, text size and corners; move, hide, show, copy or remove a section; "
+CAN_DO = ("I can change colours, fonts, text size and corners; flip or re-arrange a section; move, hide, "
+          "show, copy or remove a section; "
           "add a gallery, text, contact or enquiry section; change a headline or a button; or write a section again.")
 
 
+_ROLE_NAMES = {"story": "your story", "statement": "the statement", "pillars": "what you stand for",
+               "numbers": "the numbers", "featured": "your signature range"}
+
+
 def _name(section: dict[str, Any]) -> str:
+    if section.get("section_type_id") == "composition":
+        return _ROLE_NAMES.get(str((section.get("content") or {}).get("role") or ""), "that section")
     return _NAMES.get(str(section.get("section_type_id")), str(section.get("section_type_id", "")).replace("_", " "))
+
+
+# A composed section answers to the words for what it holds.
+_ROLE_KINDS = {
+    "story": {"about", "media_text"}, "statement": {"statement"}, "pillars": {"pillars", "feature_grid"},
+    "numbers": {"highlights"}, "featured": {"product_showcase", "category_showcase", "menu_section",
+                                            "offerings_list"},
+}
+
+
+def _is_kind(section: dict[str, Any], kind: str) -> bool:
+    if section.get("section_type_id") == kind:
+        return True
+    role = str((section.get("content") or {}).get("role") or "")
+    return section.get("section_type_id") == "composition" and kind in _ROLE_KINDS.get(role, set())
 
 
 def _find(sections: list[dict[str, Any]], words: str, *, hidden: bool | None = None) -> dict[str, Any] | None:
     """The section on this page an owner's words mean."""
     pool = [s for s in sections if hidden is None or (s.get("is_visible") is False) == hidden] or sections
     for kind in sa.section_kinds(words):
-        match = next((s for s in pool if s.get("section_type_id") == kind), None)
+        match = next((s for s in pool if _is_kind(s, kind)), None)
         if match:
             return match
     low = words.casefold().strip()
@@ -122,10 +144,10 @@ class WebsiteAssistantService:
             try:
                 if change.kind == "colour":
                     if change.target == "background":
+                        from platform_core.website.owner_style import ground_family
+
                         dark = sa.luminance(change.value) < 0.18
-                        theme_edit.update({"background_color": change.value,
-                                           "text_color": "#f5f1ea" if dark else "#1a1a1a",
-                                           "palette_mode": "dark" if dark else "light"})
+                        theme_edit.update(ground_family(change.value, "#f5f1ea" if dark else "#1a1a1a", dark=dark))
                         done.append(f"The page background is now {change.value}; the words stay readable on it.")
                     else:
                         key = "primary_color" if change.target == "primary" else "accent_color"
@@ -247,6 +269,21 @@ class WebsiteAssistantService:
                         done.append(f"{_name(target).capitalize()} now sits "
                                     + (f"right after {_name(after)}." if after else "at the top of the page."))
                     structure = True
+                elif change.kind in {"flip", "relayout"}:
+                    current = await sections()
+                    composed = [s for s in current if s.get("section_type_id") == "composition"]
+                    target = _find(composed, change.section) if change.section else (composed[0] if composed else None)
+                    if target is None:
+                        not_done.append("That section has one fixed arrangement; only composed sections can be "
+                                        "re-arranged." if change.section else
+                                        "This page has no composed section to re-arrange.")
+                        continue
+                    await WebsiteArrangeService.arrange(
+                        session, business_id=business_id, actor_id=actor_id,
+                        section_id=uuid.UUID(str(target["id"])), action="flip" if change.kind == "flip" else "next")
+                    structure = True
+                    done.append(f"{_name(target).capitalize()} is " + (
+                        "now the other way round." if change.kind == "flip" else "now in another arrangement."))
                 elif change.kind == "add":
                     await WebsiteCompositionService.add_section(
                         session, business_id=business_id, page_id=uuid.UUID(str(page["id"])), actor_id=actor_id,
@@ -317,7 +354,30 @@ class WebsiteReferenceService:
                     "reply": "That does not look like a designed page, so nothing was changed. Send a "
                              "screenshot of a website, poster or brand layout you like."}
         # The first match keeps what was there, so undo returns to the designed look.
-        before = theme.get(rs.UNDO_KEY) if isinstance(theme.get(rs.UNDO_KEY), dict) else rs.snapshot(theme)
+        stored = theme.get(rs.UNDO_KEY)
+        before: dict[str, Any] = dict(stored) if isinstance(stored, dict) else rs.snapshot(theme)
+        # Its arrangement shapes the composed sections of the same role: their
+        # own words and pictures, placed the way the reference places things.
+        from platform_core.interview.layout_engine import Style, from_geometry
+
+        dna: dict[str, Any] = dict(theme["dna"]) if isinstance(theme.get("dna"), dict) else {}
+        layout_style = Style(concept=str(dna.get("concept") or ""), shape=str(dna.get("shape") or "rect"),
+                             budget=str(dna.get("budget") or "gentle"))
+        arranged: list[tuple[str, dict[str, Any]]] = []
+        previous = dict(before.get("sections") or {})
+        for page in aggregate["draft"].get("pages") or []:
+            for section in page.get("sections") or []:
+                content = section.get("content") or {}
+                role = str(content.get("role") or "")
+                if section.get("section_type_id") != "composition" or role not in style.layouts:
+                    continue
+                remade = from_geometry(role, style.layouts[role], content, layout_style)
+                if remade is None:
+                    continue
+                arranged.append((str(section["id"]), remade))
+                previous.setdefault(str(section["id"]), content)
+        if previous:
+            before = {**before, "sections": previous}
         edit: dict[str, Any] = {**style.theme, rs.UNDO_KEY: before,
                                 "reference": {"mood": style.mood, "why": style.why}}
         if isinstance(theme.get("dna"), dict):
@@ -329,13 +389,21 @@ class WebsiteReferenceService:
             edit["owner_style"] = {"font": None, "corners": None, "heading_size": None, **edit["owner_style"]}
         draft = await WebsiteVersionService.update_draft_chrome(
             session, business_id=business_id, actor_id=actor_id, theme=edit)
-        reply = "Your draft now takes after that design: " + ", ".join(style.kept) + "."
+        for section_id, content in arranged:
+            await SectionService.patch_section(session, business_id=business_id, section_id=uuid.UUID(section_id),
+                                               actor_id=actor_id, payload={"content": content})
+        kept = list(style.kept)
+        if arranged:
+            kept.append(f"its arrangement for {len(arranged)} of your section{'s' if len(arranged) > 1 else ''}")
+        reply = ("Your draft now takes after that design: " + ", ".join(kept) + ".") if kept else (
+            "Nothing from that design could be used.")
         if style.dropped:
             reply += " Not followed: " + "; ".join(style.dropped) + "."
-        reply += (" The layout, pictures and words stay your own: it is a direction, not a copy. "
+        reply += (" The pictures and words are still your own: it is a direction, not a copy. "
                   "You can undo this, or adjust anything in Design.")
-        return {"matched": True, "reply": reply, "kept": style.kept, "dropped": style.dropped,
-                "mood": style.mood, "why": style.why, "theme": dict(draft.theme or {})}
+        return {"matched": True, "reply": reply, "kept": kept, "dropped": style.dropped,
+                "mood": style.mood, "why": style.why, "theme": dict(draft.theme or {}),
+                "arranged": len(arranged)}
 
     @staticmethod
     async def undo(session: AsyncSession, *, business_id: uuid.UUID, actor_id: uuid.UUID) -> dict[str, Any]:
@@ -351,5 +419,53 @@ class WebsiteReferenceService:
         draft = await WebsiteVersionService.update_draft_chrome(
             session, business_id=business_id, actor_id=actor_id, theme=edit, drop=drop,
             restore_owner_style=dict(before.get("owner_style") or {}) or None)
+        for section_id, content in dict(before.get("sections") or {}).items():
+            # Each re-arranged section exactly as it was; one removed since is skipped.
+            try:
+                await SectionService.patch_section(session, business_id=business_id,
+                                                   section_id=uuid.UUID(section_id), actor_id=actor_id,
+                                                   payload={"content": content})
+            except (ResourceNotFound, ValidationError):
+                continue
         return {"undone": True, "reply": "Your draft is back to how it looked before the match.",
                 "theme": dict(draft.theme or {})}
+
+
+class WebsiteArrangeService:
+    """A composed section the other way round, or in another arrangement: the
+    same words and pictures, placed differently (interview.layout_engine)."""
+
+    @staticmethod
+    async def arrange(session: AsyncSession, *, business_id: uuid.UUID, actor_id: uuid.UUID,
+                      section_id: uuid.UUID, action: str) -> dict[str, Any]:
+        from platform_core.interview.layout_engine import Style, mirrored, rearranged
+
+        if action not in {"flip", "next"}:
+            raise ValidationError("Choose flip or next")
+        aggregate = await WebsiteService.get_aggregate(session, business_id=business_id)
+        section = next((s for p in aggregate["draft"].get("pages") or [] for s in p.get("sections") or []
+                        if str(s.get("id")) == str(section_id)), None)
+        if section is None:
+            raise ResourceNotFound("Website section")
+        if section.get("section_type_id") != "composition":
+            raise ValidationError("Only a composed section can be re-arranged",
+                                  details={"code": "not_composed"})
+        content = dict(section.get("content") or {})
+        changed: dict[str, Any] | None
+        if action == "flip":
+            changed = mirrored(content)
+        else:
+            theme = dict(aggregate["draft"].get("theme") or {})
+            dna: dict[str, Any] = dict(theme["dna"]) if isinstance(theme.get("dna"), dict) else {}
+            changed = rearranged(content, Style(concept=str(dna.get("concept") or ""),
+                                                shape=str(dna.get("shape") or "rect"),
+                                                budget=str(dna.get("budget") or "gentle")),
+                                 seed=str(section_id))
+            if changed is None:
+                raise ValidationError("This section has no other arrangement for what it holds",
+                                      details={"code": "no_other_arrangement"})
+        updated = await SectionService.patch_section(session, business_id=business_id, section_id=section_id,
+                                                     actor_id=actor_id, payload={"content": changed})
+        from platform_core.resolvers.website_resolver import WebsiteResolver
+
+        return WebsiteResolver.serialize_section(updated)

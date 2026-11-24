@@ -78,7 +78,25 @@ OWNER_STYLE_VALUES: dict[str, tuple[str, ...]] = {
     "corners": CORNERS,
 }
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
-COLOUR_KEYS = ("primary_color", "accent_color", "background_color", "text_color")
+COLOUR_KEYS = ("primary_color", "accent_color", "background_color", "text_color", "surface_alt_color",
+               "muted_color")
+# Everything a page's ground decides: set together, or a dark page keeps light
+# alternate bands (found on a reference match, 2026-11-23).
+GROUND_KEYS = ("background_color", "text_color", "surface_alt_color", "muted_color", "palette_mode")
+
+
+def _mix(a: str, b: str, share: float) -> str:
+    """`share` of colour b laid over colour a, as hex."""
+    pa = [int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    pb = [int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    return "#" + "".join(f"{round(x + (y - x) * share):02x}" for x, y in zip(pa, pb))
+
+
+def ground_family(background: str, text: str, *, dark: bool) -> dict[str, str]:
+    """A page ground with the alternate ground, muted words and mode that go with it."""
+    return {"background_color": background, "text_color": text,
+            "surface_alt_color": _mix(background, text, 0.06 if dark else 0.045),
+            "muted_color": _mix(text, background, 0.38), "palette_mode": "dark" if dark else "light"}
 
 
 def clean_owner_style(raw: Any) -> dict[str, str]:

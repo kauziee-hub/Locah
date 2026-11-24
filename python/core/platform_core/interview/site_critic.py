@@ -70,6 +70,19 @@ def _pictures(section: dict[str, Any]) -> list[str]:
     return found
 
 
+def _layout(section: dict[str, Any]) -> tuple[str, Any]:
+    """What makes two sections the same design: a composition is its recipe."""
+    kind = str(section["section_type_id"])
+    if kind == "composition":
+        return kind, (section.get("content") or {}).get("recipe")
+    return kind, section.get("layout_variant")
+
+
+def _featured_beside_range(a: str, b: str) -> bool:
+    """A range page's signature block shows things the list below also shows: intended."""
+    return {a, b} == {"composition", "product_showcase"}
+
+
 def critique(payload: dict[str, Any]) -> list[Finding]:
     budget = str(((payload.get("theme_hints") or {}).get("dna") or {}).get("budget") or "gentle")
     out: list[Finding] = []
@@ -81,9 +94,9 @@ def critique(payload: dict[str, Any]) -> list[Finding]:
         for section in sections:
             kind = str(section["section_type_id"])
             for picture in dict.fromkeys(_pictures(section)):
-                if picture in seen and seen[picture] != kind:
+                if picture in seen and seen[picture] != kind and not _featured_beside_range(seen[picture], kind):
                     out.append(Finding("repeated_picture", slug, kind, f"same picture as the {seen[picture]}",
-                                       kind in {"cta_band", "media_text", "statement", "about"}))
+                                       kind in {"cta_band", "media_text", "statement", "about", "composition"}))
                 seen.setdefault(picture, kind)
         for a, b in zip(sections, sections[1:]):
             if _is(a, _CARDS) and _is(b, _CARDS):
@@ -92,7 +105,7 @@ def critique(payload: dict[str, Any]) -> list[Finding]:
             if _is(a, _TEXT_ONLY) and _is(b, _TEXT_ONLY):
                 out.append(Finding("wall_of_text", slug, str(b["section_type_id"]),
                                    "two sections of only words in a row", True))
-        layouts = [(s["section_type_id"], s.get("layout_variant")) for s in sections]
+        layouts = [_layout(s) for s in sections]
         for i, layout in enumerate(layouts):
             if layout in layouts[:i] and layout[0] not in {"product_showcase"}:
                 out.append(Finding("repeated_layout", slug, str(layout[0]), "the same section twice", True))
@@ -105,7 +118,9 @@ def critique(payload: dict[str, Any]) -> list[Finding]:
     home = payload["pages"][0]["sections"]
     hero = next((s for s in home if s["section_type_id"] == "hero"), None)
     if hero and not hero["content"].get("image_asset_id") and not any(
-            s["section_type_id"] in {"statement", "about"} for s in home):
+            s["section_type_id"] in {"statement", "about"} or (
+                s["section_type_id"] == "composition"
+                and (s.get("content") or {}).get("role") in {"statement", "story"}) for s in home):
         out.append(Finding("no_centrepiece", "home", "hero",
                            "no picture, story or statement to carry the page — ask the owner", False))
     return out
@@ -154,6 +169,17 @@ def polish(payload: dict[str, Any], findings: list[Finding]) -> list[str]:
             elif f.where == "about":
                 content.pop("image_asset_id", None)
                 target["layout_variant"] = "text_only"
+            elif f.where == "composition":
+                # Its repeated picture leaves; the arrangement keeps its words.
+                used = {p for s in sections if s is not target for p in _pictures(s)}
+                kept = [b for b in content.get("items") or []
+                        if not (b.get("kind") == "picture" and str(b.get("image_asset_id")) in used)]
+                if any(b.get("kind") != "picture" for b in kept):
+                    from platform_core.website.composition_grammar import normalize
+
+                    target["content"] = normalize({**content, "items": kept})
+                else:
+                    target["_drop"] = True
             done.append(f"{f.page}: {f.where} no longer repeats a picture")
         elif f.code == "card_after_card" and target:
             target["layout_variant"] = "numbered" if f.where == "pillars" else "list"

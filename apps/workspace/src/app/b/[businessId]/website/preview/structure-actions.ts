@@ -151,3 +151,9 @@ export async function undoReference(businessId: string) {
   return call<ReferenceReply>(businessId, '/reference-style', 'POST', { undo: true },
     'That could not be undone')
 }
+
+/** A composed section the other way round ("flip") or in another arrangement ("next"). */
+export async function arrangeSection(businessId: string, sectionId: string, action: 'flip' | 'next') {
+  return call(businessId, `/sections/${sectionId}/arrange`, 'POST', { action },
+    action === 'flip' ? 'That section could not be flipped' : 'No other arrangement fits what that section holds')
+}
