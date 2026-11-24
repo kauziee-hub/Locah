@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from platform_core.catalog.taxonomy import infer_from_text, respell
 from platform_core.interview.catalogue_capture import read_priced_list
-from platform_core.interview.spelling import fix_words
+from platform_core.interview.spelling import fix_words, for_the_page
 from platform_testing.certify.owners import all_scenarios
 
 KITCHEN = ("hi this is pepper vine kichen in kadavantra kochi, we make kerala food biriyani appam stew meals "
@@ -392,3 +392,11 @@ async def test_check_in_is_said_back_even_when_locah_moves_straight_to_ive_got_e
     assert bp.readiness.ready and bp.checkpoint_turn is not None  # the "I've got enough" reply
     assert said.startswith("I'll use the usual times: check-in from 2 pm, check-out by 11 am."), said
     assert "enough" in said
+
+
+def test_a_price_unit_typed_in_chat_reads_as_words_and_stays_lower_case() -> None:
+    # "Family room 12500 per nite" — the shadow quality gate found "per nite" on a
+    # hotel's rooms (2026-11-25). A unit is a fragment, so no capital is added.
+    assert for_the_page("per nite", capitalise=False) == "per night"
+    assert for_the_page("per nite") == "Per night"
+    assert for_the_page("per plate", capitalise=False) == "per plate"

@@ -506,7 +506,11 @@ def browse_sections(
             if item.price and prices == "show":
                 entry["price"] = money(item.price)[:40]
                 if item.unit:
-                    entry["unit"] = item.unit[:40]
+                    # The owner's unit as a customer reads it: "per nite" is "per night"
+                    # (the shadow quality gate found it on a hotel's rooms, 2026-11-25).
+                    from platform_core.interview.spelling import for_the_page
+
+                    entry["unit"] = for_the_page(item.unit, capitalise=False)[:40]
             elif prices == "on_request" and (item.price or group.price):
                 entry["price"] = "Price on request"
             elif group.price and arche == "real_estate_projects" and prices in {"show", "from"}:

@@ -165,9 +165,10 @@ _SHORTHAND: dict[str, str] = {
 }
 
 
-def for_the_page(text: str) -> str:
+def for_the_page(text: str, *, capitalise: bool = True) -> str:
     """An owner's sentence as a customer should read it: slips put right, chat
-    shorthand written out, a capital to start. The facts are untouched — only
+    shorthand written out, a capital to start (unless `capitalise` is off, for a
+    fragment such as a price unit: "per nite" is "per night"). The facts are untouched — only
     how they are spelt. ("Ppl shud book trial first then join" and "hsr layout
     blr" were on a gym's live site, 2026-11-14.)"""
 
@@ -182,6 +183,8 @@ def for_the_page(text: str) -> str:
     # "book online n pay": "n" for "and" between two words — never in a name
     # ("Rock n Roll Cafe" keeps its capitals and its n).
     out = re.sub(r"(?<=[a-z]) n (?=[a-z])", " and ", out)
+    if not capitalise:
+        return out
     return out[:1].upper() + out[1:] if out else out
 
 
