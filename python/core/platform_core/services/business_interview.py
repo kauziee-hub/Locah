@@ -1819,7 +1819,7 @@ class BusinessInterviewService:
             images_ms = int((time.monotonic() - images_started) * 1000)
             drawn_ok = await place_found_pictures(
                 session, bp, found, business_id=job.business_id, actor_id=actor, generation_job_id=job.id)
-            from platform_core.website.image_generation import draw_fallback, fallback_drawing_available
+            from platform_core.website.image_generation import draw_fallback, drawn_by, fallback_drawing_available
 
             if fallback_drawing_available():
                 # A cover or passage no photograph fitted: drawn, labelled a draft
@@ -1840,8 +1840,9 @@ class BusinessInterviewService:
                         alt_text=f"Illustrative picture: {slot.subject or 'cover'}"[:200],
                         original_filename=f"draft-{slug(slot.key)}.{'png' if image.mime_type == 'image/png' else 'jpg'}",
                         generated_for=slot.key, generation_job_id=job.id, prompt_version=PROMPT_VERSION,
+                        source_type=f"{drawn_by(image)}_generated",
                     )
-                    record(bp, slot, UUID(asset["id"]))
+                    record(bp, slot, UUID(asset["id"]), drawn_by=drawn_by(image))
                     drawn_ok += 1
                 images_ms = int((time.monotonic() - images_started) * 1000)
         else:

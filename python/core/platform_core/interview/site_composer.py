@@ -112,7 +112,7 @@ def _expected_pictures(bp: BusinessBlueprint) -> int:
     plan = [p for p in bp.media_plan if p.key not in {"process", "detail"}]
     ready = sum(1 for p in plan if p.status == "ready")
     planned = sum(1 for p in plan
-                  if p.status == "planned" and p.source in {"gemini_generated", "stock_retrieved"})
+                  if p.status == "planned" and p.source in {"gemini_generated", "cloudflare_generated", "stock_retrieved"})
     if planned:
         from platform_core.website.image_generation import pictures_available
 

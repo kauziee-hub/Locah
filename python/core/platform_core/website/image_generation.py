@@ -125,6 +125,15 @@ def _cloudflare_keys() -> tuple[str, str]:
     return (os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip(), os.getenv("CLOUDFLARE_API_TOKEN", "").strip())
 
 
+# What a drawn picture is labelled, by who drew it (media_assets.source_type).
+DRAWN_SOURCES = frozenset({"gemini_generated", "cloudflare_generated"})
+
+
+def drawn_by(image: GeneratedImage) -> str:
+    """The provider that drew a picture: "cloudflare" for a Workers AI model, else "gemini"."""
+    return "cloudflare" if image.model.startswith("@cf/") else "gemini"
+
+
 def fallback_drawing_available() -> bool:
     """Whether a mood slot the photo search left empty may be drawn (explicit opt-in)."""
     account, token = _cloudflare_keys()

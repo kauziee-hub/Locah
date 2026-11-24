@@ -297,7 +297,7 @@ class MediaReference(StrictModel):
 TruthClass = Literal["factual", "representative", "mood", "graphic"]
 MediaSource = Literal[
     "owner_uploaded", "catalogue_extracted", "existing_business_asset", "gemini_generated",
-    "graphic_generated", "stock_retrieved",
+    "cloudflare_generated", "graphic_generated", "stock_retrieved",
 ]
 
 

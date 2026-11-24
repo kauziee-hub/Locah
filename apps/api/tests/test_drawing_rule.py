@@ -174,3 +174,26 @@ async def test_a_place_led_sites_passages_are_different_views_of_its_land() -> N
 def test_a_wall_or_floor_is_an_interior() -> None:
     assert unsafe_drawing(build_prompt(subject="soft light across a plain wall", purpose="story",
                                        truth_class="mood", brief=BRIEF, trade="business"))
+
+
+@pytest.mark.asyncio
+async def test_a_drawing_is_labelled_with_the_provider_that_drew_it() -> None:
+    """Cloudflare drawings were recorded as gemini_generated (audit, 2026-11-24)."""
+    from uuid import uuid4
+
+    from platform_core.interview.media_director import plan_media, record
+    from platform_core.website.image_generation import GeneratedImage, drawn_by
+
+    flux = GeneratedImage(mime_type="image/jpeg", bytes=b"", model="@cf/black-forest-labs/flux-1-schnell",
+                          latency_ms=1, prompt="")
+    nano = GeneratedImage(mime_type="image/png", bytes=b"", model="gemini-3.1-flash-image", latency_ms=1, prompt="")
+    assert (drawn_by(flux), drawn_by(nano)) == ("cloudflare", "gemini")
+
+    bp = await _owner(*TRADES[3])
+    direction = direct(bp, "hotel")
+    plan_media(bp, direction)
+    hero = next(s for s in plan_slots(bp, direction) if s.key == "hero")
+    record(bp, hero, uuid4(), drawn_by="cloudflare")
+    assert next(p for p in bp.media_plan if p.key == "hero").source == "cloudflare_generated"
+    plan_media(bp, direction)  # re-planned (a rebuild): still who drew it
+    assert next(p for p in bp.media_plan if p.key == "hero").source == "cloudflare_generated"

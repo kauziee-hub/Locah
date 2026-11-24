@@ -369,7 +369,7 @@ def plan_media(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Plan
             entry.source = "catalogue_extracted" if source == "CATALOGUE_EXTRACTED" else "owner_uploaded"
             entry.asset_id, entry.status = own, "ready"
         elif drawn:
-            entry.source, entry.asset_id, entry.status = _source_of(bp, drawn), drawn, "ready"
+            entry.source, entry.asset_id, entry.status = _source_of(bp, drawn, prior), drawn, "ready"
         elif slot.truth_class == "factual":
             entry.status, entry.reason = "skipped", "Needs a real photo — never drawn."
         elif not drafts_allowed(bp):
@@ -388,10 +388,15 @@ def cached(bp: BusinessBlueprint, key: str) -> UUID | None:
     return request.asset_id if request else None
 
 
-def _source_of(bp: BusinessBlueprint, asset_id: UUID) -> str:
-    """How a ready picture got onto the site: found online, or drawn."""
+def _source_of(bp: BusinessBlueprint, asset_id: UUID, prior: PlannedMedia | None = None) -> str:
+    """How a ready picture got onto the site: found online, or drawn — and by whom,
+    kept from the plan that recorded it (a Cloudflare drawing is never re-labelled Gemini)."""
     found = next((m for m in bp.media_assets if m.asset_id == asset_id), None)
-    return "stock_retrieved" if found is not None and found.source == "STOCK_PHOTO" else "gemini_generated"
+    if found is not None and found.source == "STOCK_PHOTO":
+        return "stock_retrieved"
+    if prior is not None and prior.asset_id == asset_id and prior.source == "cloudflare_generated":
+        return "cloudflare_generated"
+    return "gemini_generated"
 
 
 def owner_photo(bp: BusinessBlueprint, slot: Slot) -> UUID | None:
@@ -629,7 +634,7 @@ def site_concept(bp: BusinessBlueprint, direction: CreativeDirection) -> str:
 
 
 def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str = "", *,
-           stock: bool = False) -> None:
+           stock: bool = False, drawn_by: str = "gemini") -> None:
     """Remember a found or drawn (or failed) slot on the Blueprint, and in its media plan."""
     bp.media_generation_requests = [
         r for r in bp.media_generation_requests if not (r.role == "visual" and r.key == slot.key)
@@ -649,7 +654,8 @@ def record(bp: BusinessBlueprint, slot: Slot, asset_id: UUID | None, reason: str
             entry.status = "ready" if asset_id else "failed"
             entry.asset_id = asset_id or entry.asset_id
             if asset_id:
-                entry.source = "stock_retrieved" if stock else "gemini_generated"
+                entry.source = "stock_retrieved" if stock else (
+                    "cloudflare_generated" if drawn_by == "cloudflare" else "gemini_generated")
             entry.reason = "" if asset_id else (reason or "error")[:200]
 
 

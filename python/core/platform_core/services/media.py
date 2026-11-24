@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.website.image_generation import DRAWN_SOURCES
 from platform_core.exceptions import ResourceNotFound, ValidationError
 from platform_core.media.supabase_storage import (
     ALLOWED_MIME_TYPES,
@@ -345,8 +346,11 @@ class MediaService:
         generated_for: str | None = None,
         generation_job_id: uuid.UUID | None = None,
         prompt_version: str | None = None,
+        source_type: str = "gemini_generated",
     ) -> dict[str, Any]:
         """Persist platform-generated image bytes as a ready media asset.
+
+        `source_type` names who drew it (image_generation.DRAWN_SOURCES).
 
         User uploads still use the signed-URL path. This is only for images
         the platform produced (Gemini drafts) so they follow the same
@@ -386,7 +390,7 @@ class MediaService:
             alt_text=alt_text,
             purpose=purpose,
             status="ready",
-            source_type="gemini_generated",
+            source_type=source_type if source_type in DRAWN_SOURCES else "gemini_generated",
             generated_for=(generated_for or None),
             generation_job_id=generation_job_id,
             prompt_version=(prompt_version or None),
@@ -578,7 +582,7 @@ class MediaService:
     ) -> dict[str, Any]:
         """The owner keeps a picture LOCAH drew. It stays marked as generated."""
         asset = await MediaService._get(session, business_id=business_id, asset_id=asset_id)
-        if asset.source_type not in {"gemini_generated", "stock_photo"}:
+        if asset.source_type not in DRAWN_SOURCES | {"stock_photo"}:
             raise ValidationError("Only a draft picture LOCAH made needs approving")
         asset.approval_state = "approved"
         await session.flush()
@@ -590,7 +594,7 @@ class MediaService:
         # the editor says so, and offers to replace, keep or remove it.
         resolved: dict[str, Any] = {
             "url": asset.public_url, "alt_text": asset.alt_text,
-            "draft": getattr(asset, "source_type", None) == "gemini_generated"
+            "draft": getattr(asset, "source_type", None) in DRAWN_SOURCES
             and getattr(asset, "approval_state", None) == "draft"}
         credit = MediaService.credit_of(asset)
         if credit:
