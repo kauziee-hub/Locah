@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -150,7 +151,7 @@ def fetch() -> None:
             rel = f"ofl/{face.family_dir}/{cut.source}"
             if not target.exists():
                 url = (f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_FONTS_COMMIT}/"
-                       + urllib.request.quote(rel))
+                       + urllib.parse.quote(rel))
                 print("fetch", rel, flush=True)
                 target.write_bytes(_get(url))
             lock[cut.source] = {"path": rel, "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
