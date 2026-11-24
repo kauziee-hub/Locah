@@ -17,6 +17,12 @@ model. Gemini drawing remains only as an explicit opt-in (`IMAGE_PROVIDER=gemini
 GEMINI_IMAGE_MODEL) — it is never a fallback — and is the only way to draw a
 logo. `IMAGE_PROVIDER=none` switches pictures off. A failed image is a missing
 image, never a second paid call.
+
+One fallback exists, and only by name: `IMAGE_FALLBACK=cloudflare` draws a MOOD
+slot (cover, story, a passage) that the photo search left empty, with FLUX.1
+schnell on Cloudflare Workers AI — about 170 free pictures a day, then a
+fraction of a cent each (checked 2026-11-24). Never a product, a room or
+anything the business sells: those are the owner's or stay empty.
 """
 
 from __future__ import annotations
@@ -109,6 +115,86 @@ def pictures_available() -> bool:
 
 def image_model() -> str:
     return (os.getenv("GEMINI_IMAGE_MODEL") or GEMINI_IMAGE_MODEL).strip()
+
+
+_CLOUDFLARE_BASE = "https://api.cloudflare.com/client/v4/accounts"
+CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
+
+
+def _cloudflare_keys() -> tuple[str, str]:
+    return (os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip(), os.getenv("CLOUDFLARE_API_TOKEN", "").strip())
+
+
+def fallback_drawing_available() -> bool:
+    """Whether a mood slot the photo search left empty may be drawn (explicit opt-in)."""
+    account, token = _cloudflare_keys()
+    return (os.getenv("IMAGE_FALLBACK") or "").strip().lower() == "cloudflare" and bool(account and token)
+
+
+def cloudflare_model() -> str:
+    return (os.getenv("CLOUDFLARE_IMAGE_MODEL") or CLOUDFLARE_IMAGE_MODEL).strip()
+
+
+def cloudflare_image_from(payload: Any) -> tuple[str, bytes] | None:
+    """The picture in a Workers AI answer: {"result": {"image": "<base64>"}, "success": true}."""
+    if not isinstance(payload, dict) or payload.get("success") is False:
+        return None
+    result = payload.get("result")
+    data = result.get("image") if isinstance(result, dict) else None
+    if not isinstance(data, str) or not data:
+        return None
+    raw = base64.b64decode(data)
+    mime = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    return mime, raw
+
+
+async def _generate_cloudflare(
+    prompt: str, *, timeout_seconds: int
+) -> tuple[GeneratedImage | None, str]:
+    account, token = _cloudflare_keys()
+    if not (account and token):
+        _log.info("website.image_generation.skipped", reason="no_fallback_key")
+        return None, "unavailable"
+    guard_external_ai("image", "cloudflare", "image")
+    model = cloudflare_model()
+    started = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(
+                f"{_CLOUDFLARE_BASE}/{account}/ai/run/{model}",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                # schnell is made for 4 steps; it draws 1024 square, which every
+                # section crops to its own shape.
+                json={"prompt": prompt[:2000], "steps": 4},
+            )
+        latency_ms = int((time.monotonic() - started) * 1000)
+        if response.status_code >= 400:
+            _log.warning("website.image_generation.failed", provider="cloudflare", status_code=response.status_code,
+                         latency_ms=latency_ms, error=response.text[:400])
+            return None, _reason_for(response.status_code, response.text[:400])
+        found = cloudflare_image_from(response.json())
+        if found is None:
+            _log.warning("website.image_generation.empty", provider="cloudflare", latency_ms=latency_ms)
+            return None, "error"
+        mime, data = found
+        _log.info("website.image_generation.ok", provider="cloudflare", model=model, latency_ms=latency_ms,
+                  bytes=len(data))
+        return GeneratedImage(mime_type=mime, bytes=data, model=model, latency_ms=latency_ms, prompt=prompt), ""
+    except Exception as exc:  # noqa: BLE001 — a drawing must never fail the draft
+        _log.warning("website.image_generation.error", provider="cloudflare", error=str(exc)[:400])
+        return None, "error"
+
+
+async def draw_fallback(
+    prompt: str, *, aspect_ratio: str = "16:9", timeout_seconds: int = 60
+) -> tuple[GeneratedImage | None, str]:
+    """A mood picture the photo search could not find, drawn — (image, "") or (None, reason)."""
+    del aspect_ratio  # the model draws square; the section crops
+    if not fallback_drawing_available():
+        return None, "unavailable"
+    if _refused(prompt):
+        return None, "rejected"
+    return await _generate_cloudflare(prompt, timeout_seconds=timeout_seconds)
 
 
 def gemini_image_body(prompt: str, aspect_ratio: str) -> dict[str, Any]:
@@ -207,6 +293,16 @@ async def _generate_gemini(
         return None, "error"
 
 
+def _refused(prompt: str) -> bool:
+    """A drawing the rule forbids (media_prompts.unsafe_drawing) is never sent."""
+    from platform_core.website.media_prompts import unsafe_drawing
+
+    shown = unsafe_drawing(prompt)
+    if shown:
+        _log.warning("website.image_generation.refused", reason="would_show_the_business", shows=shown)
+    return bool(shown)
+
+
 async def generate_image(
     prompt: str,
     *,
@@ -217,6 +313,8 @@ async def generate_image(
     if image_provider() != "gemini":
         _log.info("website.image_generation.skipped", reason="no_image_provider")
         return None, "unavailable"
+    if _refused(prompt):
+        return None, "rejected"
     return await _generate_gemini(prompt, aspect_ratio=aspect_ratio, timeout_seconds=timeout_seconds)
 
 

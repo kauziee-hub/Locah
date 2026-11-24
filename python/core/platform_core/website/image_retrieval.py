@@ -322,6 +322,8 @@ class PhotoBrief:
     concept: str = ""  # the site's design DNA concept
     atmosphere: str = ""
     style: str = ""
+    wants: str = ""  # what the picture must do, when the trade's own differs from the role's
+    place: str = ""  # region and setting searched as such ("coorg coffee estate")
 
     @property
     def section_role(self) -> str:
@@ -340,7 +342,8 @@ class PhotoBrief:
         context: dict[str, Any] = {
             "slot": self.key, "role": self.section_role, "importance": intent.importance,
             "subject": self.subject, "purpose": self.purpose, "section": self.section,
-            "aspect_ratio": self.aspect, "business": self.trade, "what_the_picture_must_do": intent.wants,
+            "aspect_ratio": self.aspect, "business": self.trade,
+            "what_the_picture_must_do": self.wants or intent.wants,
             "composition": intent.composition, "visual_world": self.world, "atmosphere": self.atmosphere,
             "light": self.light, "colour_grade": self.grade, "palette": list(self.palette),
             "how_it_is_used": self.framing, "must_avoid": [*self.avoid, *intent.avoid],
@@ -443,6 +446,8 @@ def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, con
     role = role_for(slot.purpose, slot.key, slot.section)
     if role == "hero":
         framing = HERO_FRAMING.get(hero, "The subject fills the frame, softly lit, calm space for a headline.")
+    elif role in {"story", "process"} and bool(getattr(slot, "wants", None)):
+        framing = "A quiet, lived-in scene of the place, seen as a guest would, with room for text beside it."
     elif role in {"story", "process"}:
         framing = "A quiet, lived-in scene of where the work happens, seen from the side."
     elif role == "statement":
@@ -451,7 +456,8 @@ def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, con
         framing = "The subject fills the frame, centred, styled simply."
     business, locality, offers = _owner_words(bp) if bp is not None else ("", "", ())
     subject = slot.subject
-    if role in {"story", "process", "detail"} and str(get("archetype") or "") in _GOODS_ARCHETYPES:
+    wants = str(getattr(slot, "wants", "") or "")
+    if role in {"story", "process", "detail"} and str(get("archetype") or "") in _GOODS_ARCHETYPES and not wants:
         subject = goods_subject(role, bp, slot.subject)
     avoid: tuple[str, ...] = _DEFAULT_AVOID
     if role in {"story", "process"} or _PEOPLE_TRADE.search(" ".join([trade, business, *offers])):
@@ -466,7 +472,8 @@ def brief_for_slot(slot: Any, direction: Any, trade: str, *, bp: Any = None, con
         truth_class=slot.truth_class, aspect=slot.aspect, trade=trade, world=shoot.world,
         light=art.light or shoot.light, grade=shoot.grade, palette=shoot.palette, framing=framing,
         avoid=avoid + art.avoid, role=role, business=business, locality=locality, offerings=offers,
-        concept=art.concept, atmosphere=art.atmosphere, style=art.style,
+        concept=art.concept, atmosphere=art.atmosphere, style=art.style, wants=wants,
+        place=str(getattr(slot, "place", "") or ""),
     )
 
 
@@ -782,15 +789,48 @@ async def verify_image_url(url: str, *, timeout_seconds: float = 8.0) -> tuple[b
     return True, kind
 
 
+# Previews fetched at once from one host. Every candidate of three slots at
+# once drew 429s from Pixabay's image host (17 in one hotel build, 2026-11-23),
+# and a picture the judge cannot see can never be chosen.
+_PREVIEWS_PER_HOST = 3
+_PREVIEW_GATES: dict[tuple[int, str], asyncio.Semaphore] = {}
+
+
+def _preview_gate(url: str) -> asyncio.Semaphore:
+    from urllib.parse import urlparse
+
+    key = (id(asyncio.get_running_loop()), urlparse(url).hostname or "")
+    gate = _PREVIEW_GATES.get(key)
+    if gate is None:
+        if len(_PREVIEW_GATES) > 64:
+            _PREVIEW_GATES.clear()  # gates of finished event loops
+        gate = _PREVIEW_GATES[key] = asyncio.Semaphore(_PREVIEWS_PER_HOST)
+    return gate
+
+
 async def fetch_preview(url: str, *, timeout_seconds: float = 10.0) -> ImageInput | None:
-    """A small preview, in memory only, for a model that cannot take a URL."""
+    """A small preview, in memory only, for a model that cannot take a URL.
+
+    A few at a time per host, and a "too many requests" is waited out briefly
+    (twice at most) rather than losing the candidate."""
     if not url_allowed(url):
         return None
+    response = None
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False,
-                                     headers={"User-Agent": USER_AGENT}) as client:
-            response = await client.get(url)
+        async with _preview_gate(url), httpx.AsyncClient(
+                timeout=timeout_seconds, follow_redirects=False, headers={"User-Agent": USER_AGENT}) as client:
+            for attempt in range(3):
+                response = await client.get(url)
+                if response.status_code != 429:
+                    break
+                try:
+                    wait = float(response.headers.get("retry-after") or 0)
+                except ValueError:
+                    wait = 0.0
+                await asyncio.sleep(min(max(wait, 1.0 + attempt), 4.0))
     except Exception:  # noqa: BLE001
+        return None
+    if response is None:
         return None
     kind = response.headers.get("content-type", "").split(";")[0].strip().lower()
     if response.status_code != 200 or kind not in ALLOWED_PREVIEW_MIME or len(response.content) > _MAX_PREVIEW_BYTES:
@@ -1165,7 +1205,15 @@ async def retrieve_for_slot(
     try:
         outcome = await asyncio.wait_for(_loop(brief, provider, search, site, fresh), timeout=slot_timeout_seconds())
     except TimeoutError:
+        _log.info("website.image_retrieval.slot_empty", slot=brief.key, role=brief.section_role, reason="timed_out")
         return Outcome(None, "timed_out")
+    if outcome.found is None:
+        # Why a slot stayed empty, said where it can be read (a hotel's hero came
+        # back bare with only "none_qualified" to go on, 2026-11-23).
+        last = outcome.log[-1] if outcome.log else {}
+        _log.info("website.image_retrieval.slot_empty", slot=brief.key, role=brief.section_role,
+                  reason=outcome.reason, rounds=len(outcome.log), queries=list(last.get("queries") or [])[:4],
+                  pool=last.get("pool"), why=list(last.get("reasons") or [])[:6])
     if outcome.found is not None:
         if used is not None:
             used.add(outcome.found.key)
@@ -1217,6 +1265,11 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
             # the plain name better. Always asked as well: an owner run found
             # no appam at all across three styled searches (2026-11-13).
             queries = [*queries, plain]
+        if brief.place and brief.place.casefold() not in {q.casefold() for q in queries}:
+            # First, so the editorial source is asked it: a library knows "coorg
+            # coffee estate" far better than "hillside estate bungalow among coffee
+            # plantation trees" (a hotel's cover found nothing that way, 2026-11-24).
+            queries = [brief.place, *queries]
         errors: list[dict[str, Any]] = []
         try:
             pool, hits = await gather_pool(search, brief, queries, skip=site.used | rejected | site.elsewhere,

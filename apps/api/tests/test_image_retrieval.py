@@ -220,7 +220,7 @@ def test_unsplash_rows_become_normalised_candidates_with_compliance_fields() -> 
     assert c.average_color == "#26180c" and c.query == "sourdough morning light"
     credit = c.credit()
     assert credit["line"] == "Photo by Ada Baker on Unsplash"
-    assert "utm_source=locah" in credit["name_url"] and "utm_medium=referral" in credit["source_url"]
+    assert "utm_source=locah_website_builder" in credit["name_url"] and "utm_medium=referral" in credit["source_url"]
     assert parse_unsplash({"results": None}) == [] and parse_unsplash([]) == []
 
 
@@ -824,3 +824,31 @@ def test_an_item_is_also_searched_by_its_plain_name() -> None:
     assert plain_subject_query(stew) == "chicken stew"  # type: ignore[arg-type]
     hero = SimpleNamespace(key="hero", subject="a Kerala kitchen's table")
     assert plain_subject_query(hero) == ""  # type: ignore[arg-type]
+
+
+# The real fetcher: the suite's own fixture swaps it out to keep tests off the network.
+_REAL_FETCH_PREVIEW = ir.fetch_preview
+
+
+@pytest.mark.asyncio
+async def test_a_throttled_preview_is_waited_out_not_lost(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hotel build, 2026-11-23: 17 previews refused with 429 by Pixabay's image
+    host — pictures the judge never saw. A 429 is waited out (briefly) and retried."""
+    answers = [httpx.Response(429, headers={"retry-after": "1"}),
+               httpx.Response(200, content=b"\xff\xd8\xff" + b"0" * 64, headers={"content-type": "image/jpeg"})]
+    asked: list[str] = []
+
+    class Throttled(_Client):
+        async def get(self, url: str, params: dict[str, Any] | None = None,
+                      headers: dict[str, str] | None = None) -> httpx.Response:
+            asked.append(url)
+            return answers.pop(0)
+
+    async def no_wait(seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(ir.httpx, "AsyncClient", Throttled)
+    monkeypatch.setattr(ir.asyncio, "sleep", no_wait)
+    preview = await _REAL_FETCH_PREVIEW("https://images.unsplash.com/photo-1?w=400")
+    assert preview is not None and preview.mime_type == "image/jpeg"
+    assert len(asked) == 2

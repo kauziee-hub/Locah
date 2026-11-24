@@ -181,3 +181,56 @@ async def test_a_gemini_failure_does_not_spend_on_the_other_provider(
     monkeypatch.setattr(image_generation.httpx, "AsyncClient", recorder.client)
     assert await generate_image_bytes("draw") is None
     assert len(recorder.calls) == 1 and "x.ai" not in recorder.calls[0][0]
+
+
+# ------------------------------------------------------- the drawn fallback (Cloudflare)
+def test_the_drawing_fallback_is_on_only_by_name_and_with_both_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_core.website.image_generation import fallback_drawing_available
+
+    for name in ("IMAGE_FALLBACK", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    assert fallback_drawing_available() is False
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-token")
+    assert fallback_drawing_available() is False  # keys alone never switch drawing on
+    monkeypatch.setenv("IMAGE_FALLBACK", "cloudflare")
+    assert fallback_drawing_available() is True
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN")
+    assert fallback_drawing_available() is False
+
+
+@pytest.mark.asyncio
+async def test_a_fallback_drawing_sends_the_token_in_a_header_and_reads_the_picture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform_core.website.image_generation import draw_fallback
+
+    monkeypatch.setenv("IMAGE_FALLBACK", "cloudflare")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct123")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-secret")
+    monkeypatch.delenv("CLOUDFLARE_IMAGE_MODEL", raising=False)
+    jpeg = b"\xff\xd8\xff\xe0 a picture"
+    recorder = _Recorder(httpx.Response(200, json={"result": {"image": base64.b64encode(jpeg).decode()},
+                                                   "success": True, "errors": []}))
+    monkeypatch.setattr(image_generation.httpx, "AsyncClient", recorder.client)
+    image, reason = await draw_fallback("a coffee estate at dawn", aspect_ratio="16:9")
+    assert reason == "" and image is not None and image.bytes == jpeg and image.mime_type == "image/jpeg"
+    url, headers, body = recorder.calls[0]
+    assert url.endswith("/accounts/acct123/ai/run/@cf/black-forest-labs/flux-1-schnell")
+    assert "cf-secret" not in url and headers["Authorization"] == "Bearer cf-secret"
+    assert body == {"prompt": "a coffee estate at dawn", "steps": 4}
+
+
+@pytest.mark.asyncio
+async def test_a_refused_fallback_drawing_is_a_missing_picture_with_its_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform_core.website.image_generation import draw_fallback
+
+    monkeypatch.setenv("IMAGE_FALLBACK", "cloudflare")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct123")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-secret")
+    recorder = _Recorder(httpx.Response(429, json={"success": False, "errors": [{"message": "daily limit"}]}))
+    monkeypatch.setattr(image_generation.httpx, "AsyncClient", recorder.client)
+    image, reason = await draw_fallback("anything")
+    assert image is None and reason == "quota" and len(recorder.calls) == 1

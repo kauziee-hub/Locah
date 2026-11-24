@@ -54,6 +54,7 @@ from platform_core.interview.models import (
 from platform_core.website.image_generation import GeneratedImage, generate_image, picture_source
 from platform_core.website.media_prompts import (
     PROMPT_VERSION,
+    drawing_prompt,
     aspect_for_hero,
     build_prompt,
     shoot_brief,
@@ -128,6 +129,12 @@ class Slot:
     purpose: str = "category"
     truth_class: TruthClass = "representative"
     section: str = ""
+    # What this picture must do, when the trade's own differs from the role's
+    # ("hands and tools at work" is no picture of a stay).
+    wants: str = ""
+    # The region and setting, searched as such ("coorg coffee estate"): photo
+    # libraries know a region far better than a styled description of it.
+    place: str = ""
 
 
 def slug(text: str) -> str:
@@ -183,10 +190,78 @@ def may_draw(bp: BusinessBlueprint, direction: CreativeDirection) -> bool:
     return drafts_allowed(bp)
 
 
+# Where a stay is, in the owner's words: "our coffee estate", "on the backwaters".
+_STAY_SETTING = re.compile(
+    r"\b(?:coffee|tea|spice|cardamom|pepper|rubber|areca)\s+(?:estate|plantation|farm)s?\b"
+    r"|\b(?:beach|seaside|sea view|backwaters?|lakeside|lake|riverside|river|forest|jungle|hills?|hill station|"
+    r"mountains?|valley|farm|vineyard|orchard|heritage|palace|haveli|fort|desert|island|tea gardens?)\b", re.I)
+_STAY_SUBJECTS = {
+    "story": ("the setting around the stay — {setting}: a veranda looking out over it, paths and greenery, "
+              "the landscape in early light",
+              "the place itself and what a guest wakes up to: the view, the grounds and the landscape around the "
+              "stay — real and lived-in, never a showroom"),
+    "process": ("a guest's slow morning at the stay — breakfast laid on a veranda table looking out over {setting}, "
+                "soft light, no faces",
+                "one moment of the stay a guest would have — breakfast outside, a walk through the grounds, the "
+                "evening by a fire — lived-in, faces never the subject"),
+    "detail": ("a close detail of the place — a cup of coffee on a wooden veranda rail beside local stone "
+               "and leaves, soft light",
+               "a close detail that says this place — its materials, its light, its own produce — calm and "
+               "tactile"),
+}
+
+
+def stay_setting(bp: BusinessBlueprint) -> str:
+    """The stay's setting in the owner's words ("coffee estate"), or "" when they said none."""
+    from platform_core.interview.spelling import fix_words
+
+    facts = {**bp.known_facts, **bp.unconfirmed_facts}
+    said = " ".join([str(facts[k].value) for k in ("description", "offerings", "classification") if k in facts]
+                    + [m.text for m in bp.messages if m.role == "user"][:3])
+    found = _STAY_SETTING.search(fix_words(said))
+    return found.group(0).casefold() if found else ""
+
+
+_STAY_HERO_WANTS = ("the stay's setting at a glance — the land around it is what guests come for: {setting} can "
+                    "carry the picture on its own, a building in it is welcome; wide and calm, with room for a "
+                    "headline; never a different kind of place (a beach for hills, a city for an estate)")
+
+
+def stay_place(bp: BusinessBlueprint) -> str:
+    """The stay's own place as one search ("coorg madikeri"), or its setting when no place was said.
+
+    The place alone: Unsplash had 4,727 pictures for "coorg madikeri" and one
+    for "coorg coffee estate" (checked 2026-11-24)."""
+    facts = {**bp.known_facts, **bp.unconfirmed_facts}
+    where = str(facts["locations"].value).split(";")[0].strip() if "locations" in facts else ""
+    where = re.sub(r"\b(?:near|in|at|road|rd|street|st|main|cross|layout|nagar|colony)\b|[\d,.#/-]+", " ", where,
+                   flags=re.I)
+    return " ".join(where.split()[:3]).casefold() or stay_setting(bp)
+
+
+def _stay_slots(bp: BusinessBlueprint, names: list[str]) -> tuple[str, dict[str, tuple[str, str]]]:
+    """A stay's hero subject and its story, process and detail subjects with what each must do."""
+    facts = {**bp.known_facts, **bp.unconfirmed_facts}
+    setting = stay_setting(bp)
+    where = str(facts["locations"].value).split(";")[0].strip() if "locations" in facts else ""
+    del names
+    # The land, never a room: a drawn or borrowed bedroom on a hotel's cover
+    # passes for the guest's own room (a test drawing of "bungalow room, valley
+    # cottage… on a coffee estate" came back a bedroom, 2026-11-24).
+    # Said as what IS in the picture (an image model draws the "beds" in "no
+    # beds"), and short enough to survive the prompt's subject limit.
+    hero = (f"{'a ' + setting if setting else 'green countryside'}{f' near {where}' if where else ''} seen from a "
+            "hillside outdoors: green slopes, a few rooftops small in the distance, soft morning light")[:158]
+    place = setting or "the grounds and the view"
+    return hero, {k: (subject.format(setting=place), wants) for k, (subject, wants) in _STAY_SUBJECTS.items()}
+
+
 def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot]:
     """The pictures this site should have, most important first — with each
     slot's truth class. Factual slots are listed (the plan shows what a real
     photo would improve) but never drawn."""
+    from platform_core.interview.playbooks import is_stay
+
     arche = direction.archetype
     groups = [g for g in bp.taxonomy.groups if g.name]
     names = [_clean(g.name) for g in groups if _clean(g.name)]
@@ -200,8 +275,17 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
                         "show the service or its tools rather than generic decorative furnishings")
     else:
         hero_subject = _HERO_MOOD.get(arche, "")
+    stay = is_stay(bp)
+    stay_parts: dict[str, tuple[str, str]] = {}
+    if stay:
+        # A stay's cover is the place in its landscape, in the owner's words
+        # ("on a coffee estate near Coorg"), not a generic villa facade.
+        hero_subject, stay_parts = _stay_slots(bp, names)
+    place = stay_place(bp) if stay else ""
     slots = [Slot("hero", hero_subject, aspect_for_hero(direction.hero), "hero", "Draft visual · cover",
-                  purpose="hero", truth_class="mood", section="hero")]
+                  purpose="hero", truth_class="mood", section="hero",
+                  wants=_STAY_HERO_WANTS.format(setting=stay_setting(bp) or "the landscape") if stay else "",
+                  place=place)]
     featured = FEATURED_ITEMS.get(arche, 0)
     items: list[Slot] = []
     if featured and not evidence:
@@ -229,19 +313,30 @@ def plan_slots(bp: BusinessBlueprint, direction: CreativeDirection) -> list[Slot
     story = _STORY.get(arche)
     if story and arche == "service_appointment" and names:
         story = f"{story} — the work and tools for {', '.join(names[:3])}"
+    if stay:
+        story = stay_parts["story"][0]
     if story and direction.story_variant == "story_split":
         slots.append(Slot("story", story, "4:5", "gallery", "Draft visual · where it is made",
-                          purpose="story", truth_class="mood", section="about"))
+                          purpose="story", truth_class="mood", section="about",
+                          wants=stay_parts["story"][1] if stay else "", place=place))
     # Pictures for the premium site's passages and inner-page openings.
     if not evidence:
         trade = ", ".join(names[:3])
         process = _PROCESS.get(arche)
-        if process:
+        if stay:
+            slots.append(Slot("process", stay_parts["process"][0], "5:4", "gallery", "Draft visual · the stay",
+                              purpose="story", truth_class="mood", section="media_text",
+                              wants=stay_parts["process"][1], place=place))
+        elif process:
             slots.append(Slot("process", f"{process}{f' ({trade})' if trade else ''}", "5:4", "gallery",
                               "Draft visual · how it is made", purpose="story", truth_class="mood",
                               section="media_text"))
         detail = _DETAIL.get(arche)
-        if detail:
+        if stay:
+            slots.append(Slot("detail", stay_parts["detail"][0], "5:4", "gallery", "Draft visual · close detail",
+                              purpose="story", truth_class="mood", section="media_text",
+                              wants=stay_parts["detail"][1]))
+        elif detail:
             slots.append(Slot("detail", f"{detail}{f' ({trade})' if trade else ''}", "5:4", "gallery",
                               "Draft visual · close detail", purpose="story", truth_class="mood",
                               section="media_text"))
@@ -355,9 +450,65 @@ def picture_for(bp: BusinessBlueprint, key: str) -> str | None:
     return None
 
 
+# A place's open land, by the setting the owner named — never its buildings.
+_NATURE = (
+    (r"beach|sea|seaside|island", "a quiet sea shore and wide horizon"),
+    (r"backwater|lake|river", "still water between green palm-lined banks"),
+    (r"forest|jungle", "a dense green forest canopy in mist"),
+    (r"desert", "soft desert dunes under a wide sky"),
+    (r"mountain|hill|valley|estate|plantation|tea|coffee|spice", "rolling green hills and valleys in morning mist"),
+)
+# Texture or abstract art in the site's own art direction.
+_TEXTURE = {
+    "warm_craft": "a close-up of natural texture: weathered stone and dry leaves in warm light",
+    "quiet_luxury": "smooth grey river stones in soft even light, close-up",
+    "noir_editorial": "a single beam of light across rough dark stone, deep shadows",
+    "fresh_market": "fresh green leaves with morning dew, close-up in bright daylight",
+    "playful_pop": "bold abstract paper shapes in {colours}",
+    "calm_care": "a soft abstract gradient of {colours} with gentle light",
+    "technical_grid": "abstract geometric lines of light on a dark ground",
+    "kinetic_sport": "abstract streaks of light in motion across a dark ground",
+}
+
+
+def drawing_for(slot: Slot, bp: BusinessBlueprint, direction: CreativeDirection) -> str:
+    """The only kind of picture LOCAH draws (the drawing rule, media_prompts):
+    a place-led business's cover is its region's open land; everything else is
+    a texture or abstract image in the site's art direction. Nothing the owner
+    sells or has — no item, room, dish, person or building — reaches the prompt."""
+    from platform_core.interview.playbooks import is_stay
+
+    brief = shoot_brief(direction)
+    facts = {**bp.known_facts, **bp.unconfirmed_facts}
+    where = re.sub(r"[^A-Za-z ]+", " ", str(facts["locations"].value).split(";")[0]) if "locations" in facts else ""
+    where = " ".join(w for w in where.split() if w.casefold() not in {"near", "in", "at", "road", "rd"})[:40]
+    setting = stay_setting(bp)
+    place_led = is_stay(bp) or bool(setting)
+    if place_led:
+        # A place-led business's passages are its land too, each a different
+        # view (three "light on a plain wall" passages came back as one empty
+        # room three times, 2026-11-24).
+        nature = next((land for pattern, land in _NATURE if re.search(pattern, setting or "hill")),
+                      "rolling green hills and valleys in morning mist")
+        near = f" near {where.title()}" if where else ""
+        views = {"hero": f"{nature}{near}, wide open sky", "statement": f"{nature}{near}, wide open sky",
+                 "story": f"a narrow path winding through green country{near} in early light",
+                 "process": "morning mist drifting over green slopes at dawn",
+                 "detail": "dew on fresh green leaves, close-up in soft light"}
+        return drawing_prompt(views.get(slot.key, views["process"]), brief)
+    colours = " and ".join(c for c in brief.palette[:2] if c) or "soft muted colours"
+    concept = site_concept(bp, direction)
+    texture = _TEXTURE.get(concept, "soft abstract shapes in {colours}").format(colours=colours)
+    return drawing_prompt(texture, brief, abstract="abstract" in texture)
+
+
 def prompt_for(slot: Slot, direction: CreativeDirection, trade: str) -> str:
+    # A stay's passages are the place seen as a guest would, not "where the work happens".
+    framing = ("A quiet, lived-in scene of the place outdoors, seen as a guest would."
+               if slot.wants and slot.purpose == "story" else "")
     return str(build_prompt(subject=slot.subject or trade, purpose=slot.purpose, truth_class=slot.truth_class,
-                            brief=shoot_brief(direction), trade=trade, hero_style=direction.hero))
+                            brief=shoot_brief(direction), trade=trade, hero_style=direction.hero,
+                            framing=framing))
 
 
 Drawer = Callable[[str, str], Awaitable[tuple[GeneratedImage | None, str]]]
@@ -371,12 +522,14 @@ async def draw_missing(
     draw: Drawer | None = None,
     concurrency: int = 3,
 ) -> list[tuple[Slot, GeneratedImage | None, str]]:
-    """Draw the planned slots that have no picture yet, a few at a time.
+    """Draw the planned mood slots that have no picture yet, a few at a time.
 
-    Never a factual slot, never when the owner asked for a text-led site, never
-    a slot the owner removed, never a slot already filled.
+    Only mood slots (the cover, the story, the passages), each drawn as the
+    drawing rule allows (`drawing_for`): never what the business sells or has
+    — a drawn room or dish would pass for theirs. Never when the owner asked
+    for a text-led site, never a slot the owner removed or already filled.
     """
-    todo = _slots_to_fill(bp, direction)
+    todo = [s for s in _slots_to_fill(bp, direction) if s.truth_class == "mood"]
     if not todo:
         return []
     gate = asyncio.Semaphore(concurrency)
@@ -384,7 +537,7 @@ async def draw_missing(
 
     async def one(slot: Slot) -> tuple[Slot, GeneratedImage | None, str]:
         async with gate:
-            image, reason = await drawer(prompt_for(slot, direction, trade), slot.aspect)
+            image, reason = await drawer(drawing_for(slot, bp, direction), slot.aspect)
             return slot, image, reason
 
     return list(await asyncio.gather(*(one(s) for s in todo)))
@@ -568,7 +721,7 @@ def section_image_brief(theme: dict[str, object], section_type: str, trade: str,
 # evidence: a named project, a studio's work, a real gallery.
 REAL_PHOTO_MESSAGE = "This should be a real photo of your work — upload one instead."
 _MOOD_SECTIONS = frozenset({"hero", "cta_band", "about"})
-_ROW_SECTIONS = frozenset({"category_showcase", "product_showcase"})
+_ROW_SECTIONS = frozenset({"category_showcase", "product_showcase", "composition"})
 _EVIDENCE_VARIANTS = frozenset({"project_cards"})
 _NO_ROW_PICTURES = frozenset({"plan_cards"})
 

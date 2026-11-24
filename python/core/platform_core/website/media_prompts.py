@@ -62,10 +62,52 @@ class ShootBrief:
                 f"Lens: {self.lens}. Colour grade: {self.grade}.{accents}")
 
 
+# THE DRAWING RULE (founder, firm, 2026-11-24): a drawn picture may show
+# scenery, the region, mood, texture or abstract art — never rooms, food,
+# dishes, staff, products, interiors, amenities or buildings a visitor would
+# read as the real business. Real things come from the owner or from stock.
+# Checked on every drawing at the provider boundary (`unsafe_drawing`).
+FORBIDDEN_IN_DRAWINGS = re.compile(
+    r"\b(rooms?|bed(?:room)?s?|suites?|interiors?|lobby|lobbies|reception|bathrooms?|pools?|spas?|"
+    r"verandas?|verandahs?|balcon(?:y|ies)|terraces?|lounges?|amenit(?:y|ies)|walls?|floors?|ceilings?|"
+    r"kitchens?|cooking|food|foods|dish(?:es)?|plates?|bowls?|cups?|mugs?|meals?|breakfast|lunch|dinner|"
+    r"snacks?|cakes?|breads?|coffee|tea|drinks?|cocktails?|menus?|biryani|curry|"
+    r"people|person|persons|faces?|hands?|staff|chefs?|waiters?|customers?|guests?|patients?|doctors?|"
+    r"stylists?|trainers?|"
+    r"products?|shelf|shelves|counters?|shops?|stores?|showrooms?|packaging|bottles?|jars?|"
+    r"equipment|machines?|barbells?|racks?|tools?|chairs?|tables?|"
+    r"buildings?|houses?|cottages?|villas?|bungalows?|hotels?|resorts?|rooftops?|facades?|storefronts?|"
+    r"offices?|clinics?|salons?|gyms?|studios?|restaurants?|cafes?|caf\u00e9s?)\b", re.I)
+
+
+def unsafe_drawing(prompt: str) -> str:
+    """The first forbidden thing a drawing prompt would show, or "" when it is safe.
+
+    The prompt's own "never" sentences are not what it shows, so they are left
+    out; a logo (no Subject / Motif / series line) is not a scene and passes.
+    """
+    text = prompt or ""
+    if not any(k in text for k in ("Subject:", "Motif:", "Part of one editorial series")):
+        return ""
+    for sentence in (_NEVER, _NEVER_GRAPHIC):
+        text = text.replace(sentence, " ")
+    found = FORBIDDEN_IN_DRAWINGS.search(text)
+    return found.group(0).casefold() if found else ""
+
+
+def drawing_prompt(subject: str, brief: "ShootBrief", *, abstract: bool = False) -> str:
+    """A drawing that shows only what the rule allows: the subject, the site's
+    light and grade — never the site's photo style, which names what it sells."""
+    kind = "An abstract editorial image" if abstract else "A calm editorial landscape photograph"
+    return (f"{kind}. Subject: {subject}. Light: {brief.light}. Colour grade: {brief.grade}. "
+            "Wide, uncluttered composition with open, quiet space.")
+
+
 # Light and grade follow the site's ground: a dark site is shot low-key, a light
 # one airy. The world itself comes from the direction's image style.
 _LOW_KEY = ("low-key directional side light with deep shadows", "rich, deep, slightly desaturated")
-_AIRY = ("soft natural daylight from a window, gentle shadows", "clean, bright and natural")
+# Not "from a window": that put a hotel's landscape behind a bedroom window.
+_AIRY = ("soft natural daylight, gentle shadows", "clean, bright and natural")
 
 
 def shoot_brief(direction: Any) -> ShootBrief:
@@ -122,8 +164,10 @@ def build_prompt(
     brief: ShootBrief,
     trade: str,
     hero_style: str = "",
+    framing: str = "",
 ) -> str:
-    """One image prompt. Raises for a factual slot: those are never drawn."""
+    """One image prompt. Raises for a factual slot: those are never drawn.
+    `framing` replaces the purpose's own when the trade's picture differs."""
     if truth_class == "factual":
         raise ValueError("a factual picture is never generated — it must be the owner's own")
     subject = _clean(subject) or _clean(trade) or "the trade's materials"
@@ -131,7 +175,9 @@ def build_prompt(
     if truth_class == "graphic":
         return (f"A refined, textured editorial illustration for a small business website ({trade}). "
                 f"Motif: {subject}. {brief.sentence()} {_NEVER_GRAPHIC}")
-    if purpose == "hero":
+    if framing:
+        pass
+    elif purpose == "hero":
         framing = HERO_FRAMING.get(hero_style, "The subject fills the frame, softly lit.")
     elif purpose == "story":
         framing = "A quiet, lived-in scene of where the work happens, seen from the side."

@@ -50,6 +50,8 @@ from platform_core.interview.models import (
     now,
 )
 from platform_core.interview import voice
+from platform_core.interview.reader import DELEGATED as _DELEGATED  # "u decide", "up to you"
+from platform_core.interview.hours import STAY_DEFAULTS  # what LOCAH sets when an owner leaves a stay's times to it
 from platform_core.interview.orchestrator import BusinessInterviewOrchestrator, QUESTIONS
 from platform_core.interview.understanding import understanding
 from platform_core.interview.website import build_preview, with_draft
@@ -300,6 +302,8 @@ def _clock(hour: str, minute: str | None, half: str | None) -> str | None:
     return f"{h:02d}:{m:02d}" if 0 <= h <= 23 and 0 <= m <= 59 else None
 
 
+
+
 def _stay_rules(said: str) -> dict[str, Any]:
     """A stay's rules from how the owner said them — "check-in 1 pm, check-out
     11 am", "2-night minimum on weekends", "weekend min 2 nites" — as a room
@@ -433,6 +437,12 @@ def place_address(said: str) -> dict[str, str]:
     said = re.sub(r"\s+", " ", said or "").strip(" .,")
     if not said:
         return {}
+    if said[1:] == said[1:].lower():
+        # Typed all in lower case ("coorg madikeri" stood in a hotel's footer):
+        # set as place names. An owner's own capitals ("RS Puram") are kept.
+        small = {"near", "and", "of", "the", "opp", "off", "nr"}
+        said = " ".join(w if i and w.casefold().strip(".,") in small or any(c.isdigit() for c in w)
+                        else w[:1].upper() + w[1:] for i, w in enumerate(said.split(" ")))
     named = place_from_address(said)
     if named is not None:
         out = {"city": named.city, "state": named.state, "country": "IN"}
@@ -1166,10 +1176,17 @@ class BusinessInterviewService:
             if section_type in current:
                 await patch_one(current[section_type], payload)
 
+        def is_teaser(section: dict[str, Any]) -> bool:
+            """The home page's story teaser: passages, or a composed story, that
+            link on to /about."""
+            content = section.get("content") or {}
+            if section.get("section_type_id") == "media_text":
+                return str(content.get("more_path") or "") == "/about"
+            return section.get("section_type_id") == "composition" and content.get("role") == "story" and any(
+                str(b.get("cta_url") or "") == "/about" for b in content.get("items") or [] if isinstance(b, dict))
+
         def teasers() -> list[dict[str, Any]]:
-            """The home page's story teaser: passages that link on to /about."""
-            return [s for _, s in placed.get("media_text", [])
-                    if str((s.get("content") or {}).get("more_path") or "") == "/about"]
+            return [s for kind in ("media_text", "composition") for _, s in placed.get(kind, []) if is_teaser(s)]
 
         if "feel" in kinds:
             design_keys = {"primary_color", "accent_color", "background_color", "text_color", "surface_alt_color",
@@ -1248,12 +1265,14 @@ class BusinessInterviewService:
                         told = fresh_for(slug, "about") or new["about"]
                         await patch_one(section, {"content": told["content"], "is_visible": True,
                                                   "layout_variant": told.get("layout_variant")})
-                    fresh_teaser = next((s for s in fresh_by_slug.get("home", {}).values()
-                                         if s["section_type_id"] == "media_text"
-                                         and (s.get("content") or {}).get("more_path") == "/about"), None)
+                    fresh_home = next((p for p in fresh["pages"] if p.get("slug") == "home"), {}) or {}
+                    fresh_teaser = next((s for s in fresh_home.get("sections") or [] if is_teaser(s)), None)
                     for section in teasers():
+                        # The new words reach a teaser of the same kind; one of
+                        # another kind is shown again as it is.
+                        same = fresh_teaser and fresh_teaser["section_type_id"] == section["section_type_id"]
                         await patch_one(section, {"content": fresh_teaser["content"], "is_visible": True}
-                                        if fresh_teaser else {"is_visible": True})
+                                        if same and fresh_teaser else {"is_visible": True})
                 else:
                     await WebsiteCompositionService.add_section(
                         session, business_id=business.id, page_id=UUID(str(page["id"])), actor_id=actor_id,
@@ -1329,10 +1348,17 @@ class BusinessInterviewService:
             (bp.discovery.get("offerings.structure") or TargetState()).quote]))
         # A stay's check-in, check-out and shortest stay, wherever they were said.
         facts = {**bp.unconfirmed_facts, **bp.known_facts}
+        hours_state = bp.discovery.get("operations.hours") or TargetState()
+        hours_said = hours_state.quote
         stay_rules = _stay_rules(" . ".join(filter(None, [
-            (bp.discovery.get("operations.hours") or TargetState()).quote,
+            hours_said,
             (bp.discovery.get("bookings.format") or TargetState()).quote,
             *(str(facts[k].value) for k in ("opening_hours", "operational_characteristics") if k in facts)])))
+        left_to_locah = hours_state.status in {"declined", "deferred"} or bool(_DELEGATED.search(hours_said or ""))
+        if left_to_locah and not ({"check_in", "check_out"} & set(stay_rules)):
+            # "u decide" (read as no answer): the usual check-in and check-out,
+            # said back in the interview, shown on each room type, changeable.
+            stay_rules = {**STAY_DEFAULTS, **stay_rules}
         for row in _setup_details(bp):
             name = row.get("title", "")
             if not name or name.casefold() in applied:
@@ -1782,6 +1808,7 @@ class BusinessInterviewService:
         images_started = time.monotonic()
         actor = job.triggered_by or business.primary_owner_identity_id
         audit: list[dict[str, Any]] = []
+        drawn: list[Any]  # (slot, outcome) when found; (slot, image, reason) when drawn
         if picture_source() == "stock":
             # Real photographs, found and checked slot by slot (website.image_retrieval).
             found = await retrieve_missing(
@@ -1792,6 +1819,31 @@ class BusinessInterviewService:
             images_ms = int((time.monotonic() - images_started) * 1000)
             drawn_ok = await place_found_pictures(
                 session, bp, found, business_id=job.business_id, actor_id=actor, generation_job_id=job.id)
+            from platform_core.website.image_generation import draw_fallback, fallback_drawing_available
+
+            if fallback_drawing_available():
+                # A cover or passage no photograph fitted: drawn, labelled a draft
+                # visual (a hotel's site came back with none, 2026-11-24).
+                # Not `fallback`: that name is the creative step's fallback reason,
+                # which the build's summary saves (a list of drawings there made
+                # the job unsavable and it was rebuilt every two minutes, 2026-11-24).
+                drawings = await draw_missing(
+                    bp, direction, trade,
+                    draw=lambda prompt, aspect: draw_fallback(prompt, aspect_ratio=aspect, timeout_seconds=60))
+                for slot, image, reason in drawings:
+                    if image is None:
+                        record(bp, slot, None, f"drawing:{reason}")
+                        continue
+                    asset = await MediaService.persist_generated(
+                        session, business_id=job.business_id, actor_id=actor,
+                        purpose="website", mime_type=image.mime_type, body=image.bytes,
+                        alt_text=f"Illustrative picture: {slot.subject or 'cover'}"[:200],
+                        original_filename=f"draft-{slug(slot.key)}.{'png' if image.mime_type == 'image/png' else 'jpg'}",
+                        generated_for=slot.key, generation_job_id=job.id, prompt_version=PROMPT_VERSION,
+                    )
+                    record(bp, slot, UUID(asset["id"]))
+                    drawn_ok += 1
+                images_ms = int((time.monotonic() - images_started) * 1000)
         else:
             drawn = await draw_missing(bp, direction, trade)
             images_ms = int((time.monotonic() - images_started) * 1000)
