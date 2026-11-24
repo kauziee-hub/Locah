@@ -244,11 +244,14 @@ def test_owner_changes_during_personalization_are_kept_and_pictures_are_drawn(
         assert of(talk.site(), "hero")["assets"]["image_asset_id"]["draft"] is False
         assert after["theme"]["palette_key"] == mine["theme"]["palette_key"]  # the owner's "warmer" stands
         assert "Prawns" in str(after)
-        # Model first, then pictures — every prompt from one shoot brief.
+        # Model first, then pictures — every drawing in one site look (light and
+        # grade), and none showing what the shop sells (the drawing rule).
         assert gemini_stubbed["order"][0] == "creative"
-        briefs = {p.split("Part of one editorial series for this brand: ", 1)[1].split(". Light:")[0]
-                  for p in gemini_stubbed["prompts"]}
-        assert len(briefs) == 1
+        from platform_core.website.media_prompts import unsafe_drawing
+
+        looks = {p.split("Light: ", 1)[1].split(" Wide,")[0] for p in gemini_stubbed["prompts"]}
+        assert len(looks) == 1
+        assert all(unsafe_drawing(p) == "" for p in gemini_stubbed["prompts"])
         story = [s for s in every_section(after) if s["section_type_id"] == "about"]
         assert story and story[0]["content"].get("image_asset_id")
 

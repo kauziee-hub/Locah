@@ -359,3 +359,36 @@ async def test_the_drawn_fallback_draws_the_cover_and_passages_never_the_rooms()
     keys = {slot.key for slot, _, _ in drawn}
     assert "hero" in keys and all(s.truth_class == "mood" for s, _, _ in drawn)
     assert not any(k.startswith(("category:", "item:")) for k in keys), keys
+
+
+@pytest.mark.asyncio
+async def test_check_in_is_said_back_even_when_locah_moves_straight_to_ive_got_enough() -> None:
+    """Hotel run r6 (2026-11-24): the model read "u decide pls" as declining
+    check-in on the very turn the site became ready, and the reply went straight
+    to "I've got enough…" without the times. A scripted model plays that turn."""
+    from test_interview_language import Down, Model, blueprint, last_reply
+
+    from platform_core.interview.orchestrator import BusinessInterviewOrchestrator as Engine
+
+    answers = {"catalogue": "bunglow room 7500 valley cotage 9500 family 12500 pool vila 18500 per nite",
+               "bookings": "per nite, weekend min 2 nites", "contact": "kaggodlu road madikeri, 94480 27316"}
+    bp = blueprint("Mistwood Estate Retreat")
+    bp = await Engine.turn(bp, "mistwood estate retreat coorg madikeri, 14 rooms in our cofee estate, cottages + "
+                               "pool vilas, guests book online", provider=Down(), business_type="hotel")
+    for _ in range(8):
+        ask = bp.asks[-1].ask if bp.asks else ""
+        if ask == "hours":
+            break
+        bp = await Engine.turn(bp, answers.get(ask, "no"), provider=Down(), business_type="hotel")
+    assert bp.asks[-1].ask == "hours" and not bp.readiness.ready
+    for target, state in bp.discovery.items():  # everything else already settled
+        if target != "operations.hours" and state.status not in {"answered", "declined"}:
+            state.status = "declined"
+    model = Model({"answered": [{"target": "operations.hours", "summary": "", "quote": "u decide pls",
+                                 "status": "declined"}],
+                   "acknowledgement": "Ah, okay.", "next_target": "", "next_question": ""})
+    bp = await Engine.turn(bp, "u decide pls", provider=model, business_type="hotel")
+    said = last_reply(bp)
+    assert bp.readiness.ready and bp.checkpoint_turn is not None  # the "I've got enough" reply
+    assert said.startswith("I'll use the usual times: check-in from 2 pm, check-out by 11 am."), said
+    assert "enough" in said

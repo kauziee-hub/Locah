@@ -263,11 +263,14 @@ async def test_draft_visuals_are_on_by_default_off_for_a_text_led_site_and_drawn
     assert await draw_missing(bp, direction, "a meat shop", draw=draw) == []
     bp.visual_consent = "unknown"  # an owner with no photos gets pictures by default
     drawn = await draw_missing(bp, direction, "a meat shop", draw=draw)
-    assert [s.key for s, _, _ in drawn] == ["hero", "category:chicken", "category:mutton",
-                                           "category:fish-seafood", "story", "process", "detail"]
-    assert all("One continuous photograph" in p for p in calls)
-    assert all("No text" in p and "people" in p for p in calls)
-    assert all("farm" not in p.lower() and "240" not in p for p in calls)
+    # The drawing rule (founder, 2026-11-24): only the cover and the passages are
+    # drawn, never what the shop sells — its chicken, mutton and fish are its own
+    # photographs or none.
+    assert [s.key for s, _, _ in drawn] == ["hero", "story", "process", "detail"]
+    from platform_core.website.media_prompts import unsafe_drawing
+
+    assert all(unsafe_drawing(p) == "" for p in calls), calls
+    assert all("farm" not in p.lower() and "240" not in p and "chicken" not in p.lower() for p in calls)
     for slot, _, _ in drawn:
         record(bp, slot, uuid4())
     assert await draw_missing(bp, direction, "a meat shop", draw=draw) == []  # cached
@@ -275,7 +278,7 @@ async def test_draft_visuals_are_on_by_default_off_for_a_text_led_site_and_drawn
     found = sections(payload)
     assert found["hero"]["content"]["image_asset_id"] == picture_for(bp, "hero")
     boards = found["product_showcase"]["content"]["categories"]
-    assert all(c.get("image_asset_id") for c in boards)
+    assert not any(c.get("image_asset_id") for c in boards)  # the shop's own photos or none, never drawn
     # The story has its own picture: the hero is not shown three times.
     storied = sections(compose_site(
         bp, direction, WebsiteCopy(about_body="Family run for eight years."), business_type="other",
