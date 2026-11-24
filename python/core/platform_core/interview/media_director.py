@@ -606,6 +606,8 @@ def photo_audit(found: list[tuple[Slot, Any]]) -> list[dict[str, Any]]:
             row["reasons"] = [str(r)[:160] for r in (entry.get("reasons") or [])[:4]]
             if entry.get("selected"):
                 row["selected"] = str(entry["selected"])[:80]
+            if entry.get("passed_over"):
+                row["passed_over"] = [str(r)[:160] for r in entry["passed_over"][:4]]
             rounds.append(row)
         rows.append({"key": slot.key, "reason": str(getattr(outcome, "reason", "") or "")[:60], "rounds": rounds})
     return rows

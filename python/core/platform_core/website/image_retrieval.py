@@ -1356,6 +1356,9 @@ async def _loop(brief: PhotoBrief, provider: AIModelProvider, search: ImageSearc
             outcome.reason = "ok"
             entry["selected"] = candidate.key
             entry["selection_reason"] = why[:300]
+            if reasons:
+                # Why better-scored pictures were passed over (a near-duplicate, a dead link).
+                entry["passed_over"] = reasons[:6]
             outcome.log.append(entry)
             return outcome
         entry["rejected"] = len(top)
