@@ -43,6 +43,7 @@ from platform_api.routers import (
     webhooks_whatsapp,
     v1_website,
     v1_public_websites,
+    v1_tls,
     v1_public_quotes,
     v1_public_search,
     v1_marketplace,
@@ -245,6 +246,7 @@ app.include_router(webhooks_payments.router)
 app.include_router(webhooks_whatsapp.router)
 app.include_router(v1_website.router)
 app.include_router(v1_public_websites.router)
+app.include_router(v1_tls.router)
 app.include_router(v1_public_quotes.router)
 app.include_router(v1_public_search.router)
 app.include_router(v1_marketplace.router)
