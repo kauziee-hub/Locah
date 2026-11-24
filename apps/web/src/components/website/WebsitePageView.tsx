@@ -414,7 +414,7 @@ export function WebsitePageView({
 
   return (
     <div
-      className={siteFontVariables}
+      className={siteFontVariables(lang)}
       data-locah-site=""
       data-page-purpose={pagePurpose}
       lang={LANG_LOCALE[lang]}

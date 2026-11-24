@@ -39,7 +39,7 @@ export function SiteFrame({
   return (
     <div
       data-locah-site=""
-      className={[siteFontVariables, className].filter(Boolean).join(' ')}
+      className={[siteFontVariables(lang), className].filter(Boolean).join(' ')}
       lang={LANG_LOCALE[lang]}
       data-palette={theme.paletteMode}
       data-display={dna.display}
