@@ -308,8 +308,17 @@ is tested.
    - Fixed: the name, plus the job runner now settles each job in its own
      transaction, rolls back a failed job's own work only, and gives
      `website.generate` a 15-minute lease.
-   - Tests: two new worker tests. The worker suite needs `DATABASE_URL`; it was
-     skipped in earlier full runs and has now run green, 19 tests.
+   - Tests: two new worker tests, worker suite green (19).
+   - *Correction (2026-11-25):* this audit first said the worker suite had been
+     skipped in earlier local runs. It had not: the test setup turns
+     `TEST_DATABASE_URL` into `DATABASE_URL` before the tests load, so it ran.
+     What *was* true is worse. CI ran strict mypy before pytest, mypy failed every
+     run (25 errors), so **CI never ran pytest at all**. CI also triggers only on
+     `main` and on pull requests, so this branch's commits were never checked.
+     Fixed: the 25 errors are cleared and CI runs a mypy ratchet with baseline 0
+     (`tools/ci/mypy_ratchet.py`). Under CI, or with `LOCAH_REQUIRE_DB=1`, a test
+     skipped for want of a database is now a failure
+     (`platform_testing/require_db.py`).
 3. **Interview:** LOCAH says back the check-in times it chose also when it moves
    straight to "I've got enough to build". This path is verified only in a live
    run, not by a unit test.

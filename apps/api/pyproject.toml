@@ -40,4 +40,6 @@ pythonpath = [
     "../worker/src",
 ]
 asyncio_mode = "auto"
+# A database test runs or fails under CI / LOCAH_REQUIRE_DB=1 — never skips quietly.
+addopts = "-p platform_testing.require_db"
 

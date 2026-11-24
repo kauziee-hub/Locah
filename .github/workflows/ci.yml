@@ -82,8 +82,10 @@ jobs:
       - name: Ruff Lint
         run: uv run ruff check .
 
-      - name: Mypy Typecheck
-        run: uv run mypy --explicit-package-bases .
+      - name: Mypy Typecheck (ratchet)
+        # The error count may only go down (tools/ci/mypy-baseline.txt). Strict
+        # mypy used to fail this step every run, so pytest never ran (2026-11-25).
+        run: uv run python tools/ci/mypy_ratchet.py
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -135,5 +137,7 @@ jobs:
         # path (Doc 11 §21.1 gate 2 / AUD-02).
         run: cd apps/api && uv run pytest tests ../worker/tests -c pyproject.toml --rootdir .
         env:
+          # A database test runs or fails here — never skips (platform_testing.require_db).
+          LOCAH_REQUIRE_DB: "1"
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
           API_DATABASE_URL: postgresql+asyncpg://platform_api:${{ env.CI_PLATFORM_API_PASSWORD }}@localhost:5432/postgres
