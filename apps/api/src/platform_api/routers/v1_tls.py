@@ -20,7 +20,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
-from platform_core.models import Business, Website
+from platform_core.context_resolver import bind_public_context
+from platform_core.models import Website
+from platform_core.services.business import BusinessService
 
 router = APIRouter(prefix="/v1/public/tls", tags=["edge"])
 
@@ -48,11 +50,14 @@ async def tls_allowed(
         return Response(status_code=200)
     if not _LABEL.fullmatch(label):
         return Response(status_code=404)
-    # The same test the public renderer applies (WebsitePublishService.load_public_page).
+    # The same steps and test as the public renderer (WebsitePublishService.
+    # load_public_page): the API connects as the RLS-enforcing platform_api role,
+    # which sees a website only inside its own business's public context.
+    business = await BusinessService.get_by_slug(session, label)
+    if business is None or business.deleted_at is not None:
+        return Response(status_code=404)
+    await bind_public_context(session, business.id)
     published = (await session.execute(
-        select(Business.id)
-        .join(Website, Website.business_id == Business.id)
-        .where(Business.slug == label, Business.deleted_at.is_(None),
-               Website.status == "published", Website.published_version_id.is_not(None))
-        .limit(1))).first()
+        select(Website.id).where(Website.business_id == business.id, Website.status == "published",
+                                 Website.published_version_id.is_not(None)).limit(1))).first()
     return Response(status_code=200 if published else 404)
