@@ -51,11 +51,20 @@ _SLIPS: dict[str, str] = {
         "curry": "curi cury",
         "gravy": "gravey",
         "boneless": "bonless bonles",
-        "breakfast": "brekfast breakfst",
+        "breakfast": "brekfast breakfst brkfst",
         "sweets": "sweats",
         "cake": "cak",
         "cupcake": "cupcak",
         "brownie": "browni",
+        # stays
+        "bungalow": "bunglow bunglaw bungalo banglow bunglo",
+        "cottage": "cotage cottege cottaj cotege",
+        "cottages": "cotages cotteges",
+        "villa": "vila villla",
+        "villas": "vilas villlas",
+        "night": "nite nyt",
+        "nights": "nites nyts",
+        "deluxe": "delux",
         # beauty and care
         "facial": "fecial facail",
         "keratin": "keratine kertin keratn",
@@ -93,7 +102,6 @@ _SLIPS: dict[str, str] = {
         "regular": "reguler",
         "family": "famly",
         "double": "doble",
-        "deluxe": "delux",
     }.items()
     for slip in slips.split()
 }
@@ -129,7 +137,7 @@ _SHORTHAND: dict[str, str] = {
     "wen": "when",
     "frm": "from",
     "wid": "with",
-    "thru": "through",
+    "thru": "through", "incl": "included", "approx": "about",
     "tmrw": "tomorrow",
     "tmrow": "tomorrow",
     "nite": "night",
@@ -171,6 +179,9 @@ def for_the_page(text: str) -> str:
         return full if full[:1].isupper() else (full.capitalize() if said[:1].isupper() else full)
 
     out = _WORD.sub(word, text or "")
+    # "book online n pay": "n" for "and" between two words — never in a name
+    # ("Rock n Roll Cafe" keeps its capitals and its n).
+    out = re.sub(r"(?<=[a-z]) n (?=[a-z])", " and ", out)
     return out[:1].upper() + out[1:] if out else out
 
 

@@ -120,6 +120,36 @@ NAME_THANKS = {"en": "{name} — lovely.", "ta_en": "{name} — nalla per.", "ta
 # The opening answers these at once; what it leaves open is asked after.
 OPENING_TARGETS = ("business.identity", "offerings.main", "commerce.action")
 NO_PROBLEM = {"en": "No problem.", "ta_en": "Paravaalla.", "ta": "பரவாயில்லை."}
+# "u decide pls": the owner handed the choice over, and is told LOCAH will make it
+# — only for what LOCAH can choose. A place or a phone number it cannot.
+LEAVE_IT = {"en": "Leave it with me.", "ta_en": "Naan paathukkaren.", "ta": "நான் பார்த்துக்கிறேன்."}
+_LOCAH_CHOOSES = frozenset({"brand.feel", "brand.story", "media.photos", "media.logo", "offerings.pricing",
+                            "offerings.customisation", "operations.team"})
+
+
+def _declined_opener(bp: BusinessBlueprint, ti: Any, reading: Any, lang: str) -> str:
+    """"No problem." — or "Leave it with me." when the owner left to LOCAH what it can choose."""
+    if reading.delegate:
+        stay = False
+        if any(a.target == "operations.hours" for a in ti.answered):
+            from platform_core.interview.playbooks import is_stay
+
+            stay = is_stay(bp)
+        if all(a.target in _LOCAH_CHOOSES or (stay and a.target == "operations.hours") for a in ti.answered):
+            return LEAVE_IT[lang]
+    return NO_PROBLEM[lang]
+
+
+def _stay_times_left(bp: BusinessBlueprint, before: str, lang: str) -> str:
+    """A stay's owner left check-in and check-out to LOCAH this turn: say what it chose."""
+    now = (bp.discovery.get("operations.hours") or TargetState()).status
+    if before in {"declined", "deferred", "answered"} or now not in {"declined", "deferred"}:
+        return ""
+    from platform_core.interview.playbooks import is_stay
+
+    if not is_stay(bp):
+        return ""
+    return hours.STAY_DEFAULTS_SAID.get(lang, hours.STAY_DEFAULTS_SAID["en"])
 # A correction to something already known is said back as it now stands.
 FACT_UPDATED = {
     "en": "Updated — {what}: {value}.",
@@ -469,6 +499,7 @@ class BusinessInterviewOrchestrator:
         source = "USER_STATEMENT" if field or fallback else "AI_EXTRACTION"
         # What a correction changes is said back ("Updated — hours: …").
         said_before = {k: f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items() if k in UPDATED_FACT}
+        hours_before = (bp.discovery.get("operations.hours") or TargetState()).status
         from platform_core.interview.understanding import offer_groups
 
         groups_before = {g["name"].casefold() for g in offer_groups(bp)}
@@ -591,7 +622,9 @@ class BusinessInterviewOrchestrator:
         elif bp.readiness.ready and bp.checkpoint_turn is None:
             bp.checkpoint_turn = bp.turn_count + 1
             worth = [w["short_ta" if lang == "ta" else "short"] for w in worth_knowing(bp, business_type, limit=3)]
-            reply = " ".join(p for p in (ack, media_note, planner.checkpoint_message(bp, lang, worth)) if p)
+            # "u decide" to check-in, answered with "I've got enough": the times are still said back.
+            opener = _stay_times_left(bp, hours_before, lang) or ack
+            reply = " ".join(p for p in (opener, media_note, planner.checkpoint_message(bp, lang, worth)) if p)
         elif bp.readiness.ready:
             if bp.refining:
                 next_item = planner.choose(bp, ti.next_target, business_type)
@@ -602,8 +635,9 @@ class BusinessInterviewOrchestrator:
                     planner.READY_AGAIN[lang]
             else:
                 question = planner.AFTER_READY[lang] if understood else planner.READY_AGAIN[lang]
-            opener = NO_PROBLEM[lang] if reading.decline and all(a.status == "declined" for a in ti.answered) else (
-                ack if understood and not added else "")
+            opener = _declined_opener(bp, ti, reading, lang) if reading.decline and all(
+                a.status == "declined" for a in ti.answered) else (ack if understood and not added else "")
+            opener = _stay_times_left(bp, hours_before, lang) or opener
             reply = " ".join(p for p in (opener, media_note, question) if p)
         else:
             next_item = planner.choose(bp, ti.next_target, business_type)
@@ -614,7 +648,8 @@ class BusinessInterviewOrchestrator:
                 BusinessInterviewOrchestrator.project(bp, business_type)
                 bp.checkpoint_turn = bp.turn_count + 1
                 worth = [w["short_ta" if lang == "ta" else "short"] for w in worth_knowing(bp, business_type, limit=3)]
-                reply = " ".join(p for p in (ack, media_note, planner.checkpoint_message(bp, lang, worth)) if p)
+                opener = _stay_times_left(bp, hours_before, lang) or ack
+                reply = " ".join(p for p in (opener, media_note, planner.checkpoint_message(bp, lang, worth)) if p)
             else:
                 question = _question(bp, ti, next_item, text, lang) if next_item else planner.phrase(
                     planner.ASKS_BY_ID["offer"], bp, lang)
@@ -629,11 +664,12 @@ class BusinessInterviewOrchestrator:
                     if so_far:
                         bp.synthesis_turn = bp.turn_count + 1
                 declined_only = reading.decline and all(a.status == "declined" for a in ti.answered)
-                opener = NO_PROBLEM[lang] if declined_only else ack if understood else (
+                opener = _declined_opener(bp, ti, reading, lang) if declined_only else ack if understood else (
                     UNCLEAR[lang].strip() if not fallback else "")
                 if so_far and opener and any(opener == a for options in ACKS.values() for a in options):
                     # The summary opens with its own "Okay —"; a stock "Understood." before it is one too many.
                     opener = ""
+                opener = _stay_times_left(bp, hours_before, lang) or opener
                 reply = " ".join(p for p in (opener, media_note, so_far, question) if p)
         if asked_name:
             bp.asks = (bp.asks + [AskRecord(ask="name", targets=[], turn=bp.turn_count + 1)])[-60:]

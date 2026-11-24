@@ -54,6 +54,12 @@ class Playbook:
     booking_led: bool = False
 
 
+# A stay keeps check-in and check-out times, not opening hours.
+_STAY_HOURS = {"en": "When can guests check in, and by when should they check out?",
+                 "ta_en": "Guests eppo check-in pannalaam, eppo-kulla check-out pannanum?",
+                 "ta": "விருந்தினர்கள் எப்போது செக்-இன் செய்யலாம், எப்போதுக்குள் செக்-அவுட் செய்ய வேண்டும்?"}
+
+
 def _p(
     key: str,
     noun: str,
@@ -361,7 +367,8 @@ PLAYBOOKS: dict[str, Playbook] = {p.key: p for p in (
        asks={"offer": {"en": "Mostly rentals or sales — homes, plots or commercial spaces — and in which areas?"}}),
     _p("stay", "rooms", "room_type", "Rooms", "Rooms", media="high",
        booking_led=True,
-       families=("airy_property", "local_friendly"), skip=_NO_DELIVERY, likely_actions=("enquire", "call", "visit")),
+       families=("airy_property", "local_friendly"), skip=_NO_DELIVERY, likely_actions=("enquire", "call", "visit"),
+       asks={"hours": _STAY_HOURS}),
     _p("design_studio", "projects", "portfolio_item", "Work", "Selected work", media="critical", portfolio=True,
        price_visibility="on_request", families=("portfolio_sketchbook", "airy_property"),
        skip=_NO_DELIVERY + ("commerce.payment",), likely_actions=("book_consultation", "whatsapp"),
@@ -442,10 +449,12 @@ PLAYBOOKS: dict[str, Playbook] = {p.key: p for p in (
                            "guests come for?"},
            "conversion": {"en": "Do guests book directly with you, or mostly through travel sites — and should "
                                 "the website take booking requests?"},
+           "hours": _STAY_HOURS,
        }),
     _p("homestay", "rooms", "room_type", "Stay", "The stay", media="critical", story_matters=True,
        booking_led=True,
-       families=("editorial_warm", "airy_property"), skip=_NO_DELIVERY, likely_actions=("whatsapp", "book_online")),
+       families=("editorial_warm", "airy_property"), skip=_NO_DELIVERY, likely_actions=("whatsapp", "book_online"),
+       asks={"hours": _STAY_HOURS}),
     _p("travel", "packages", "package", "Packages", "Trips & packages", media="high", price_visibility="from",
        families=("airy_property", "playful_editorial"), skip=("offerings.units", "operations.stock"),
        likely_actions=("request_quote", "whatsapp")),
@@ -575,6 +584,15 @@ def playbook_key(bp: BusinessBlueprint) -> str:
 
 def playbook_for(bp: BusinessBlueprint) -> Playbook:
     return PLAYBOOKS.get(playbook_key(bp), PLAYBOOKS["other"])
+
+
+# A business guests stay at overnight: rooms by the night, check-in and check-out.
+STAY_KINDS = frozenset({"room_type", "accommodation"})
+
+
+def is_stay(bp: BusinessBlueprint) -> bool:
+    """A hotel, resort, homestay or estate stay — whatever it was called."""
+    return playbook_for(bp).offer_kind in STAY_KINDS
 
 
 def phrase_override(playbook: Playbook, ask_id: str, lang: str) -> str:

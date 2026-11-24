@@ -381,7 +381,13 @@ def _variant_of(word: str, previous: str, known: tuple[str, ...]) -> str:
     return text[:1].upper() + text[1:]
 
 
-def read_priced_list(text: str, known: tuple[str, ...] = ()) -> list[ReadGroup]:
+# Words that are a size on a menu ("family 450" after a pizza) and a room on a
+# rate card ("family 12500" after a cottage). Found on a hotel run (2026-11-23):
+# the family room became a second price of the valley cottage.
+_ROOM_WORDS = frozenset({"family", "single", "double", "twin", "triple", "deluxe", "suite", "standard", "premium"})
+
+
+def read_priced_list(text: str, known: tuple[str, ...] = (), *, rooms: bool = False) -> list[ReadGroup]:
     """A typed menu or price list as groups of priced items.
 
     Reads one entry per line, or comma/semicolon-separated entries; a line
@@ -389,7 +395,7 @@ def read_priced_list(text: str, known: tuple[str, ...] = ()) -> list[ReadGroup]:
     220, full 400" keeps both prices on one item. Anything that is not
     "name then price" — hours, phone numbers, years — is left alone.
     """
-    flat = _PHONE.sub(" ", text or "")
+    flat = _PHONE.sub(" ", fix_words(text or ""))  # "per nite" is per night
     flat = _TIME.sub(" ", flat)
     flat = _YEAR.sub(" ", flat)
     groups: list[ReadGroup] = []
@@ -436,6 +442,9 @@ def read_priced_list(text: str, known: tuple[str, ...] = ()) -> list[ReadGroup]:
                     previous = entry.name
                 size = re.match(r"^(?P<base>.+?)\s+(?P<size>half|full|quarter|small|medium|large|regular|"
                                 r"\d+\s*(?:g|gm|kg|ml|l|ltr|pcs?))$", entry.name, re.I)
+                if rooms and entry.name.casefold() in _ROOM_WORDS:
+                    # A stay's rate card: "family" is the family room.
+                    entry.name = f"{entry.name} room"
                 if _SIZE.match(entry.name) and current.items:
                     # "full 400" after "Mutton biryani half 220": the same dish, another size.
                     last = current.items[-1]
@@ -718,7 +727,7 @@ def read_traits(bp: BusinessBlueprint, text: str) -> int:
 def capture(bp: BusinessBlueprint, text: str, answering: tuple[str, ...] = ()) -> int:
     """Read a turn for the catalogue: priced lines, then traits. Returns what changed."""
     known = tuple(fix_words(item.name) for group in bp.taxonomy.groups for item in group.items)
-    groups = read_priced_list(text, known)
+    groups = read_priced_list(text, known, rooms=offer_kind(bp) in {"room_type", "accommodation"})
     count = priced_count(groups)
     changed = 0
     # A list in passing needs two priced lines to be a list; an answer to

@@ -706,6 +706,8 @@ def location_text(text: str) -> str:
     """The place in a location answer, with any phone number taken out."""
     raw = " ".join((text or "").split())
     raw = _PHONE.sub(" ", raw)
+    if only_delegated(raw) or _DECLINE.search(raw):
+        return ""  # "u decide pls", "not sure" — not a place
     raw = re.sub(r"\b(?:and\s+)?(?:the\s+)?(?:number|phone|mobile|whatsapp)\b.*$", "", raw, flags=re.I)
     raw = re.sub(r"^\s*(?:we(?:'re| are)\s+)?(?:located\s+|based\s+)?(?:in|at|near|on)\s+", "", raw, flags=re.I)
     raw = " ".join(raw.split()).strip(" .,;:-")
@@ -845,6 +847,23 @@ _DECLINE = re.compile(
     r"we don'?t (?:have|do) (?:that|any))\b",
     re.I,
 )
+# An owner who leaves a choice to LOCAH: "u decide", "up to you", "neenga decide pannunga".
+DELEGATED = re.compile(r"\b(?:u|you|neenga|nee|aap|tum)\s+(?:decide|choose|pick)\b|\bup to you\b|"
+                       r"\bleave it to you\b|\byour (?:choice|call)\b|\bwhatever(?: is)? (?:fine|ok|good)\b|"
+                       r"\bany(?:thing)? (?:is )?(?:fine|ok)\b", re.I)
+_POLITE = re.compile(r"\b(?:ok|okay|k|pls|plz|please|bro|sir|madam|anna|akka|da|ji|just|only|itself|yourself|"
+                     r"then|so|na|pannunga|pannu|karo|kar\s+lo|best|whatever|you|u)\b|[^\w]", re.I)
+
+
+def only_delegated(text: str) -> bool:
+    """The whole message hands the choice to LOCAH ("u decide pls") — nothing else is in it.
+
+    Hotel owner lab, 2026-11-23: "u decide pls", typed to "where are you?",
+    became the business's place ("a resort in U Decide Pls").
+    """
+    return bool(DELEGATED.search(text or "")) and not _POLITE.sub(" ", DELEGATED.sub(" ", text or "")).strip()
+
+
 _REDUNDANT = re.compile(r"\b(already (?:told|said|mentioned|gave)|i (?:just )?said|as i said|obviously|i told you)\b", re.I)
 
 
@@ -864,6 +883,8 @@ class Reading:
     finish: bool = False
     refine: bool = False
     decline: bool = False
+    # The decline is "you choose", not "no": LOCAH says it will choose.
+    delegate: bool = False
     redundant: bool = False
 
 
@@ -879,7 +900,8 @@ def read(text: str) -> Reading:
         content=content_wishes(text),
         finish=bool(_FINISH.search(text)),
         refine=bool(_REFINE.search(text)),
-        decline=bool(_DECLINE.search(text)) and len(text) < 90,
+        decline=(bool(_DECLINE.search(text)) and len(text) < 90) or only_delegated(text),
+        delegate=only_delegated(text),
         redundant=bool(_REDUNDANT.search(text)),
     )
 

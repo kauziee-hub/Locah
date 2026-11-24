@@ -14,6 +14,16 @@ from __future__ import annotations
 import re
 
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+# What LOCAH sets when a stay's owner leaves check-in and check-out to it ("u
+# decide", or no answer): the usual times, said back to the owner and changed on
+# any room type at any time (hotel owner lab, 2026-11-23).
+STAY_DEFAULTS = {"check_in": "14:00", "check_out": "11:00"}
+STAY_DEFAULTS_SAID = {
+    "en": "I'll use the usual times: check-in from 2 pm, check-out by 11 am. You can change them on each room type.",
+    "ta_en": "Usual time vechirukken: check-in 2 pm-la irundhu, check-out 11 am-kulla. Room type-la eppo venaalum maathalaam.",
+    "ta": "வழக்கமான நேரம் வைத்திருக்கிறேன்: செக்-இன் மதியம் 2 மணி முதல், செக்-அவுட் காலை 11 மணிக்குள். ஒவ்வொரு அறை வகையிலும் மாற்றலாம்.",
+}
 _DAY_WORDS = {
     "mon": "mon", "monday": "mon", "tue": "tue", "tues": "tue", "tuesday": "tue", "wed": "wed",
     "wednesday": "wed", "thu": "thu", "thur": "thu", "thurs": "thu", "thursday": "thu", "fri": "fri",
