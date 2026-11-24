@@ -1235,7 +1235,7 @@ class BusinessInterviewService:
             # About section does. (Found 2026-11-13: on a site whose story lived
             # in a statement, "that's your story on the website now" was said and
             # nothing on the website had changed.)
-            fresh_home = next((p for p in fresh["pages"] if p.get("slug") == "home"), None) or {}
+            fresh_home: dict[str, Any] = next((p for p in fresh["pages"] if p.get("slug") == "home"), {}) or {}
             fresh_statement = next((s for s in fresh_home.get("sections") or []
                                     if s["section_type_id"] == "statement"), None)
             home_statements = [s for slug, s in placed.get("statement", []) if slug == str(page.get("slug"))]

@@ -201,7 +201,8 @@ def validate_section_content(
         # whoever proposed them: always the normalized form is stored.
         from platform_core.website.composition_grammar import normalize
 
-        return normalize(cleaned)
+        composed: dict[str, Any] = normalize(cleaned)
+        return composed
     return cleaned if lenient else content
 
 

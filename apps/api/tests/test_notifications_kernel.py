@@ -471,6 +471,6 @@ def test_a_website_enquiry_tells_the_owner_who_and_what_about() -> None:
         "origin_context": {"purpose_label": "Membership enquiry", "plan_title": "Monthly"}}}
     assert _body(NOTIFICATION_RULES["lead.created"], payload) == "Rahul Nair · Membership enquiry · Monthly"
     # A lead the team typed in themselves tells nobody.
-    typed = {**payload, "after": {**payload["after"], "source": "manual"}}
+    typed = {**payload, "after": {**cast(dict[str, Any], payload["after"]), "source": "manual"}}
     assert asyncio.run(NotificationDispatcher.dispatch(
-        None, event_type="lead.created", payload=typed, business_id=_uuid.uuid4(), correlation_id=None)) == 0  # type: ignore[arg-type]
+        None, event_type="lead.created", payload=typed, business_id=_uuid.uuid4(), correlation_id=None)) == 0

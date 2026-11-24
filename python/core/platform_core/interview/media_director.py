@@ -500,11 +500,11 @@ def drawing_for(slot: Slot, bp: BusinessBlueprint, direction: CreativeDirection)
                  "story": f"a narrow path winding through green country{near} in early light",
                  "process": "morning mist drifting over green slopes at dawn",
                  "detail": "dew on fresh green leaves, close-up in soft light"}
-        return drawing_prompt(views.get(slot.key, views["process"]), brief)
+        return str(drawing_prompt(views.get(slot.key, views["process"]), brief))
     colours = " and ".join(c for c in brief.palette[:2] if c) or "soft muted colours"
     concept = site_concept(bp, direction)
     texture = _TEXTURE.get(concept, "soft abstract shapes in {colours}").format(colours=colours)
-    return drawing_prompt(texture, brief, abstract="abstract" in texture)
+    return str(drawing_prompt(texture, brief, abstract="abstract" in texture))
 
 
 def prompt_for(slot: Slot, direction: CreativeDirection, trade: str) -> str:

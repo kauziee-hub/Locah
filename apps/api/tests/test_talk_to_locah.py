@@ -298,7 +298,7 @@ def test_an_education_charity_asking_for_donations_and_volunteers_is_not_refused
     said = ("Thozhi Learning Trust, Kannagi Nagar, Chennai. Free after-school learning centres for children, "
             "scholarships for girls. Need online donations and volunteer sign-ups.")
     assert infer_from_text(said) == ("education_ngo", 0.82)
-    assert infer_from_text("After-school tuition for class 10 students in Adyar")[0] != "education_ngo"  # type: ignore[index]
+    assert infer_from_text("After-school tuition for class 10 students in Adyar")[0] != "education_ngo"
     bp = BusinessBlueprint(business_id=uuid.uuid4())
     bp.requested_capabilities = [
         CapabilityIntent(intent="donations", original_request="Need online donations"),

@@ -82,7 +82,7 @@ def test_clean_sentences_are_left_alone() -> None:
 
 def test_every_persona_still_reads_as_its_own_kind() -> None:
     """The six tellings of each certification business stay in the same family."""
-    family = {
+    family: dict[str, set[str | None]] = {
         "restaurant-delivery": {"restaurant", "cloud_kitchen", None},
         "meat-shop": {"meat_shop"},
         "bakery": {"bakery"},
@@ -309,7 +309,7 @@ def test_a_place_typed_in_lower_case_is_set_as_a_place_name_on_the_site() -> Non
     def said(where: str) -> str:
         bp = BusinessBlueprint(business_id=uuid4(), known_facts={
             "locations": Fact(value=where, source="USER_STATEMENT", confirmation="confirmed")})
-        return _address(bp)
+        return str(_address(bp))
 
     assert said("coorg madikeri") == "Coorg Madikeri"
     assert said("RS Puram, Coimbatore") == "RS Puram, Coimbatore"  # the owner's own capitals stand

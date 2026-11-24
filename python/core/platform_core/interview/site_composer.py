@@ -140,7 +140,7 @@ def _answer(bp: BusinessBlueprint, target: str) -> str:
     state = bp.discovery.get(target)
     if not state or state.status not in {"answered", "partial"}:
         return ""
-    return for_the_page(f"{state.summary} {state.quote}".strip())
+    return str(for_the_page(f"{state.summary} {state.quote}".strip()))
 
 
 def _display_phone(text: str) -> str:

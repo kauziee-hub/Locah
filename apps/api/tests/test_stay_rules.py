@@ -52,7 +52,8 @@ LOCATION = cast(Any, SimpleNamespace(timezone="Asia/Kolkata"))
 def _stay(first: date, last: date, **attrs: Any) -> str | None:
     room = _room(**attrs)
     a, b = stay_window(LOCATION, room, first, last)
-    return stay_rule_broken(room, LOCATION, a, b)
+    broken: str | None = stay_rule_broken(room, LOCATION, a, b)
+    return broken
 
 
 def test_a_weekend_stay_keeps_the_weekend_minimum() -> None:

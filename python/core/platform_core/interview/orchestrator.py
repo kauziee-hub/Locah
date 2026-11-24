@@ -149,7 +149,7 @@ def _stay_times_left(bp: BusinessBlueprint, before: str, lang: str) -> str:
 
     if not is_stay(bp):
         return ""
-    return hours.STAY_DEFAULTS_SAID.get(lang, hours.STAY_DEFAULTS_SAID["en"])
+    return str(hours.STAY_DEFAULTS_SAID.get(lang, hours.STAY_DEFAULTS_SAID["en"]))
 # A correction to something already known is said back as it now stands.
 FACT_UPDATED = {
     "en": "Updated — {what}: {value}.",

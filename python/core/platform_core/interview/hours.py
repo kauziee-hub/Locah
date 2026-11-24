@@ -265,11 +265,11 @@ def _clause(flat: str, current: Week, *, add: bool = False, days: list[str] | No
     for d in targets:
         old = week[d][0] if week[d] else None
         old_open, old_close = (_at(old[0]), _at(old[1])) if old else (None, None)
-        open_at = _minutes(*since.groups()) if since else old_open
-        close = _until(until, open_at, old_close) if until else old_close
-        if open_at is None or close is None:
+        opens: int | None = _minutes(*since.groups()) if since else old_open
+        close = _until(until, opens, old_close) if until else old_close
+        if opens is None or close is None:
             return None  # "till 11" with no opening time known
-        week[d] = [[_clock(open_at), _clock(close)]]
+        week[d] = [[_clock(opens), _clock(close)]]
     return week
 
 

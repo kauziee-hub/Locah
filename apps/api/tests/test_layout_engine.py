@@ -63,7 +63,7 @@ def _strings(value: Any) -> list[str]:
 
 
 def _overlap(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    return (a["col"] < b["col"] + b["span"] and b["col"] < a["col"] + a["span"]
+    return bool(a["col"] < b["col"] + b["span"] and b["col"] < a["col"] + a["span"]
             and a["row"] < b["row"] + b["rows"] and b["row"] < a["row"] + a["rows"])
 
 
@@ -102,7 +102,9 @@ def test_words_laid_over_a_picture_rest_on_its_edge_on_a_phone() -> None:
 def test_the_stored_schema_is_the_registrys_own() -> None:
     migration = next(Path(__file__).resolve().parents[3].glob(
         "infra/supabase/migrations/*_website_composition_section.sql")).read_text(encoding="utf-8")
-    stored = json.loads(re.search(r"\n '(\{.*\})',\n", migration, re.S).group(1).replace("''", "'"))
+    found = re.search(r"\n '(\{.*\})',\n", migration, re.S)
+    assert found, "the migration carries the schema as a JSON literal"
+    stored = json.loads(found.group(1).replace("''", "'"))
     assert stored == SCHEMA
 
 

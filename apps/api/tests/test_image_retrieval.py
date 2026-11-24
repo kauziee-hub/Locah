@@ -819,11 +819,11 @@ def test_an_item_is_also_searched_by_its_plain_name() -> None:
     from platform_core.website.image_retrieval import plain_subject_query
 
     brief = SimpleNamespace(key="item:appam", subject="Appam, soft and lacy, served in a clay bowl on banana leaf")
-    assert plain_subject_query(brief) == "appam"  # type: ignore[arg-type]
+    assert plain_subject_query(brief) == "appam"
     stew = SimpleNamespace(key="item:chicken-stew", subject="chicken stew with appam")
-    assert plain_subject_query(stew) == "chicken stew"  # type: ignore[arg-type]
+    assert plain_subject_query(stew) == "chicken stew"
     hero = SimpleNamespace(key="hero", subject="a Kerala kitchen's table")
-    assert plain_subject_query(hero) == ""  # type: ignore[arg-type]
+    assert plain_subject_query(hero) == ""
 
 
 # The real fetcher: the suite's own fixture swaps it out to keep tests off the network.

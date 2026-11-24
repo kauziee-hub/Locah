@@ -20,7 +20,7 @@ from platform_core.services.entitlement import ModuleService
 def _enable(module_id: str, entitled: frozenset[str]) -> Any:
     # The checks refuse before any database work; a session is never reached.
     return asyncio.run(ModuleService.enable_module(
-        None,  # type: ignore[arg-type]
+        None,
         business_id=uuid.uuid4(), module_id=module_id, actor_id=uuid.uuid4(),
         entitlements=EntitlementSet(modules=entitled)))
 
@@ -33,7 +33,7 @@ def test_an_unknown_tool_is_not_found() -> None:
 def test_a_future_tool_is_not_available_yet_whatever_the_plan() -> None:
     with pytest.raises(ValidationError) as refused:
         _enable("payroll", frozenset())
-    assert refused.value.detail["details"]["reason"] == "not_built"  # type: ignore[index]
+    assert refused.value.detail["details"]["reason"] == "not_built"
 
 
 def test_a_built_tool_outside_the_plan_needs_the_entitlement() -> None:

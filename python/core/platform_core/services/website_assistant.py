@@ -468,4 +468,4 @@ class WebsiteArrangeService:
                                                      actor_id=actor_id, payload={"content": changed})
         from platform_core.resolvers.website_resolver import WebsiteResolver
 
-        return WebsiteResolver.serialize_section(updated)
+        return dict(WebsiteResolver.serialize_section(updated))

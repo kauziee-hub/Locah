@@ -295,7 +295,8 @@ def test_undoing_a_match_puts_the_designed_look_back() -> None:
         restored.pop(key, None)
     restored = merge_theme(restored, {"owner_style": matched[rs.UNDO_KEY]["owner_style"]})
     assert restored == before
-    voiced = {**before, "dna": {**before["dna"], "headline": "italic"}}
-    borrowed = merge_theme(voiced, {"dna": {**voiced["dna"], "headline": "none"}, rs.UNDO_KEY: rs.snapshot(voiced)})
+    dna: dict[str, Any] = dict(before["dna"])  # type: ignore[arg-type]
+    voiced: dict[str, Any] = {**before, "dna": {**dna, "headline": "italic"}}
+    borrowed = merge_theme(voiced, {"dna": {**dna, "headline": "none"}, rs.UNDO_KEY: rs.snapshot(voiced)})
     edit, _ = rs.undo(borrowed) or ({}, ())
     assert merge_theme(borrowed, edit)["dna"]["headline"] == "italic"
