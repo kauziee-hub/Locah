@@ -203,6 +203,8 @@ async def draw_fallback(
         return None, "unavailable"
     if _refused(prompt):
         return None, "rejected"
+    if not _charged():
+        return None, "quota"
     return await _generate_cloudflare(prompt, timeout_seconds=timeout_seconds)
 
 
@@ -302,6 +304,17 @@ async def _generate_gemini(
         return None, "error"
 
 
+def _charged() -> bool:
+    """One drawing charged to the open build's ledger; False past its cap (alerted there)."""
+    from platform_core import ai_ledger
+
+    try:
+        ai_ledger.before_drawing()
+    except ai_ledger.CapReached:
+        return False
+    return True
+
+
 def _refused(prompt: str) -> bool:
     """A drawing the rule forbids (media_prompts.unsafe_drawing) is never sent."""
     from platform_core.website.media_prompts import unsafe_drawing
@@ -324,6 +337,8 @@ async def generate_image(
         return None, "unavailable"
     if _refused(prompt):
         return None, "rejected"
+    if not _charged():
+        return None, "quota"
     return await _generate_gemini(prompt, aspect_ratio=aspect_ratio, timeout_seconds=timeout_seconds)
 
 

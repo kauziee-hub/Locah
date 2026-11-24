@@ -879,15 +879,26 @@ class BusinessInterviewService:
         if command.action == "turn":
             # No row locks or open DB transaction across a network/provider call.
             await session.commit()
+            from platform_core import ai_ledger
+            from platform_core.services.usage_meter import UsageMeterService
+
             try:
-                proposed = await BusinessInterviewOrchestrator.turn(
-                    initial, command.text, field=command.field,
-                    business_type=business.business_type,
-                    image_available=pictures_available(),
-                    via=command.via,
-                )
+                with ai_ledger.ledger(f"interview:{business_id}", max_calls=ai_ledger.max_calls_per_turn(),
+                                      max_drawings=0) as turn_ledger:
+                    proposed = await BusinessInterviewOrchestrator.turn(
+                        initial, command.text, field=command.field,
+                        business_type=business.business_type,
+                        image_available=pictures_available(),
+                        via=command.via,
+                    )
             except ValueError as exc:
                 raise ValidationError(str(exc)) from exc
+            for purpose, row in turn_ledger.by_purpose.items():
+                await UsageMeterService.record_model_usage(
+                    session, business_id,
+                    {"prompt_tokens": row["prompt_tokens"], "completion_tokens": row["completion_tokens"]},
+                    key=f"interview:{business_id}:{proposed.turn_count}:{purpose}", feature=f"interview:{purpose}",
+                )
         elif command.action == "draft" and command.draft and command.draft.op == "regenerate":
             await session.commit()
             proposed = await BusinessInterviewOrchestrator.regenerate_draft(
@@ -1890,8 +1901,22 @@ class BusinessInterviewService:
         if provider is not None:
             job.ai_provider = provider.provider_name
             job.model_name = provider.model_name
+        from platform_core import ai_ledger
+
+        led = ai_ledger.current()
+        if led is not None:
+            # The whole build, not its first call: every purpose's calls and tokens.
+            meta["model_usage"] = led.summary()
         job.provider_usage = {**dict(getattr(provider, "last_usage", None) or {}), **meta}
-        if provider is not None:
+        if led is not None:
+            for purpose, row in led.by_purpose.items():
+                await UsageMeterService.record_model_usage(
+                    session, job.business_id,
+                    {"prompt_tokens": row["prompt_tokens"], "completion_tokens": row["completion_tokens"],
+                     "model": getattr(provider, "model_name", None)},
+                    key=f"build:{job.id}:{job.attempt_count}:{purpose}", feature=f"build:{purpose}",
+                )
+        elif provider is not None:
             await UsageMeterService.record_model_usage(
                 session, job.business_id, getattr(provider, "last_usage", None),
                 key=f"interview_personalization:{job.id}:{job.attempt_count}", feature="interview_personalization",
@@ -2019,8 +2044,13 @@ class BusinessInterviewService:
         strategy_source = "deterministic"
         personalization_started = time.monotonic()
         if snapshot.get("composer") == "creative-v2":
-            return await BusinessInterviewService._personalize_creative(
-                session, job, bp, business, plan, correlation_id, personalization_started)
+            from platform_core import ai_ledger
+
+            # Every model call and drawing of this build is counted and capped
+            # (AI_MAX_MODEL_CALLS_PER_BUILD, AI_MAX_DRAWINGS_PER_BUILD).
+            with ai_ledger.ledger(f"build:{job.id}"):
+                return await BusinessInterviewService._personalize_creative(
+                    session, job, bp, business, plan, correlation_id, personalization_started)
         try:
             result, copy, provider = await generate_website_plan(bp, plan)
             payload = build_preview(bp, plan, result.strategy, copy)

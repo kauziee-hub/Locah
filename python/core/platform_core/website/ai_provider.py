@@ -19,6 +19,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
+from platform_core import ai_ledger
 from platform_core.ai_guard import guard_external_ai
 from platform_core.logging import get_logger
 
@@ -413,6 +414,7 @@ class GeminiProvider:
     async def _post(
         self, model: str, body: dict[str, Any], purpose: Any, timeout: float
     ) -> dict[str, Any]:
+        ai_ledger.before_call(purpose)  # counted, and refused past the work's cap
         started = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -471,6 +473,7 @@ class GeminiProvider:
         }
         # Keys avoid the word "token": the log redactor masks anything named
         # like a credential, and usage is the one thing these lines are for.
+        ai_ledger.after_call(purpose, usage.get("promptTokenCount"), usage.get("candidatesTokenCount"))
         _log.info(
             "ai.gemini.completed", model=model, purpose=purpose, latency_ms=latency_ms,
             prompt_units=usage.get("promptTokenCount"),
@@ -749,6 +752,7 @@ class DeepSeekProvider:
         return clipped if isinstance(clipped, dict) else parsed
 
     async def _post(self, body: dict[str, Any], purpose: Any, timeout: float) -> dict[str, Any]:
+        ai_ledger.before_call(purpose)  # counted, and refused past the work's cap
         started = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -793,6 +797,7 @@ class DeepSeekProvider:
             "latency_ms": latency_ms,
             "model": model,
         }
+        ai_ledger.after_call(purpose, usage.get("prompt_tokens"), usage.get("completion_tokens"))
         _log.info("ai.deepseek.completed", model=model, purpose=purpose, latency_ms=latency_ms,
                   prompt_units=usage.get("prompt_tokens"), output_units=usage.get("completion_tokens"),
                   thinking_units=reasoning)
