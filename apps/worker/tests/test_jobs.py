@@ -361,3 +361,57 @@ async def test_a_business_scoped_claim_never_takes_another_business_job(db_sessi
     claimed = await claim_job_batch(db_session, "test-scope", job_type=isolated_type)
     await db_session.commit()
     assert [row["id"] for row in claimed] == [job_id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+async def test_a_job_that_breaks_its_transaction_still_records_its_retry(
+        db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A website build whose failed flush left the session broken could not
+    record its retry, kept its lease, and was rebuilt every two minutes (owner
+    lab, 2026-11-24: 14 builds, 320 model calls). Its own work is rolled back and
+    the retry is recorded on a clean session."""
+    from platform_worker import job_runner
+
+    isolated_type = f"platform.noop.{uuid.uuid4().hex[:12]}"
+    job_id = await _insert_async_job(db_session, job_type=isolated_type, max_attempts=3)
+
+    async def breaks_the_transaction(session: AsyncSession, job: dict[str, Any]) -> None:
+        await session.execute(text("SELECT * FROM a_table_that_does_not_exist"))
+
+    monkeypatch.setattr(job_runner, "_execute_job", breaks_the_transaction)
+    await poll_and_execute_jobs(db_session, "test-job-broken", job_type=isolated_type)
+    status, attempt_count, last_error = await _job_status(db_session, job_id)
+    assert status == "failed" and attempt_count == 1
+    assert last_error and "a_table_that_does_not_exist" in last_error
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+async def test_a_website_build_holds_its_claim_for_as_long_as_a_build_takes(
+        db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_worker import job_runner
+
+    job_id = await _insert_async_job(db_session, job_type="website.generate",
+                                     payload={"generation_job_id": str(uuid.uuid4())})
+    seen: dict[str, Any] = {}
+
+    async def a_long_build(session: AsyncSession, job: dict[str, Any]) -> None:
+        row = await session.execute(text(
+            "SELECT EXTRACT(EPOCH FROM (leased_until - now())) FROM platform_async_jobs WHERE id = :id"),
+            {"id": str(job["id"])})
+        seen["lease_left"] = float(row.scalar_one())
+
+    monkeypatch.setattr(job_runner, "_execute_job", a_long_build)
+    monkeypatch.setattr(job_runner, "claim_job_batch", _only(job_id, job_runner.claim_job_batch))
+    await poll_and_execute_jobs(db_session, "test-job-long")
+    assert seen["lease_left"] > 600  # not the two-minute claim
+
+
+def _only(job_id: uuid.UUID, claim: Any) -> Any:
+    async def claim_this(session: AsyncSession, worker_id: str, **kwargs: Any) -> list[Any]:
+        rows = (await session.execute(text(
+            "UPDATE platform_async_jobs SET status = 'processing', leased_until = now() + interval '120 seconds', "
+            "leased_by = :w WHERE id = :id RETURNING *"), {"w": worker_id, "id": str(job_id)})).mappings()
+        return list(rows)
+    return claim_this

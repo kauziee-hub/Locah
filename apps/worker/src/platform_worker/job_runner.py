@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_worker.claiming import claim_job_batch
 
+# Jobs that run longer than the claim's lease (claiming.LEASE_SECONDS): a website
+# build searches, judges and may draw pictures for minutes. Its lease is
+# lengthened before it runs, or another poll re-claims and rebuilds it while it
+# is still running.
+LONG_JOB_LEASE_SECONDS = {"website.generate": 900}
+
 
 def _payload_as_dict(payload: Any) -> dict[str, Any]:
     if payload is None:
@@ -249,6 +255,12 @@ async def poll_and_execute_jobs(
     jobs = await claim_job_batch(session, worker_id, job_type=job_type, business_id=business_id)
     if not jobs:
         return 0
+    # The claim is committed before anything runs, and each job is settled in
+    # its own transaction: a job that fails rolls back its own work only, and
+    # its retry is recorded on a clean session. (A build whose failed flush left
+    # the session broken could not record its retry, kept its lease, and was
+    # rebuilt every two minutes — 14 times and 320 model calls, 2026-11-24.)
+    await session.commit()
 
     processed = 0
     for job in jobs:
@@ -256,21 +268,30 @@ async def poll_and_execute_jobs(
         job_type = str(job.get("job_type") or "unknown")
         handler = f"job_runner.{job_type}"
         try:
+            lease = LONG_JOB_LEASE_SECONDS.get(job_type)
+            if lease:
+                await session.execute(
+                    text("UPDATE platform_async_jobs SET leased_until = now() + make_interval(secs => :s) "
+                         "WHERE id = :id"), {"s": lease, "id": job_id})
+                await session.commit()
             if await _already_processed(session, job_id, handler):
                 await _mark_completed(session, job_id)
+                await session.commit()
                 processed += 1
                 continue
 
             await _execute_job(session, dict(job))
             await _record_processed(session, job_id, handler)
             await _mark_completed(session, job_id)
+            await session.commit()
             processed += 1
         except Exception as exc:
+            await session.rollback()
             attempt = int(job.get("attempt_count", 0)) + 1
             max_attempts = int(job.get("max_attempts", 5))
             if attempt >= max_attempts:
                 await _mark_dead_letter(session, dict(job), str(exc))
             else:
                 await _mark_retry(session, job_id, attempt, str(exc))
-    await session.commit()
+            await session.commit()
     return processed
