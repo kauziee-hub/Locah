@@ -13,6 +13,67 @@ the UI makes, plus DB/API checks — the UI itself not clicked), **TESTED**
 
 ## Environment (local only)
 
+### Checkpoint — 2026-11-24, the layout engine and a messy hotel owner
+
+Local stack only; branch `web-builder-premium`, pushed, not deployed.
+
+- **Composed sections** (`composition` section type, `layout_engine.py`): the
+  statement, the story's start, the featured range, About passages and pillars are
+  arranged per business from seeded recipes. VERIFIED-BROWSER
+  (`composition-editor-check.mjs`, hotel r1): the editor opens a composed section
+  with its blocks; **Flip sides** mirrors it; **Another arrangement** changes the
+  recipe and keeps the words; a block's heading is edited in place; "try another
+  layout for the story" in Ask LOCAH changes it; the draft is restored exactly; no
+  page errors. Site lab: no overflow at 1440 and 390 across four lab sites.
+- **Hotel, `bad_input`** ("u decide pls" to check-in times, "bunglow room 7500
+  valley cotage 9500 … per nite"):
+  - r2: 5 fails, all one cause: "u decide" was read as no answer, so no check-in
+    reached the rooms. Fixed: a message that only hands the choice over is read as
+    *leave it to me*; for a stay LOCAH says back "check-in from 2 pm, check-out by
+    11 am" and sets it on every room type; a stay is asked about check-in and
+    check-out, not opening hours; "u decide pls" to "where are you?" is never a
+    place (it had become "a resort in U Decide Pls" with the model down).
+  - r3: VERIFIED-BROWSER, every step passes (rooms, rates, booking at the property,
+    overlap, weekend minimum, arrival, guest cancel, return).
+  - The site had almost no photos: the hotel was given the *shop* archetype, so
+    its story/process/detail photos were briefed as "the counter, the tools" and
+    the judge rightly refused bedsheets and laundry rooms; the hero was a generic
+    villa facade. Fixed: stays get the booking archetype and stay briefs (the place
+    in its landscape in the owner's words — "on a coffee estate near Coorg" — the
+    setting, a guest's morning, a close detail). Preview downloads are now a few at
+    a time per host with 429s waited out (17 Pixabay 429s in one build). Empty
+    slots log why (`website.image_retrieval.slot_empty`).
+  - r4: the Rooms form said "Added." for a room that was never saved — the last
+    save's message stayed up during the next save, and its late reset wiped the
+    next room's typed name. Fixed in the shared `ActionForm` (18 Workspace forms).
+    r4 was also built by a stale worker (three were running; see memory).
+  - r5: VERIFIED-BROWSER, all 13 steps pass on one worker with the stay archetype —
+    no "Call to order" on rooms, a typographic cover naming the four room types, a
+    composed "How a stay works" on the home. Its photos: every slot empty, because
+    the Unsplash **demo key's 50 requests/hour was spent** by the day's back-to-back
+    builds (403 on every search) and Pixabay alone has little for a Coorg coffee
+    estate; the judge rightly refused a European church, showroom sofas and coffee
+    still lifes. Stays now also search the region and setting as such ("coorg
+    madikeri coffee estate", first, so the editorial source is asked it).
+    **BLOCKED** for photo quality at volume: a production Unsplash key (5,000/h).
+- After r5, on its site: the bound Rooms list drew four empty grey picture boxes —
+  a room with no picture is now a row of words (VERIFIED-BROWSER); the booking card
+  quoted "Guests shud book online n pay." — the owner's sentence is now read as a
+  visitor would (spelt out, and a sentence about guests is not a card; TESTED, next
+  build); a location typed in lower case is saved as place names (TESTED).
+- Workspace home tells a stay "Check-in from 2 pm · check-out by 11 am" instead of
+  "Add your opening hours" (TESTED). An address typed in lower case is set as a
+  place name on the site.
+- **Image sources (2026-11-24, checked in Chrome on each provider's own page):**
+  Unsplash 50/h demo → 1,000/h on production; Pexels 200/h, unlimited free on
+  request; Pixabay 100/min; Cloudflare FLUX.1 schnell ~170 free drawings a day.
+  A new Unsplash app, **LOCAH Website Builder**, was registered on the founder's
+  account with two attribution screenshots; its key is in `.env`; **Apply for
+  production is the founder's click** (5–10 business days). The Cloudflare
+  fallback is live locally: a test cover for the Coorg hotel came back as green
+  hills with rooftops in 3 s — after two attempts that drew a bedroom, fixed by
+  briefing a stay's cover as the land, outdoors, in positive words.
+
 ### Checkpoint — 2026-11-14, "anyone can use it": messy owners, the editor, WhatsApp
 
 Driven with owners who type fast and wrong (`bad_input` personas), real DeepSeek

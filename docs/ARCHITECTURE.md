@@ -136,12 +136,49 @@ Entitlement (plan / overrides)  →  activation (owner switched it on)
   **Design** (colours, lettering, sizes, corners) and **Ask LOCAH** — and shows the
   real draft at a true desktop width, scaled to fit. Clicking a section in the
   preview opens it in the editor (`apps/web/.../EditorBridge.tsx`, preview only).
+- **Composed sections (the layout engine).** Besides fixed variants, a site has
+  `composition` sections: blocks (words, quote, list, number, action, label, picture)
+  placed on a 12-column grid (6 on a phone) with layers, plates, frames (rounded,
+  arch, circle, slant, inset, bleed), grounds, heights and motion
+  (`website/composition_grammar.py`; `normalize()` is the one rule-keeper and runs
+  on every save, so no layout can overlap words or lose its phone order).
+  `interview/layout_engine.py` composes one from a business's own material with
+  seeded parametric recipes per role (story, statement, pillars, numbers,
+  featured): the same business always gets the same arrangement, two businesses
+  rarely do, and the DNA's shape and motion budget decide frames and movement.
+  `site_pages.py` composes the statement, the story's start, the featured range,
+  the About passages and pillars (on the home when there is no About page). The
+  owner can flip a composed section, ask for another arrangement (the same words
+  and pictures placed differently; `POST …/sections/{id}/arrange`, or "try another
+  layout" in Ask LOCAH) and edit each block in place. Rendered by
+  `apps/web/.../experience/Composition.tsx` and `packages/ui/src/site-compose.css`
+  (display type fitted to its column, so a long title never overruns its block).
 - **A design the owner likes is a direction, not a template.** In Design, "Match a
   design you like" takes a screenshot; one vision call reads it into the governed
   vocabulary only — palette, light or dark, a lettering pairing, corners, heading
-  scale (`website/reference_style.py`). Unreadable colours are replaced and said
-  so; the reference's layout, pictures and words are never taken, and the site's
-  own composition stays. Undo restores the draft exactly.
+  scale, and for composed sections the reference's *geometry* (where pictures and
+  words sit), re-bound to the owner's own material (`layout_engine.from_geometry`)
+  (`website/reference_style.py`). A dark or light ground is set with its alternate
+  band and muted text (`owner_style.ground_family`). Unreadable colours are replaced
+  and said so; the reference's pictures and words are never taken. Undo restores
+  the draft exactly.
+- **A stay is a stay.** Hotels, resorts and homestays (`playbooks.is_stay`) get the
+  booking archetype, check-in/check-out instead of opening hours (asked as such;
+  "u decide" gets 2 pm / 11 am, said back and set on every room type), and photo
+  slots briefed as the place: the property in its landscape in the owner's words
+  ("on a coffee estate near Coorg"), the setting, a guest's morning, a close detail
+  — never "the counter, the tools"; its own place name is searched as such. An
+  empty photo slot logs why (`website.image_retrieval.slot_empty`) and the build
+  job keeps the full audit.
+- **Drawn only when no photograph fits.** `IMAGE_FALLBACK=cloudflare` draws a
+  *mood* slot (cover, story, passages) the photo search left empty with FLUX.1
+  schnell on Cloudflare Workers AI (`image_generation.draw_fallback`; ~170 free a
+  day). Never a product, a room or a dish — those are the owner's or stay empty —
+  and every drawing is labelled a draft visual. A stay's cover is drawn as the
+  land, outdoors (a drawn bedroom would pass for the guest's room).
+- **Photo credits** read in each library's words ("Photo by … on Unsplash", "Image
+  by … from Pixabay"), both names linked, Unsplash links carrying the registered
+  app's `utm_source` (`locah_website_builder`).
 - **A headline speaks in one voice.** `design_dna.py` draws `headline: none` most
   often; a coloured italic phrase is an exception a concept must offer, and the
   italic label of warm_craft / calm_care follows it. A tool's section (plans,
