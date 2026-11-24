@@ -169,7 +169,7 @@ class WebsiteService:
         for _attempt in range(3):
             try:
                 async with session.begin_nested():
-                    return await WebsiteService._insert_live_draft(
+                    version = await WebsiteService._insert_live_draft(
                         session,
                         business_id=business_id,
                         website=website,
@@ -179,6 +179,14 @@ class WebsiteService:
                     )
             except IntegrityError as exc:
                 last_error = exc
+                continue
+            # Every generated draft is checked against the static hard gates and
+            # the verdict logged (shadow certification; never blocks).
+            from platform_core.services.website_certification import WebsiteCertificationService
+
+            await WebsiteCertificationService.shadow(
+                session, business_id=business_id, version=version, source=generated_by)
+            return version
         raise last_error or RuntimeError("Could not replace the website draft")
 
     @staticmethod

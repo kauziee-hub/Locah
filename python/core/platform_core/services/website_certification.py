@@ -8,9 +8,12 @@ leaves the certificate stale.
 
 ``WEBSITE_CERTIFICATION`` decides what publish does with it:
 
-- ``off`` (default) — certification is not consulted;
-- ``record`` — publish goes ahead; a missing, stale or failed certificate is
-  logged, so a run can say which sites *would* have been held back;
+- ``off`` — certification is not consulted and nothing is checked;
+- ``record`` (default; "shadow") — every generated draft is checked against the
+  static hard gates (website.quality_gate) and the verdict is recorded with a
+  ``shadow:`` source and logged; publish goes ahead, and a missing, stale or
+  failed certificate is logged, so a run can say which sites *would* have been
+  held back. Shadow verdicts never certify a site and are never shown to owners;
 - ``enforce`` — publish refuses a draft without a current passing certificate,
   and the refusal carries the gate's requests to the owner ("We need 2–3
   photographs of your actual clinic…") instead of a weak site going live.
@@ -36,9 +39,28 @@ Mode = Literal["off", "record", "enforce"]
 STATUSES = frozenset({"pass", "repair", "fail_closed"})
 
 
+SHADOW = "shadow:"
+
+
 def mode() -> Mode:
-    value = os.getenv("WEBSITE_CERTIFICATION", "off").strip().lower()
-    return value if value in {"record", "enforce"} else "off"  # type: ignore[return-value]
+    """Shadow ("record") unless set: the Website Quality Program runs the gate on
+    every build and logs it before it may ever hold a site back (2026-11-25)."""
+    value = os.getenv("WEBSITE_CERTIFICATION", "record").strip().lower()
+    if value == "shadow":
+        return "record"
+    return value if value in {"off", "record", "enforce"} else "record"  # type: ignore[return-value]
+
+
+async def _draft_pages(session: AsyncSession, version_id: uuid.UUID) -> list[dict[str, Any]]:
+    pages: list[dict[str, Any]] = []
+    for page in await WebsiteResolver.list_pages(session, version_id=version_id):
+        sections = await WebsiteResolver.list_sections(session, page_id=page.id)
+        pages.append({
+            "slug": page.slug, "page_type": page.page_type, "order": page.sort_order,
+            "sections": [{"section_type_id": s.section_type_id, "content": s.content or {},
+                          "is_visible": s.is_visible, "sort_order": s.sort_order} for s in sections],
+        })
+    return sorted(pages, key=lambda p: (p["order"], p["slug"]))
 
 
 async def fingerprint(session: AsyncSession, *, version_id: uuid.UUID) -> str:
@@ -102,17 +124,60 @@ class WebsiteCertificationService:
         return row
 
     @staticmethod
-    async def current(session: AsyncSession, *, business_id: uuid.UUID) -> dict[str, Any] | None:
-        """The latest verdict on the current draft, and whether it still describes it."""
+    async def shadow(session: AsyncSession, *, business_id: uuid.UUID, version: WebsiteVersion,
+                     source: str) -> dict[str, Any] | None:
+        """Check a just-generated draft against the static hard gates; record and log
+        the verdict. Never raises and never blocks: a gate that cannot run is logged."""
+        if mode() == "off":
+            return None
+        log = get_logger("website.certification")
+        try:
+            from platform_core.models import MediaAsset
+            from platform_core.website import quality_gate
+
+            async with session.begin_nested():
+                pages = await _draft_pages(session, version.id)
+                ids = {a for p in pages for s in p["sections"] for a, _ in quality_gate.pictures(s["content"])}
+                sources: dict[str, str] = {}
+                valid = [uuid.UUID(i) for i in ids if _is_uuid(i)]
+                if valid:
+                    rows = await session.execute(
+                        select(MediaAsset.id, MediaAsset.source_type).where(MediaAsset.id.in_(valid)))
+                    sources = {str(i): str(t) for i, t in rows.all()}
+                verdict: dict[str, Any] = quality_gate.check(pages, sources)
+                session.add(WebsiteCertification(
+                    business_id=business_id, website_id=version.website_id, version_id=version.id,
+                    fingerprint=await fingerprint(session, version_id=version.id), status=verdict["status"],
+                    score=None, blocked_on="platform" if verdict["failures"] else None, owner_requests=[],
+                    result={**verdict, "shadow": True}, source=(SHADOW + source)[:60],
+                ))
+                await session.flush()
+        except Exception as exc:  # noqa: BLE001 — a shadow check must never fail a build
+            log.warning("website.quality_gate_error", business_id=str(business_id), error=str(exc)[:300])
+            return None
+        (log.warning if verdict["failures"] else log.info)(
+            "website.quality_gate", business_id=str(business_id), version_id=str(version.id),
+            status=verdict["status"], failed_gates=verdict["failed_gates"], source=source,
+            failures=[f"{f['gate']}@{f['page']}: {f['detail']}" for f in verdict["failures"][:8]])
+        return verdict
+
+    @staticmethod
+    async def current(session: AsyncSession, *, business_id: uuid.UUID,
+                      include_shadow: bool = False) -> dict[str, Any] | None:
+        """The latest verdict on the current draft, and whether it still describes it.
+
+        Shadow verdicts (static gates only) are left out unless asked for: they
+        never certify a site and are not the owner's to see."""
         website = await WebsiteResolver.resolve_website(session, business_id=business_id)
         draft = await WebsiteResolver.resolve_draft_version(
             session, business_id=business_id, website_id=website.id)
+        query = (select(WebsiteCertification)
+                 .where(WebsiteCertification.business_id == business_id,
+                        WebsiteCertification.website_id == website.id))
+        if not include_shadow:
+            query = query.where(~WebsiteCertification.source.startswith(SHADOW))
         row = (await session.execute(
-            select(WebsiteCertification)
-            .where(WebsiteCertification.business_id == business_id,
-                   WebsiteCertification.website_id == website.id)
-            .order_by(WebsiteCertification.created_at.desc()).limit(1)
-        )).scalars().first()
+            query.order_by(WebsiteCertification.created_at.desc()).limit(1))).scalars().first()
         if row is None:
             return None
         stale = row.version_id != draft.id or row.fingerprint != await fingerprint(session, version_id=draft.id)
@@ -121,6 +186,7 @@ class WebsiteCertificationService:
             "blocked_on": row.blocked_on, "owner_requests": list(row.owner_requests or []),
             "stale": stale, "source": row.source, "certified_at": row.created_at.isoformat()
             if row.created_at else None,
+            "failed_gates": list((row.result or {}).get("failed_gates") or []),
         }
 
     @staticmethod
@@ -145,11 +211,24 @@ class WebsiteCertificationService:
         else:
             return
         if current_mode == "record":
+            # Shadow: what would have held this site back — the full verdict if
+            # there is one, else the static gates every build is checked against.
+            seen = found or await WebsiteCertificationService.current(
+                session, business_id=business_id, include_shadow=True)
             get_logger("website.certification").warning(
-                "website.publish_uncertified", business_id=str(business_id), reason=reason)
+                "website.publish_uncertified", business_id=str(business_id), reason=reason,
+                shadow_status=(seen or {}).get("status"), failed_gates=(seen or {}).get("failed_gates") or [])
             return
         raise ValidationError(message, details={
             "reason": reason,
             "owner_requests": (found or {}).get("owner_requests") or [],
             "score": (found or {}).get("score"),
         })
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
