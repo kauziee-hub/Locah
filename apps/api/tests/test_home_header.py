@@ -81,3 +81,13 @@ def test_quick_actions_need_the_tool_on_and_the_permission() -> None:
     assert [a["label"] for a in quick_actions(salon_can, "Services")] == [
         "Today's bookings", "Add a service", "Add a customer", "Edit your website"]
     assert quick_actions(can, "Menu")[2]["label"] == "Add to your menu"
+
+
+def test_a_stay_says_its_check_in_and_check_out_instead_of_asking_for_opening_hours() -> None:
+    from datetime import time
+
+    from platform_core.services.home_header import stay_state
+
+    assert stay_state(time(14, 0), time(11, 0)) == {
+        "state": "stay", "text": "Check-in from 2 pm · check-out by 11 am"}
+    assert stay_state(time(12, 0), time(10, 30))["text"] == "Check-in from noon · check-out by 10:30 am"

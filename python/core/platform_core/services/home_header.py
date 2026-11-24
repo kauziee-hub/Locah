@@ -70,6 +70,11 @@ def _spans(hours: dict[str, Any], day: str) -> list[tuple[time, time]]:
     return sorted(out)
 
 
+def stay_state(check_in: time, check_out: time) -> dict[str, str]:
+    """A stay keeps check-in and check-out times, not opening hours (hotel owner lab, 2026-11-23)."""
+    return {"state": "stay", "text": f"Check-in from {_clock(check_in)} · check-out by {_clock(check_out)}"}
+
+
 def open_state(hours: dict[str, Any] | None, tz: str | None, now: datetime) -> dict[str, str]:
     """{"state": open|closed|unknown, "text": owner-facing}. Spans are
     {"mon": [["09:00", "22:00"]], ...}; a span that ends before it starts runs

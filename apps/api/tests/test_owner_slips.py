@@ -201,3 +201,161 @@ def test_chat_shorthand_is_written_out_for_the_page_and_facts_are_left_alone() -
     assert for_the_page("ppl shud book trial first then join") == "People should book trial first then join"
     assert for_the_page("hsr layout blr") == "HSR layout Bengaluru"
     assert for_the_page("rs 500 for 5 min walk") == "Rs 500 for 5 min walk"
+
+
+def test_a_stays_rate_card_typed_in_a_hurry_is_every_room_with_its_rate() -> None:
+    """Hotel run, 2026-11-23: "family 12500" became a second price of the cottage
+    (read as a menu size) and the room names kept their slips."""
+    read = _read("bunglow room 7500 pool vila 18500 per nite, breakfast incl")
+    assert read == [("Bungalow room", "7500", ""), ("Pool villa", "18500", "per night")]
+    rooms = [(i.name, i.price) for g in read_priced_list(
+        "bunglow room 7500 valley cotage 9500 family 12500 pool vila 18500 per nite", rooms=True) for i in g.items]
+    assert rooms == [("Bungalow room", "7500"), ("Valley cottage", "9500"), ("Family room", "12500"),
+                     ("Pool villa", "18500")]
+    # On a menu, a family size is still a size.
+    assert _read("margherita half 220 family 450") == [("Margherita", "220 / 450", "half / family")]
+
+
+def test_an_owner_who_leaves_check_in_to_locah_gets_the_usual_times() -> None:
+    from platform_core.services.business_interview import _DELEGATED, STAY_DEFAULTS
+
+    assert STAY_DEFAULTS == {"check_in": "14:00", "check_out": "11:00"}
+    assert all(_DELEGATED.search(said) for said in ("u decide pls", "neenga decide pannunga", "up to you"))
+    assert not any(_DELEGATED.search(said) for said in ("10 to 8", "check-in 1 pm, check-out 11 am"))
+
+
+def test_u_decide_hands_the_choice_over_and_is_never_a_place() -> None:
+    """Hotel run, 2026-11-23: "u decide pls", typed to "where are you?", became
+    the business's place ("a resort in U Decide Pls")."""
+    from platform_core.interview import reader as rd
+
+    for said in ("u decide pls", "U decide", "neenga decide pannunga", "up to you bro", "ok you choose"):
+        assert rd.only_delegated(said), said
+        assert rd.read(said).decline and rd.read(said).delegate, said
+        assert rd.location_text(said) == "", said
+    # A real answer with a choice handed over in it is still the answer.
+    for said in ("green and calm, rest u decide", "Madikeri, Coorg", "check-in 1 pm, check-out 11 am"):
+        assert not rd.only_delegated(said), said
+    assert rd.location_text("Kaggodlu Road, Madikeri") == "Kaggodlu Road, Madikeri"
+
+
+@pytest.mark.asyncio
+async def test_a_stays_owner_who_leaves_check_in_to_locah_is_told_the_times() -> None:
+    """Asked as check-in and check-out (not opening hours); "u decide pls" is
+    answered with the usual times, which then go on every room type."""
+    from test_interview_language import Down, blueprint, last_reply
+
+    from platform_core.interview.orchestrator import BusinessInterviewOrchestrator as Engine
+
+    answers = {"catalogue": "bunglow room 7500 valley cotage 9500 family 12500 pool vila 18500 per nite",
+               "bookings": "per nite, weekend min 2 nites"}
+    bp = blueprint("Mistwood Estate Retreat")
+    bp = await Engine.turn(bp, "mistwood estate retreat coorg madikeri, 14 rooms in our cofee estate, cottages + "
+                               "pool vilas, guests shud book online n pay", provider=Down(), business_type="hotel")
+    heard = ""
+    for _ in range(10):
+        ask = bp.asks[-1].ask if bp.asks else ""
+        if ask == "hours":
+            assert "check in" in last_reply(bp).casefold() and "opening hours" not in last_reply(bp).casefold()
+        bp = await Engine.turn(bp, answers.get(ask, "u decide pls"), provider=Down(), business_type="hotel")
+        if ask == "hours":
+            heard = last_reply(bp)
+            break
+    assert "check-in from 2 pm, check-out by 11 am" in heard
+    assert bp.discovery["operations.hours"].status == "declined"
+    places = [f.value for k, f in {**bp.known_facts, **bp.unconfirmed_facts}.items() if "location" in k]
+    assert not any("decide" in str(v).casefold() for v in places), places
+
+
+@pytest.mark.asyncio
+async def test_a_coffee_estate_stay_is_booked_and_photographed_as_a_stay() -> None:
+    """Hotel run, 2026-11-23: "guests shud book online n pay" made the retreat a
+    shop (product_commerce), so its photographs were briefed as "the place where
+    stay are made and sold — the counter, the tools": four of five came back empty."""
+    from test_interview_language import Down, blueprint
+
+    from platform_core.interview.creative_director import derive_archetype, direct
+    from platform_core.interview.media_director import plan_slots
+    from platform_core.interview.orchestrator import BusinessInterviewOrchestrator as Engine
+    from platform_core.website.image_retrieval import brief_for_slot
+
+    bp = blueprint("Mistwood Estate Retreat")
+    for said in ("mistwood estate retreat coorg madikeri, 14 rooms in our cofee estate, cottages + pool vilas, "
+                 "guests shud book online n pay",
+                 "bunglow room 7500 valley cotage 9500 family 12500 pool vila 18500 per nite"):
+        bp = await Engine.turn(bp, said, provider=Down(), business_type="hotel")
+    assert derive_archetype(bp, "hotel") == "service_appointment"
+    direction = direct(bp, "hotel")
+    slots = {s.key: s for s in plan_slots(bp, direction)}
+    hero = slots["hero"].subject
+    # The land, never a room: a drawn bedroom would pass for the guest's own room.
+    assert "coffee estate" in hero and "hillside outdoors" in hero and " no " not in hero
+    assert not any(w in hero for w in ("bungalow room", "family room", "valley cottage", "pool villa")), hero
+    assert "listing" in direction.image_style and "glass balconies" not in direction.image_style
+    for key in ("story", "process", "detail"):
+        if key not in slots:
+            continue
+        brief = brief_for_slot(slots[key], direction, "hotel", bp=bp).as_context()
+        said = f"{brief['subject']} {brief['what_the_picture_must_do']}".casefold()
+        assert not any(w in said for w in ("counter", "tools", "made and sold", "how it is made")), (key, said)
+
+
+def test_a_place_typed_in_lower_case_is_set_as_a_place_name_on_the_site() -> None:
+    from uuid import uuid4
+
+    from platform_core.interview.models import BusinessBlueprint, Fact
+    from platform_core.interview.site_composer import _address
+
+    def said(where: str) -> str:
+        bp = BusinessBlueprint(business_id=uuid4(), known_facts={
+            "locations": Fact(value=where, source="USER_STATEMENT", confirmation="confirmed")})
+        return _address(bp)
+
+    assert said("coorg madikeri") == "Coorg Madikeri"
+    assert said("RS Puram, Coimbatore") == "RS Puram, Coimbatore"  # the owner's own capitals stand
+
+
+def test_a_booking_card_never_quotes_the_owner_talking_about_guests_in_chat_speak() -> None:
+    """Hotel run: "Guests shud book online n pay." was a booking card on the site."""
+    from platform_core.interview.site_composer import _ABOUT_CUSTOMERS
+    from platform_core.interview.spelling import for_the_page
+
+    said = for_the_page("guests shud book online n pay")
+    assert said == "Guests should book online and pay"
+    assert _ABOUT_CUSTOMERS.search(said)
+    assert for_the_page("Rock n Roll Cafe") == "Rock n Roll Cafe"
+
+
+def test_a_location_typed_in_lower_case_is_saved_as_place_names() -> None:
+    """Hotel run: "coorg madikeri" stood in the site's footer as typed."""
+    from platform_core.services.business_interview import place_address
+
+    assert place_address("coorg madikeri")["city"] == "Coorg Madikeri"
+    assert place_address("kaggodlu road, near madikeri") == {
+        "locality": "Kaggodlu Road", "city": "Madikeri", "country": "IN"}
+    assert place_address("RS Puram, Coimbatore")["locality"] == "RS Puram"
+
+
+@pytest.mark.asyncio
+async def test_the_drawn_fallback_draws_the_cover_and_passages_never_the_rooms() -> None:
+    """A stay's rooms are the owner's or empty: only mood pictures may be drawn."""
+    from test_interview_language import Down, blueprint
+
+    from platform_core.interview.creative_director import direct
+    from platform_core.interview.media_director import draw_missing
+    from platform_core.interview.orchestrator import BusinessInterviewOrchestrator as Engine
+
+    bp = blueprint("Mistwood Estate Retreat")
+    for said in ("mistwood estate retreat coorg madikeri, 14 rooms in our cofee estate, cottages + pool vilas",
+                 "bunglow room 7500 valley cotage 9500 family 12500 pool vila 18500 per nite"):
+        bp = await Engine.turn(bp, said, provider=Down(), business_type="hotel")
+    asked: list[str] = []
+
+    async def drawer(prompt: str, aspect: str) -> tuple[None, str]:
+        asked.append(prompt)
+        return None, "unavailable"
+
+    drawn = await draw_missing(bp, direct(bp, "hotel"), "hotel", draw=drawer)
+    keys = {slot.key for slot, _, _ in drawn}
+    assert "hero" in keys and all(s.truth_class == "mood" for s, _, _ in drawn)
+    assert not any(k.startswith(("category:", "item:")) for k in keys), keys

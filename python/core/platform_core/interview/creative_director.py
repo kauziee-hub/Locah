@@ -248,6 +248,17 @@ def _image_style(profile: ReferenceProfile, bp: BusinessBlueprint, archetype: st
     profile (premium_dark, modern_commerce); its food styling — "a dark slate
     or butcher's wooden board" — is for businesses that sell food. A salon in
     that family had its hair photographs searched on butcher's boards."""
+    from platform_core.interview.playbooks import is_stay
+
+    if is_stay(bp):
+        # A stay is photographed as its place, not as a property listing: the
+        # real-estate profile's "white facades with glass balconies" was a
+        # coffee-estate retreat's shoot brief (2026-11-24).
+        from platform_core.interview.media_director import stay_setting
+
+        setting = stay_setting(bp)
+        return (f"calm editorial travel photography of the place itself{f' — {setting}' if setting else ''}: "
+                "its landscape and natural light, unposed, quiet, never a showroom or a listing photo")
     if profile.id not in _FOOD_PROFILES or archetype == "menu_commerce":
         return profile.image_style
     facts = {**bp.known_facts, **bp.unconfirmed_facts}
@@ -289,6 +300,11 @@ def derive_archetype(bp: BusinessBlueprint, business_type: str | None = None) ->
         return "membership_fitness"
     if "serves_businesses" in seen and "quote_led" in seen:
         return "b2b_rfq"
+    if playbook_for(bp).offer_kind in {"room_type", "accommodation"}:
+        # Guests book nights in rooms. "Book online n pay" read as selling and
+        # taking orders made a coffee-estate retreat a shop (hotel owner lab,
+        # 2026-11-23): its photographs were briefed as "the counter, the tools".
+        return "service_appointment"
     sells = "sells_products" in seen or ("sells_products" in chars and "accepts_orders" in seen)
     if sells and "accepts_orders" in seen:
         return "menu_commerce" if _PREPARED_FOOD.search(said) else "product_commerce"

@@ -208,7 +208,9 @@ def _pickup_line(bp: BusinessBlueprint) -> str:
 
 
 def _address(bp: BusinessBlueprint) -> str:
-    parts = _places(bp)
+    # A place typed all in lower case is set as a place name ("Coorg madikeri"
+    # stood on a hotel's contact card, 2026-11-23); one with capitals is the owner's.
+    parts = [(_place(p) or p) if p[1:] == p[1:].lower() else p for p in _places(bp)]
     if len(parts) > 1:
         # Most specific first: "Our home in Saibaba Colony, Coimbatore".
         text = ", ".join(reversed(parts))
@@ -344,7 +346,8 @@ _BOOKING_WORDS = {
 # "people should book", "most customers WhatsApp us", "they usually come at 8":
 # the owner describing their customers to us, not words for the site.
 _ABOUT_CUSTOMERS = re.compile(
-    r"\b(?:people|customers|clients|patients|parents|they|them|most of them)\b(?:\s+\w+)?\s+"
+    r"\b(?:people|customers|clients|patients|parents|guests|visitors|members|students|diners|buyers|they|them|"
+    r"most of them)\b(?:\s+\w+)?\s+"
     r"(?:should|must|need to|have to|usually|mostly|normally|generally|always|often|can|come|book|call|order|"
     r"message|whatsapp)\b",
     re.I)
@@ -358,10 +361,14 @@ def _booking_sentence(bp: BusinessBlueprint, action: str) -> str:
     the owner talking ABOUT their customers ("people should book a table"):
     on the site that reads as a note left in, not a word to the visitor.
     """
+    from platform_core.interview.spelling import for_the_page
+
     words = _BOOKING_WORDS.get(action, r"\bbook|\bappointment|\bslot")
     said = [_answer(bp, "bookings.format"), (bp.discovery.get("commerce.action") or TargetState()).quote,
             *(m.text for m in bp.messages if m.role == "user")]
-    for text in said:
+    # Read as a visitor would: "guests shud book online n pay" was a hotel's
+    # booking card, word for word (owner lab, 2026-11-23).
+    for text in (for_the_page(t) for t in said if t):
         for sentence in re.split(r"(?<=[.!?])\s+|\s[—–]\s", " ".join((text or "").split())):
             if re.search(words, sentence, re.I) and not re.search(r"\d{3,}", sentence) and len(sentence) <= 140 \
                     and not _ABOUT_CUSTOMERS.search(sentence):
@@ -838,7 +845,7 @@ def compose_site(
                   "process": picture_for(bp, "process"), "detail": picture_for(bp, "detail"),
                   "story": story_picture},
         dna_seed=int(hashlib.sha256(f"{seed}:pages".encode()).hexdigest()[:8], 16), range_variant=range_variant,
-        order_link=wa_link, concept=dna.concept,
+        order_link=wa_link, concept=dna.concept, shape=dna.shape, budget=dna.budget,
         range_layout=composition["range_layout"],
         # A page order the creative director (the model) chose stands.
         keep_order=bool(direction.page_order) and direction.source == "ai",

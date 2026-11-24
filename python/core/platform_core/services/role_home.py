@@ -139,12 +139,19 @@ class _Ctx:
         tz = IST.key  # a location still on the column default (UTC) is read as India time
         if loc and loc.timezone and loc.timezone != "UTC":
             tz = loc.timezone
+        is_open = home_header.open_state(loc.hours if loc else None, tz, self.now)
+        if is_open["state"] == "unknown":
+            from platform_core.services.booking_slots import stay_times
+
+            times = await stay_times(self.s, self.b)
+            if times:
+                is_open = home_header.stay_state(*times)
         return {
             "greeting": home_header.greeting(self.now.astimezone(ZoneInfo(tz))),
             "name": business.display_name,
             "place": home_header.place(loc.name if loc else None, loc.address if loc else None),
             "location_id": str(loc.id) if loc else None,
-            "open": home_header.open_state(loc.hours if loc else None, tz, self.now),
+            "open": is_open,
             "website": (await self.s.execute(select(Website.status).where(Website.business_id == self.b))).scalar()
             == "published",
         }

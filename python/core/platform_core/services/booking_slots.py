@@ -61,6 +61,20 @@ def _clock(value: Any, default: time) -> time:
         return default
 
 
+async def stay_times(session: AsyncSession, business_id: uuid.UUID) -> tuple[time, time] | None:
+    """A stay's check-in and check-out (its first live room type's), or None
+    when the business takes no stays. The bookings module's public read: the
+    Workspace home says these instead of asking a hotel for opening hours."""
+    room = (await session.execute(select(Offering).where(
+        Offering.business_id == business_id, Offering.deleted_at.is_(None), Offering.status == "active",
+        Offering.offering_type == "accommodation",
+    ).order_by(Offering.created_at).limit(1))).scalars().first()
+    if room is None:
+        return None
+    attrs = room.attributes or {}
+    return _clock(attrs.get("check_in"), CHECK_IN), _clock(attrs.get("check_out"), CHECK_OUT)
+
+
 def zone(location: BusinessLocation) -> ZoneInfo:
     return ZoneInfo(location.timezone or DEFAULT_TIMEZONE)
 
