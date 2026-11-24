@@ -152,6 +152,15 @@
         "tools/certify/stack/workspace.sh"
       ],
       "port": 3201
+    },
+    {
+      "name": "certify-web-prod",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "-c",
+        "SKIP_BUILD=${SKIP_BUILD:-1} tools/certify/stack/web-prod.sh"
+      ],
+      "port": 3210
     }
   ]
 }

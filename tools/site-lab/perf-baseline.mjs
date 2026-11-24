@@ -31,13 +31,19 @@ async function once(browser, url) {
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
   // Bytes from the network layer: a cross-origin photo hides its size from the page.
   const kinds = new Map()
+  const urlOf = new Map()
+  const fontFiles = []
   const bytes = { script: 0, image: 0, font: 0, stylesheet: 0, document: 0, other: 0 }
   let requests = 0
-  cdp.on('Network.responseReceived', (e) => { kinds.set(e.requestId, String(e.type || 'Other').toLowerCase()) })
+  cdp.on('Network.responseReceived', (e) => {
+    kinds.set(e.requestId, String(e.type || 'Other').toLowerCase())
+    urlOf.set(e.requestId, e.response.url)
+  })
   cdp.on('Network.loadingFinished', (e) => {
     requests += 1
     const kind = kinds.get(e.requestId) || 'other'
     bytes[kind in bytes ? kind : 'other'] += e.encodedDataLength || 0
+    if (kind === 'font') fontFiles.push({ file: String(urlOf.get(e.requestId) || '').split('/').pop(), kb: Math.round((e.encodedDataLength || 0) / 1024) })
   })
   await page.addInitScript(() => {
     window.__perf = { lcp: 0, cls: 0, longTasks: 0 }
@@ -57,6 +63,9 @@ async function once(browser, url) {
     return {
       lcp_ms: Math.round(window.__perf.lcp), fcp_ms: fcp ? Math.round(fcp.startTime) : null,
       cls: Number(window.__perf.cls.toFixed(3)), tbt_ms: Math.round(window.__perf.longTasks),
+      // Which faces the page actually drew with: a font budget names its culprits.
+      faces: [...document.fonts].filter((f) => f.status === 'loaded')
+        .map((f) => `${f.family.replace(/['"]/g, '')} ${f.style} ${f.weight} [${f.unicodeRange.slice(0, 24)}]`),
       lcp_element: lcpEl ? `${lcpEl.tagName.toLowerCase()}.${String(lcpEl.className || '').split(' ')[0]}`.slice(0, 60) : '',
     }
   })
@@ -65,7 +74,7 @@ async function once(browser, url) {
   return {
     ...m, js_kb: kb(bytes.script), img_kb: kb(bytes.image), font_kb: kb(bytes.font), css_kb: kb(bytes.stylesheet),
     html_kb: kb(bytes.document), total_kb: kb(Object.values(bytes).reduce((a, b) => a + b, 0)), requests,
-    load_fired: loaded, wall_ms: Date.now() - started,
+    load_fired: loaded, wall_ms: Date.now() - started, font_files: fontFiles,
   }
 }
 
