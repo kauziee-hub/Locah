@@ -1,0 +1,61 @@
+# The edge for locah.store (PLATFORM_DOMAIN): TLS, compression, routing.
+#
+#   {PLATFORM_DOMAIN}        public site, marketplace, and /{slug} paths   -> web
+#   www.{PLATFORM_DOMAIN}    redirects to the bare domain
+#   app.{PLATFORM_DOMAIN}    the owner's Workspace                         -> workspace
+#   api.{PLATFORM_DOMAIN}    the API                                       -> api
+#   {slug}.{PLATFORM_DOMAIN} a business's website (web rewrites to /{slug}) -> web
+#
+# Business subdomains get their certificate on first visit (on-demand TLS), and
+# only after the API says the host is LOCAH's own or a live business site
+# (/v1/public/tls/allowed) — a made-up name never gets one.
+
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://api:8000/v1/public/tls/allowed
+	}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+{$PLATFORM_DOMAIN} {
+	import common
+	reverse_proxy web:3000
+}
+
+www.{$PLATFORM_DOMAIN} {
+	redir https://{$PLATFORM_DOMAIN}{uri} permanent
+}
+
+app.{$PLATFORM_DOMAIN} {
+	import common
+	reverse_proxy workspace:3000
+}
+
+api.{$PLATFORM_DOMAIN} {
+	import common
+	reverse_proxy api:8000
+}
+
+# Every other name under the domain: a business's website. Plain HTTP for a name
+# Caddy has no certificate for yet is sent to HTTPS (which then asks the API).
+http:// {
+	redir https://{host}{uri} permanent
+}
+
+https:// {
+	import common
+	tls {
+		on_demand
+	}
+	reverse_proxy web:3000
+}

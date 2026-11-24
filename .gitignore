@@ -69,3 +69,7 @@ locah-accept-*/
 # Site lab fixtures (tools/site-lab/serve.sh)
 .site-lab/
 apps/web/public/site-lab-photos/
+
+# Oracle VM configuration: lives only on the VM
+infra/deploy/oracle/public.env
+infra/deploy/oracle/server.env

@@ -1,0 +1,87 @@
+# LOCAH on one Oracle Cloud Always Free Arm VM (Ampere A1), behind Caddy.
+#
+#   cd infra/deploy/oracle
+#   docker compose --env-file public.env up -d --build
+#
+# public.env  — the browser-visible values, baked into the Next builds (no secrets).
+# server.env  — secrets for the API and worker only; never given to web or workspace.
+# Both live only on the VM (see public.env.example / server.env.example); neither is
+# ever committed. The database and storage stay on Supabase (ap-south-1).
+
+name: locah
+
+x-public-build-args: &public-build-args
+  NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+  NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL}
+  NEXT_PUBLIC_WORKSPACE_URL: ${NEXT_PUBLIC_WORKSPACE_URL}
+  NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+  NEXT_PUBLIC_SESSION_COOKIE_DOMAIN: ${NEXT_PUBLIC_SESSION_COOKIE_DOMAIN}
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  api:
+    build: { context: ../../.., dockerfile: infra/docker/Dockerfile.api }
+    env_file: [server.env, public.env]
+    environment: { PORT: "8000" }
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  worker:
+    build: { context: ../../.., dockerfile: infra/docker/Dockerfile.worker }
+    env_file: [server.env, public.env]
+    restart: unless-stopped
+    logging: *logging
+    depends_on: { api: { condition: service_healthy } }
+
+  web:
+    build:
+      context: ../../..
+      dockerfile: infra/docker/Dockerfile.web
+      args: *public-build-args
+    env_file: [public.env]
+    environment:
+      PORT: "3000"
+      # Shared with the API so a publish can refresh the page cache; not a provider key.
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+    restart: unless-stopped
+    logging: *logging
+    depends_on: [api]
+
+  workspace:
+    build:
+      context: ../../..
+      dockerfile: infra/docker/Dockerfile.workspace
+      args: *public-build-args
+    env_file: [public.env]
+    environment: { PORT: "3000" }
+    restart: unless-stopped
+    logging: *logging
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2.8.4
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    restart: unless-stopped
+    logging: *logging
+    depends_on: [api, web, workspace]
+
+volumes:
+  caddy_data:
+  caddy_config:
