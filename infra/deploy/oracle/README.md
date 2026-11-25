@@ -47,14 +47,17 @@ chat or a ticket. `REVALIDATE_SECRET` is the same value in both files
 ## 5. Database migrations
 
 The hosted Supabase project must have every migration in
-`infra/supabase/migrations` before the new code starts. As of 2026-11-25 these
-two are known to be missing there:
+`infra/supabase/migrations` before the new code starts. On 2026-11-25 it was
+brought level with `main`: 111 files, 111 history rows, matching by version and
+name. Six migrations were applied then (20261017120000, 20261017140000,
+20261018120000, 20261018150000, 20261122120000, 20261125090000), and the
+`website_experience_layer` row was re-versioned from 20261014052757 to the
+file's 20261009120000.
 
-- `20261122120000_website_composition_section.sql`
-- `20261125090000_media_assets_cloudflare_source_type.sql`
-
-Apply them (Supabase SQL editor or `supabase db push`) and check that
-`supabase_migrations.schema_migrations` matches the folder one to one.
+Before starting newer code, compare the folder with
+`supabase_migrations.schema_migrations` by version and name. Apply any missing
+file together with its history row in one transaction (Supabase SQL editor or
+`supabase db push`).
 
 ## 6. DNS for locah.store (you, at Hostinger)
 
