@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from platform_core.business_types import SUPPORTED_BUSINESS_TYPES
 from platform_core.catalog import taxonomy
 from platform_core.catalog.modules import MODULES, is_built, storefront_modules
@@ -216,7 +218,7 @@ def test_photo_variants_differ_from_normal_only_in_photos() -> None:
         assert not no_photos.media
 
 
-def test_owner_media_are_real_files_that_truly_fit_the_business() -> None:
+def test_owner_media_are_photos_that_truly_fit_the_business() -> None:
     fits = {"meat-shop": MEAT_PHOTOS, "bakery": BAKERY_PHOTOS}
     for s in SCENARIOS.values():
         rich, own = s.variants["rich"].media, s.variants["owner_media"].media
@@ -232,11 +234,18 @@ def test_owner_media_are_real_files_that_truly_fit_the_business() -> None:
         assert media_gap(s, "owner_media") is None
         for raw in rich:
             path = Path(raw)
-            assert path.is_absolute() and path.is_file() and path.suffix == ".jpg", raw
+            assert path.is_absolute() and path.suffix == ".jpg", raw
             rel = path.relative_to(PHOTO_DIR).as_posix()
             assert rel in fits[s.key], f"{s.key}: {rel} is not a photo of this trade"
             assert rel not in NOT_THE_OWNERS, rel
     assert set(MEDIA_GAPS) == set(SCENARIOS) - {"meat-shop", "bakery"}
+
+
+# The photos are Pixabay copies the premium lab caches in a git-ignored folder
+# (.gitignore: apps/web/public/site-lab-photos/), so a fresh checkout such as CI
+# has none. Where the cache exists, every file named above must be in it.
+@pytest.mark.skipif(not PHOTO_DIR.is_dir(), reason="site-lab photos are a git-ignored local cache")
+def test_owner_media_files_are_in_the_lab_photo_cache() -> None:
     for rel in (*MEAT_PHOTOS, *BAKERY_PHOTOS, *NOT_THE_OWNERS):
         assert (PHOTO_DIR / rel).is_file(), rel
 
